@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.egg-info/
+var/
+.pytest_cache/
+.env
+.env.*
+!.env.example
+# Claude Code worktrees live inside the repo folder
+.claude/worktrees/
