@@ -169,10 +169,12 @@ Made:
 - **Hosted web app: React + TypeScript** (2026-10-11), in `web/`, on the
   same API as the local app (docs/hosted.md). The local app keeps its
   no-build page.
+- **Market: India first** (2026-10-12). The boards, cities and salary terms
+  already lean Indian; the beta invites people looking for work in India, and
+  the privacy terms follow India's DPDP Act.
 
 Waiting on the maintainer:
 
-- **Where to start:** India first (the current boards and cities) or global.
 - **Product name and domain** for the hosted app.
 - **Hosting accounts:** creating the Supabase and Render accounts (Phase 2).
 - **Monthly budget** for the beta: AI and hosting.
