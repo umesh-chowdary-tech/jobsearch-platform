@@ -34,6 +34,25 @@ jobs:
         # No network and no keys: every model and board is faked in the tests.
         run: python -m pytest -o addopts="" -q
 
+  web:
+    name: web app (type-check, audit, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - name: Audit what ships to the browser
+        run: npm audit --omit=dev --audit-level=high
+      - run: npm run build
+
   secrets:
     name: secret scan (gitleaks)
     runs-on: ubuntu-latest

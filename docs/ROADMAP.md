@@ -166,6 +166,9 @@ Made:
 - **Order: Phase 1 before any hosting** (2026-10-11). The maintainer tests as a
   real user would - upload a resume, confirm the facts - with his own data
   kept outside the repository.
+- **Hosted web app: React + TypeScript** (2026-10-11), in `web/`, on the
+  same API as the local app (docs/hosted.md). The local app keeps its
+  no-build page.
 
 Waiting on the maintainer:
 

@@ -12,7 +12,7 @@ It grows out of a personal job-search agent and is being rebuilt step by step
 |---|---|
 | 0 | One engine, many people, open-source ready: per-person profiles, sample profiles, CI, secret scanning, license |
 | 1 | Setup from a resume: upload, the AI drafts the facts, the person confirms each one (built: `jobsearch setup`) |
-| 2 | Invite-only hosted beta: sign-up, daily ranked jobs, tailored resumes, per-person AI caps |
+| 2 | Invite-only hosted beta: sign-up, daily ranked jobs, tailored resumes, per-person AI caps (in progress: docs/hosted.md) |
 | 3 | Inbox: a forwarding address first, mail sign-in later |
 | 4 | Mobile app on the same backend |
 | 5 | Payments, if costs call for it |
@@ -57,7 +57,11 @@ python -m venv .venv
 .venv/Scripts/python -m jobsearch.cli --profile sample-backend assemble --top 3
 .venv/Scripts/python -m jobsearch.cli --profile sample-backend serve          # the local app
 .venv/Scripts/python -m jobsearch.cli cycle                                   # the scheduled loop, every profile
+.venv/Scripts/python -m jobsearch.cli hosted --dev                            # the hosted service, on this machine
 ```
+
+The hosted service's web app is in `web/` (React + TypeScript; `npm ci && npm
+run build` there) - see [docs/hosted.md](docs/hosted.md).
 
 (`.venv/bin/python` on macOS and Linux.) Copy `.env.example` to `.env` for
 model keys; without any, everything up to ranking still runs.
@@ -69,7 +73,7 @@ model keys; without any, everything up to ranking still runs.
 [assembly](docs/assembly.md) · [outreach](docs/outreach.md) ·
 [inbox](docs/mail.md) · [model limits](docs/limits.md) ·
 [scheduling](docs/scheduling.md) · [the local app](docs/app.md) ·
-[the connector](docs/connector.md)
+[the connector](docs/connector.md) · [the hosted service](docs/hosted.md)
 
 ## Contributing and license
 
