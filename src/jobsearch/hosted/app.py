@@ -18,7 +18,6 @@ import io
 import json
 import logging
 import os
-import re
 import shutil
 import threading
 import zipfile
@@ -47,9 +46,16 @@ WEB_DIST = ROOT / "web" / "dist"
 JSON_MAX = 64_000
 FILE_CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; frame-ancestors 'none'"
 RESUME_TYPES = {".pdf": "application/pdf", ".html": "text/html; charset=utf-8", ".txt": "text/plain; charset=utf-8"}
-EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 DELETE_WORDS = "delete my account"
 log = logging.getLogger("jobsearch.hosted")
+
+
+def plausible_email(email: str) -> bool:
+    """Shaped like an address, checked without a regex that could backtrack
+    on a long input. Dev sign-in only; Supabase checks real ones."""
+    local, at, domain = email.partition("@")
+    return (bool(at) and 0 < len(local) <= 64 and 3 < len(domain) <= 190 and "@" not in domain
+            and "." in domain.strip(".") and not any(c.isspace() for c in email))
 
 
 def _csp(supabase_url: str) -> str:
@@ -240,7 +246,7 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
             except ApiError as exc:
                 return _json_response(*routes.as_error(exc, HOSTED))
             email = str(body.get("email") or "").strip().lower()
-            if not EMAIL.match(email):
+            if not plausible_email(email):
                 return _json_response(400, {"error": "enter an email address"})
             return _json_response(200, {"token": verifier.mint_dev(email)})
 
@@ -281,9 +287,8 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
     async def resume_file(name: str, request: Request) -> Response:
         def go() -> Any:
             _, prof = svc.member(request)
-            base = (prof.var / "resumes").resolve()
-            f = (base / name).resolve()
-            if "/" in name or "\\" in name or not f.is_relative_to(base) or not f.is_file():
+            f = routes.pick_file(prof.var / "resumes", name)
+            if f is None:
                 raise ApiError(404, "not found")
             return Response(f.read_bytes(), media_type=RESUME_TYPES.get(f.suffix.lower(), "text/plain; charset=utf-8"),
                             headers={"Content-Security-Policy": FILE_CSP,

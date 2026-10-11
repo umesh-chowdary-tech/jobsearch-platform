@@ -305,3 +305,8 @@ def test_a_marketplaces_matches_are_noise(subject):
     was meant, so "your matches" alone never matched."""
     assert R.NOISE.search(subject)
     assert not R.NOISE.search("Rematches for the role you applied to")
+
+
+def test_a_site_is_matched_as_itself_or_a_subdomain_only():
+    assert R._is("linkedin.com", "linkedin.com") and R._is("e.linkedin.com", "linkedin.com")
+    assert not R._is("notlinkedin.com", "linkedin.com")       # CodeQL: incomplete domain check

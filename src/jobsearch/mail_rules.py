@@ -81,6 +81,11 @@ def _learned(path: str, mtime: int) -> dict[str, Any]:
             "senders": {str(r["sender"]).lower(): r["company"] for r in doc.get("senders") or []}}
 
 
+def _is(domain: str, site: str) -> bool:
+    """The site itself or one of its subdomains - not "notlinkedin.com"."""
+    return domain == site or domain.endswith("." + site)
+
+
 def _domain_in(domain: str, domains: set[str] | dict) -> str | None:
     """Exact, or a parent: mail.us2.cloud.oracle.com is under a listed parent."""
     hit = _domain_depth(domain, domains)
@@ -122,9 +127,9 @@ def is_candidate(from_addr: str, subject: str, data_dir: Any, me: str = "") -> b
     s = senders(data_dir)
     if _domain_in(domain, s["feeds"]):
         return False
-    if domain.endswith("linkedin.com"):
+    if _is(domain, "linkedin.com"):
         return bool(re.search(r"your application (?:was sent )?to", subject, re.I))
-    if domain.endswith("naukri.com"):
+    if _is(domain, "naukri.com"):
         return bool(re.search(r"you applied for \d+ jobs?|status of your job application|applied by neo", subject, re.I))
     return not NOISE.search(subject)
 
@@ -264,9 +269,9 @@ def classify(from_addr: str, subject: str, body: str, data_dir: Any = None,
     """`data_dir` adds the learned phrases; `extra` adds a proposed one, to
     replay past mail with it before anyone approves it."""
     domain = from_addr.lower().rsplit("@", 1)[-1]
-    if domain.endswith("naukri.com"):
+    if _is(domain, "naukri.com"):
         return naukri(subject, body) or Verdict("unclear", "low")
-    if domain.endswith("linkedin.com"):
+    if _is(domain, "linkedin.com"):
         m = LINKEDIN_EVENT.search(body or "")
         if m:
             return Verdict(LINKEDIN_KIND.get(m.group(1), m.group(1)), "high", f"LinkedIn: {m.group(0)}")

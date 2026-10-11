@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 import re
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from .. import feedback, onboard, outreach, pipeline
@@ -63,6 +64,14 @@ HOSTED_POST = tuple(re.compile(p) for p in (
 # What a resume upload may be, by the type the page sends.
 UPLOAD_TYPES = {"application/pdf": ".pdf", "text/plain": ".txt",
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx"}
+
+
+def pick_file(folder: Path, name: str) -> Path | None:
+    """The file in `folder` named exactly `name`, found by listing the folder,
+    so the text of a request never becomes a path to open."""
+    if not folder.is_dir():
+        return None
+    return next((f for f in folder.iterdir() if f.name == name and f.is_file()), None)
 
 
 def allowed(method: str, path: str, scope: str) -> bool:
