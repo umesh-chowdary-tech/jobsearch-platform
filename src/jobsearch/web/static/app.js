@@ -14,6 +14,71 @@ const MARKS = ["sent", "followed-up", "replied", "referred", "declined", "closed
 const $ = (s, r = document) => r.querySelector(s);
 const view = $("#view");
 
+/* Icons: one stroked 24x24 path each, built as SVG nodes - no markup strings. */
+const ICONS = {
+  sun: "M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4",
+  moon: "M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z",
+  star: "M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z",
+  check: "M5 12.5l4.5 4.5L19 7.5",
+  upload: "M12 15V4M7 9l5-5 5 5M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3",
+  list: "M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2",
+  target: "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8zM12 11.5v1",
+  activity: "M3 12h4l3-7 4 14 3-7h4",
+  clock: "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 7v5l3 2",
+};
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+function icon(name, cls) {
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("class", cls ? `i ${cls}` : "i");
+  svg.setAttribute("aria-hidden", "true");
+  const p = document.createElementNS(SVG_NS, "path");
+  p.setAttribute("d", ICONS[name]);
+  svg.append(p);
+  return svg;
+}
+
+/* A company's initials on one of six tints - the same tint every time. */
+function avatar(name, big) {
+  const words = String(name || "?").replace(/[^\p{L}\p{N} ]/gu, " ").split(/\s+/).filter(Boolean);
+  const text = (words.length > 1 ? words[0][0] + words[1][0] : (words[0] || "?").slice(0, 2)).toUpperCase();
+  let h = 0;
+  for (const c of String(name || "")) h = (h * 31 + c.codePointAt(0)) >>> 0;
+  return el("span", { class: `avatar a${h % 6}${big ? " big" : ""}`, "aria-hidden": "true" }, text);
+}
+
+/* Light or dark: the system's choice until the switch picks one. The pick
+   is a convenience kept in this browser; without storage it lasts the visit. */
+const THEME_KEY = "jobsearch-theme";
+const isDark = () => {
+  const t = document.documentElement.dataset.theme;
+  return t ? t === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+};
+function paintTheme() {
+  const b = $("#theme"), dark = isDark();
+  b.replaceChildren(icon(dark ? "sun" : "moon"));
+  b.setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode");
+  b.title = b.getAttribute("aria-label");
+}
+function setTheme(t) {
+  if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+  else delete document.documentElement.dataset.theme;
+  paintTheme();
+}
+try { setTheme(localStorage.getItem(THEME_KEY)); } catch { setTheme(null); }
+$("#theme").addEventListener("click", () => {
+  const next = isDark() ? "light" : "dark";
+  setTheme(next);
+  try { localStorage.setItem(THEME_KEY, next); } catch { /* kept for this visit only */ }
+});
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", paintTheme);
+
+function setCount(name, n) {
+  const c = document.querySelector(`.side [data-count="${name}"]`);
+  if (c) c.textContent = n ? String(n) : "";
+}
+
 function safeHref(u) {
   u = String(u || "");
   return /^https?:\/\//i.test(u) || u.startsWith("/files/") || u.startsWith("#/") ? u : null;
@@ -71,8 +136,9 @@ async function copy(text) {
   catch { toast("Copy failed - select the text instead"); }
 }
 
+const FIT_WORD = { strong: "Strong fit", possible: "Possible fit", weak: "Weak fit" };
 function fitBadge(fit) {
-  return el("span", { class: `badge ${fit || "none"}` }, fit || "unread");
+  return el("span", { class: `badge ${fit || "none"}` }, FIT_WORD[fit] || fit || "Not read yet");
 }
 
 function failBox(e) {
@@ -204,7 +270,11 @@ function busyText(b) {
 
 async function refreshHealth() {
   let o;
-  try { o = await api("/api/overview"); } catch { $("#health").textContent = "App server not reachable"; return; }
+  try { o = await api("/api/overview"); } catch {
+    $("#health-text").textContent = "App server not reachable";
+    $("#health-dot").className = "dot off";
+    return;
+  }
   const bits = [];
   if (o.busy) bits.push(busyText(o.busy) + (o.stopping ? " - stopping…" : ""));
   if (o.last_cycle) bits.push(`Watcher ran ${ago(o.last_cycle.at)}`);
@@ -212,7 +282,8 @@ async function refreshHealth() {
   if (o.paused) bits.push(pausedText(o.paused));
   else if (o.scheduler && o.scheduler["Next Run Time"]) bits.push(`next ${o.scheduler["Next Run Time"].split(" ").slice(1).join(" ")}`);
   else if (o.scheduler === null) bits.push("no schedule found");
-  $("#health").textContent = bits.join(" · ");
+  $("#health-text").textContent = bits.join(" · ");
+  $("#health-dot").className = `dot ${o.busy ? "busy" : o.paused ? "paused" : o.last_cycle ? "ok" : ""}`;
   $("#run-cycle").disabled = Boolean(o.busy);
   $("#stop-run").hidden = !o.busy;
   $("#stop-run").disabled = Boolean(o.stopping);
@@ -238,7 +309,7 @@ function laterText(l) {
 function starButton(r) {
   const b = el("button", { type: "button", class: "star" });
   const paint = () => {
-    b.textContent = r.favorite ? "★" : "☆";
+    if (!b.firstChild) b.append(icon("star"));
     b.classList.toggle("on", r.favorite);
     b.setAttribute("aria-pressed", String(r.favorite));
     b.setAttribute("aria-label", r.favorite ? "Remove from favorites" : "Add to favorites");
@@ -313,24 +384,39 @@ function laterControl(r) {
   return { button: btn, panel };
 }
 
+/* What the posting asks for that the profile backs (teal) and doesn't (coral). */
+function jobTags(r) {
+  const [have, of] = String(r.coverage || "").split("/").map(Number);
+  const skills = r.skills || [], gaps = r.gaps || [];
+  if (!skills.length && !gaps.length && !(of > 0)) return null;
+  return el("div", { class: "job-tags" },
+    skills.map(s => el("span", { class: "pill c" }, s)),
+    gaps.map(g => el("span", { class: "pill g", title: "asked for, not backed" }, g)),
+    of > 0 && el("span", { class: "meter", title: `${have} of the ${of} skills it names are backed by your profile` },
+      el("span", { class: "track" }, el("i", { style: `width:${Math.round(100 * have / of)}%` })),
+      `${have}/${of} backed`));
+}
+
 function postingItem(r, withActions) {
-  const meta = [r.coverage && `${r.coverage} backed`, r.location, r.variant && "resume ready",
+  const meta = [r.location, r.variant && "resume ready",
                 r.asks.length && `${r.asks.length} referral ask${r.asks.length > 1 ? "s" : ""}`,
                 laterText(r.later)]
                .filter(Boolean).join(" · ");
   const later = withActions ? laterControl(r) : null;
   const acts = withActions ? el("div", { class: "acts" },
-    el("button", { type: "button", onclick: () => setStatus(r.id, "skipped") }, "Skip"),
+    el("button", { type: "button", class: "quiet", onclick: () => setStatus(r.id, "skipped") }, "Skip"),
     later.button,
     el("button", { type: "button", onclick: () => setStatus(r.id, "shortlisted") }, "Shortlist"),
   ) : el("span", { class: "status" }, r.status);
   return el("div", { class: "item" },
-    el("div", { class: "row", style: "flex-wrap:nowrap;align-items:flex-start" },
+    el("div", { class: "job-main" },
       starButton(r),
+      avatar(r.company),
       el("div", {},
-        el("div", { class: "t" }, fitBadge(r.fit), r.closed && el("span", { class: "badge closed" }, "closed"),
-           el("a", { href: `#/p/${encodeURIComponent(r.id)}` }, `${r.company} · ${r.title}`)),
-        el("div", { class: "m" }, meta))),
+        el("div", { class: "t" }, el("a", { href: `#/p/${encodeURIComponent(r.id)}` }, r.title),
+           fitBadge(r.fit), r.closed && el("span", { class: "badge closed" }, "closed")),
+        el("div", { class: "co" }, r.company, meta && el("span", { class: "muted" }, ` · ${meta}`)),
+        jobTags(r))),
     acts,
     later && later.panel);
 }
@@ -347,13 +433,28 @@ async function setStatus(pid, status, note) {
 
 async function viewToday() {
   const t = await api("/api/today");
+  setCount("today", t.decide.length + t.back_from_later.length);
+  const hour = new Date().getHours();
+  const hello = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const kpi = (ic, tone, n, label) => el("div", { class: "kpi" },
+    el("span", { class: `ic ${tone}` }, icon(ic)),
+    el("div", {}, el("div", { class: "n" }, n), el("div", { class: "l" }, label)));
   const chips = el("div", { class: "chips" },
     el("a", { class: "chip", href: "#/postings?flag=favorites&status=any" }, "★ favorites ", el("b", {}, t.favorites)),
     el("a", { class: "chip", href: "#/postings?flag=later" }, "saved for later ", el("b", {}, t.saved_for_later)),
     STAGES.filter(s => s !== "new").map(s =>
       el("a", { class: "chip", href: `#/postings?status=${s}` }, `${s} `, el("b", {}, t.stages[s] || 0))));
-  const parts = [el("h1", {}, "Today"),
-    el("p", { class: "sub" }, `${t.stages.new || 0} live postings you haven't decided on yet.`), chips];
+  const parts = [
+    el("div", { class: "hero" },
+      el("div", { class: "date" }, new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })),
+      el("h1", {}, t.first_name ? `${hello}, ${t.first_name}` : hello),
+      el("p", { class: "sub" }, `${t.stages.new || 0} live postings you haven't decided on yet.`)),
+    el("div", { class: "kpis" },
+      kpi("list", "", t.decide.length, "waiting on a decision"),
+      kpi("target", "", t.decide.filter(r => r.fit === "strong").length, "strong fits among them"),
+      kpi("activity", "cool", t.in_progress.length, "applications in progress"),
+      kpi("clock", "warm", t.outreach_due.length, "referral follow-ups due")),
+    chips];
 
   if (t.back_from_later.length) {
     parts.push(el("h2", {}, `Back from later · ${t.back_from_later.length}`));
@@ -454,14 +555,16 @@ async function viewPosting(pid) {
   const p = await api(`/api/postings/${encodeURIComponent(pid)}`);
   const out = [];
   out.push(el("div", { class: "spread" },
-    el("div", {},
-      // The star sits beside the heading, not in it: inside, a screen reader
-      // would announce the page as "Add to favorites Senior Backend...".
-      el("div", { class: "row", style: "flex-wrap:nowrap;align-items:flex-start" },
-        starButton(p), el("h1", {}, `${p.title} · ${p.company}`)),
-      el("p", { class: "sub" }, [p.location, p.board,
-        p.live === true ? "live on the last poll" : p.live === false ? "closed on the board" : "not tracked by the watcher"]
-        .filter(Boolean).join(" · "))),
+    el("div", { class: "posting-head" },
+      avatar(p.company, true),
+      el("div", {},
+        // The star sits beside the heading, not in it: inside, a screen reader
+        // would announce the page as "Add to favorites Senior Backend...".
+        el("div", { class: "row", style: "flex-wrap:nowrap;align-items:flex-start" },
+          starButton(p), el("h1", {}, `${p.title} · ${p.company}`)),
+        el("p", { class: "sub" }, [p.location, p.board,
+          p.live === true ? "live on the last poll" : p.live === false ? "closed on the board" : "not tracked by the watcher"]
+          .filter(Boolean).join(" · ")))),
     fitBadge(p.fit)));
 
   const later = p.status === "new" ? laterControl(p) : null;
@@ -970,27 +1073,50 @@ async function setupStep(step, body) {
   catch (e) { toast(e.message); }
 }
 
-async function uploadResume(file, button) {
+const DROP_NOTE = "PDF, Word (.docx) or plain text, up to 5 MB";
+
+async function uploadResume(file, note) {
   const ext = ((file.name || "").match(/\.[^.]+$/) || [""])[0].toLowerCase();
   if (!SETUP_TYPES[ext]) { toast("Upload a PDF, a Word file (.docx) or a plain text file"); return; }
-  button.disabled = true; button.textContent = "Reading…";
+  note.textContent = `Reading ${file.name}…`;
   try {
     const r = await fetch("/api/setup/upload", { method: "POST", headers: { "Content-Type": SETUP_TYPES[ext] }, body: file });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
     render();
-  } catch (e) { toast(e.message); button.disabled = false; button.textContent = "Upload"; }
+  } catch (e) { toast(e.message); note.textContent = DROP_NOTE; }
 }
 
 function setupUpload(s) {
-  const input = el("input", { type: "file", accept: ".pdf,.docx,.txt", "aria-label": "Your resume" });
-  const btn = el("button", { type: "button", class: s.status === "new" ? "primary" : "" }, "Upload");
-  btn.addEventListener("click", () => input.files[0] ? uploadResume(input.files[0], btn) : toast("Choose a file first"));
+  const input = el("input", { type: "file", accept: ".pdf,.docx,.txt", class: "sr-only" });
+  const note = el("span", { class: "drop-note" }, DROP_NOTE);
+  const zone = el("label", { class: "drop" }, icon("upload", "big"),
+    el("b", {}, s.file ? "Drop a new resume to start over" : "Drop your resume here, or choose a file"), note, input);
+  input.addEventListener("change", () => { if (input.files[0]) uploadResume(input.files[0], note); });
+  zone.addEventListener("dragover", e => { e.preventDefault(); zone.classList.add("over"); });
+  zone.addEventListener("dragleave", () => zone.classList.remove("over"));
+  zone.addEventListener("drop", e => {
+    e.preventDefault();
+    zone.classList.remove("over");
+    const f = e.dataTransfer && e.dataTransfer.files[0];
+    if (f) uploadResume(f, note);
+  });
   return el("div", { class: "card stack" },
     el("div", { class: "kit-h", style: "margin-top:0" }, "1 · Your resume"),
-    el("p", { class: "small" }, "A PDF, a Word file or plain text. It stays on this computer; only its text, with your email, phone and links removed, is sent to the AI."),
-    s.file && el("p", { class: "muted small" }, `Read: ${s.lines} lines from ${s.file}. Upload again to start over.`),
-    el("div", { class: "row" }, input, btn));
+    el("p", { class: "small" }, "It stays on this computer; only its text, with your email, phone and links removed, is sent to the AI."),
+    zone,
+    s.file && el("p", { class: "muted small" }, `Read: ${s.lines} lines from ${s.file}.`));
+}
+
+const SETUP_STEPS = ["Upload", "Draft", "Check facts", "Skills", "Preferences"];
+
+function setupStepper(s) {
+  const now = s.status === "saved" ? SETUP_STEPS.length : s.status === "new" ? 0 : s.status === "uploaded" ? 1
+    : s.progress && s.progress.pending ? 2 : 3;
+  return el("ol", { class: "stepper", "aria-label": "Setup steps" }, SETUP_STEPS.map((label, i) =>
+    el("li", { class: i < now ? "done" : i === now ? "now" : "", "aria-current": i === now ? "step" : null },
+      el("span", { class: "n" }, i < now ? icon("check") : String(i + 1)),
+      el("span", { class: "label" }, label, i < now ? el("span", { class: "sr-only" }, " (done)") : null))));
 }
 
 function setupDraftCard(s) {
@@ -1022,7 +1148,7 @@ function setupItem(it, fields) {
     : el("div", { class: "src" }, it.by === "you" ? "Written by you" : "");
   return el("div", { class: `setup-item ${it.state}` }, el("div", { class: "fields" }, boxes), from,
     el("div", { class: "row" },
-      it.state !== "confirmed" && el("button", { type: "button", class: "primary", onclick: () => act("confirmed") }, "Confirm"),
+      it.state !== "confirmed" && el("button", { type: "button", class: "primary", onclick: () => act("confirmed") }, icon("check"), "Confirm"),
       it.state !== "removed" && el("button", { type: "button", onclick: () => act("removed") }, "Remove"),
       it.state !== "pending" && el("button", { type: "button", onclick: () => act("pending") }, "Undo"),
       el("span", { class: `state ${it.state}` }, it.state === "pending" ? "to check" : it.state),
@@ -1065,6 +1191,10 @@ function setupReview(s) {
     el("div", { class: "kit-h" }, "3 · Check every item"),
     el("p", { class: "small" }, `${p.confirmed} confirmed · ${p.pending} still to check · ${p.removed} removed. Only confirmed items go into your profile. Edit anything before confirming - your own words stand as you write them.`),
   ];
+  const total = p.confirmed + p.pending + p.removed;
+  out.push(el("div", { class: "progress", role: "progressbar", "aria-label": "Items checked",
+                       "aria-valuemin": "0", "aria-valuemax": String(total), "aria-valuenow": String(total - p.pending) },
+    el("i", { style: `width:${total ? Math.round(100 * (total - p.pending) / total) : 0}%` })));
   const ids = of("identity");
   if (ids.length) out.push(el("h2", {}, "About you"),
     el("div", { class: "card stack" }, ids.map(i => setupItem(i, [["value", IDENTITY_NAMES[i.field] || i.field]]))));
@@ -1144,7 +1274,7 @@ function setupPrefs(s) {
 async function viewSetup() {
   const s = await api("/api/setup");
   const out = [el("h1", {}, "Set up from your resume"),
-    el("p", { class: "sub" }, `Profile "${s.profile}" · it will be saved in ${s.dir}`)];
+    el("p", { class: "sub" }, `Profile "${s.profile}" · it will be saved in ${s.dir}`), setupStepper(s)];
   if (s.exists) out.push(el("div", { class: "card" }, "Your profile is saved. ",
     el("a", { href: "#/" }, "See today's jobs"), ", or upload a resume to set it up again."));
   out.push(setupUpload(s));

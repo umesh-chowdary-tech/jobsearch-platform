@@ -263,6 +263,16 @@ def test_only_confirmed_items_reach_the_profile(new):
     assert "written by setup from a resume" in new.file("master-store.yaml").read_text(encoding="utf-8")
 
 
+def test_setup_opens_again_on_what_was_saved(new):
+    """The form sends the city and company boxes as typed text; reopening Setup
+    after a save read them back as text and the screen failed on .join()."""
+    _drafted(new)
+    _confirm_all(new)
+    O.save(new, {**O.state(new)["prefs"], "preferred": "Pune, Remote", "acceptable": "", "watch": "Globex"})
+    prefs = O.state(new)["prefs"]
+    assert prefs["preferred"] == ["Pune", "Remote"] and prefs["acceptable"] == [] and prefs["watch"] == ["Globex"]
+
+
 def test_pending_items_are_left_out_and_counted(new):
     _drafted(new)
     O.update_item(new, "id-name", "confirmed")

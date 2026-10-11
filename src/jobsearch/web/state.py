@@ -51,6 +51,7 @@ def _row(prof: Profile, p: dict[str, Any], pipe: dict, ledger: dict, variants: d
     ai = p.get("ai") or {}
     entry = pipe.get(pid) or {}
     later = entry.get("later")
+    matched = p.get("matched") or {}
     return {
         "favorite": bool(entry.get("favorite")),
         "later": ({"state": pipeline.later_state(entry), "until": later.get("until"),
@@ -66,6 +67,9 @@ def _row(prof: Profile, p: dict[str, Any], pipe: dict, ledger: dict, variants: d
         "fit": ai.get("fit"),
         "coverage": p.get("coverage") or "",
         "score": p.get("score", 0),
+        # A few of each for the list row; the posting's own page has them all.
+        "skills": list(matched)[:5],
+        "gaps": [g for g in p.get("required_gaps") or [] if g not in matched][:3],
         "closed": bool(p.get("closed_at")),
         "status": pipeline.status(pipe, pid),
         "variant": variants.get(pid),
@@ -157,7 +161,9 @@ def today(prof: Profile) -> dict[str, Any]:
         if need:
             due.append({"id": d["id"], "to": d["to"], "company": d["company"],
                         "role": d["role"], "need": need, "posting_id": d["posting_id"]})
+    name = str((load_store(prof).get("identity") or {}).get("name") or "")
     return {
+        "first_name": name.split()[0] if name.split() else "",
         "decide": decide,
         "back_from_later": back,
         "saved_for_later": len(waiting),

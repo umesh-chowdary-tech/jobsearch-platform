@@ -610,6 +610,12 @@ def _csv(v: Any) -> list[str]:
     return [s for s in (" ".join(str(x).split()) for x in items) if s]
 
 
+def _listed(prefs: dict[str, Any]) -> dict[str, Any]:
+    """Preferences in the shape the screen gets them: the form sends the city
+    and company boxes as typed text, the screen reads them back as lists."""
+    return {**prefs, **{k: _csv(prefs.get(k)) for k in ("preferred", "acceptable", "watch")}}
+
+
 def suggested_prefs(d: dict[str, Any]) -> dict[str, Any]:
     loc = next((it["value"] for it in _confirmed(d, "identity") if it["field"] == "location"), "")
     parts = [p.strip() for p in loc.split(",") if p.strip()]
@@ -711,7 +717,7 @@ def save(prof: Profile, prefs: dict[str, Any], replace: bool = False) -> dict[st
             text = HEADER.format(name=name, day=day) + yaml.safe_dump(doc, sort_keys=False, allow_unicode=True,
                                                                          width=100)
             prof.file(name).write_text(text, encoding="utf-8")
-        d["status"], d["saved_at"], d["prefs"] = "saved", utcnow(), prefs
+        d["status"], d["saved_at"], d["prefs"] = "saved", utcnow(), _listed(prefs)
         _save(prof, d)
     return {"saved": True, "dir": str(prof.dir), "left_out": progress(d)["pending"],
             "entries": len(store["entries"]), "skills": len(skill_suggestions(d))}
@@ -724,7 +730,7 @@ def state(prof: Profile) -> dict[str, Any]:
             "status": d.get("status", "new"), "lines": d.get("lines", 0), "file": d.get("file"),
             "items": d.get("items") or [], "dropped": d.get("dropped") or [],
             "progress": progress(d), "skills": skill_suggestions(d) if d else [],
-            "prefs": d.get("prefs") or (suggested_prefs(d) if d else {}),
+            "prefs": _listed(d["prefs"]) if d.get("prefs") else (suggested_prefs(d) if d else {}),
             "drafted_by": d.get("drafted_by"), "skip_options": sorted(SKIP),
             "will_send": to_send(prof) if (setup_dir(prof) / "resume.txt").exists() else "", "levels": {
                 k: v[0] for k, v in LEVELS.items()}}
