@@ -1,17 +1,39 @@
+# Dependency updates. Every ecosystem waits 14 days after a release before
+# proposing it: a compromised release is usually caught and pulled within
+# days, and the repository pins only versions at least two weeks old.
 version: 2
 updates:
   - package-ecosystem: pip
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 14
     open-pull-requests-limit: 5
+
   - package-ecosystem: npm
     directory: /web
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 14
     open-pull-requests-limit: 5
+    groups:
+      web-minor-and-patch:
+        update-types: ["minor", "patch"]
+    ignore:
+      # Vite 7+ and its React plugin 5+ need Node 20.19+. The maintainer's
+      # machine runs Node 20.16; lift these once it runs Node 22 (CI already
+      # builds on 22).
+      - dependency-name: vite
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@vitejs/plugin-react"
+        update-types: ["version-update:semver-major"]
+
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 14
     open-pull-requests-limit: 5
