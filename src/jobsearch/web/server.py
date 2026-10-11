@@ -9,6 +9,8 @@ One person, one machine, and the process holds API keys and personal data, so:
     Origin, so a page on another site cannot submit a form here
   - files are served only from the resume folders, by resolved path
   - keys never leave the process: the browser gets provider names, not keys
+  - an uploaded resume must come from this page (its Origin), as a PDF, Word
+    or text file, at most 5 MB
 
 Every action is the same function the CLI runs, captured by web/runner.py and
 held under the cross-process `busy` lock the scheduled cycle also takes.
@@ -27,7 +29,7 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import parse_qs, urlparse
 
-from .. import outreach, pipeline
+from .. import onboard, outreach, pipeline
 from ..busy import EditTimeout, busy, holder, request_stop
 from ..profile import Profile
 from ..registry import resolve_escalation
@@ -161,6 +163,9 @@ class ApiError(Exception):
 
 # Under the profile's var/<id>/.
 FILE_DIRS = {"resumes": ("resumes",), "manual": ("manual", "resumes")}
+# What a resume upload may be, by the type the page sends.
+UPLOAD_TYPES = {"application/pdf": ".pdf", "text/plain": ".txt",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx"}
 
 # Scripts are same-origin files only - no inline script, no eval. Inline styles
 # are allowed because the gap chart's bar widths are style attributes; with
@@ -219,6 +224,21 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 raise ApiError(400, "send a JSON object")
             return data
 
+        def _upload(self) -> tuple[bytes, str]:
+            """A resume, as the raw body. Stricter than _body: the Origin must
+            be present, so no other site's page can send a file here."""
+            if self.headers.get("Origin") not in app.origins:
+                raise ApiError(403, "uploads are accepted only from this page")
+            ctype = self.headers.get("Content-Type", "").split(";")[0].strip().lower()
+            if ctype not in UPLOAD_TYPES:
+                raise ApiError(415, "upload a PDF, a Word file (.docx) or a plain text file")
+            n = int(self.headers.get("Content-Length") or 0)
+            if n > onboard.MAX_BYTES:
+                raise ApiError(413, "that file is larger than 5 MB")
+            if n <= 0:
+                raise ApiError(400, "the file is empty")
+            return self.rfile.read(n), f"resume{UPLOAD_TYPES[ctype]}"
+
         def _guard(self, fn: Callable[[], None]) -> None:
             if not self._host_ok():
                 self._send(421, b"wrong host", "text/plain; charset=utf-8")
@@ -229,6 +249,8 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 self._json(e.status, {"error": e.message, **e.extra})
             except (outreach.OutreachError, pipeline.PipelineError) as e:
                 self._json(409, {"error": str(e)})
+            except onboard.SetupError as e:
+                self._json(400, {"error": str(e)})
             except EditTimeout:
                 self._json(409, {"error": "still saving another change - try again in a moment"})
             except Exception as e:  # noqa: BLE001 - a screen, not a crash
@@ -262,6 +284,7 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 "/api/profile": lambda: state.profile(prof),
                 "/api/applications": lambda: state.applications(prof),
                 "/api/actions": lambda: {k: v[0] for k, v in ACTIONS.items()},
+                "/api/setup": lambda: onboard.state(prof),
                 "/api/job": lambda: app.runner.snapshot(int((q.get("since") or ["0"])[0])),
             }
             if p in routes:
@@ -319,8 +342,38 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
 
         def _post(self) -> None:
             p = urlparse(self.path).path
-            body = self._body()
             prof = app.prof
+            if p == "/api/setup/upload":
+                onboard.upload(prof, *self._upload())
+                return self._json(200, onboard.state(prof) | {"will_send": onboard.to_send(prof)})
+            body = self._body()
+
+            # ── setup from a resume: each step returns the whole setup state ──
+            if p.startswith("/api/setup/"):
+                step = p[len("/api/setup/"):]
+                if step == "draft":
+                    onboard.draft(prof)
+                elif step == "item":
+                    onboard.update_item(prof, str(body.get("id") or ""), body.get("state"),
+                                        body.get("fields") if isinstance(body.get("fields"), dict) else None)
+                elif step == "fact":
+                    onboard.add_fact(prof, str(body.get("entry") or ""), str(body.get("text") or ""))
+                elif step == "restore":
+                    if isinstance(body.get("index"), bool) or not isinstance(body.get("index"), int):
+                        raise ApiError(400, "index must be a number")
+                    onboard.restore(prof, body["index"])
+                elif step == "skills":
+                    tiers = body.get("tiers")
+                    if not isinstance(tiers, dict):
+                        raise ApiError(400, "tiers must be an object")
+                    onboard.set_tiers(prof, tiers)
+                elif step == "save":
+                    prefs = body.get("prefs") if isinstance(body.get("prefs"), dict) else {}
+                    res = onboard.save(prof, prefs, replace=body.get("replace") is True)
+                    return self._json(200, onboard.state(prof) | {"result": res})
+                else:
+                    raise ApiError(404, "not found")
+                return self._json(200, onboard.state(prof))
 
             if p == "/api/run":
                 name = str(body.get("action") or "")
@@ -448,10 +501,10 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
     return Handler
 
 
-def serve(prof: Profile, port: int = DEFAULT_PORT, open_browser: bool = True) -> None:
+def serve(prof: Profile, port: int = DEFAULT_PORT, open_browser: bool = True, page: str = "") -> None:
     app = App(prof, port)
     httpd = ThreadingHTTPServer(("127.0.0.1", port), make_handler(app))
-    url = f"http://127.0.0.1:{port}/"
+    url = f"http://127.0.0.1:{port}/{page}"
     print(f"job search app for {prof.id} on {url}  (Ctrl+C to stop)", flush=True)
     if open_browser:
         webbrowser.open(url)

@@ -39,7 +39,7 @@ from pydantic import BaseModel, Field
 from . import outreach, pipeline, rank, statestore
 from .busy import editing, holder
 from .models import utcnow
-from .profile import Profile
+from .profile import Profile, var_dir
 from .web import state
 
 DESC_CHARS = 6000          # a posting's text, as much as a chat can usefully read
@@ -60,7 +60,7 @@ class Tools:
         self.var.mkdir(parents=True, exist_ok=True)
         # The database mirrors the whole of var/: this profile's and the shared
         # board state.
-        self.mirror = prof.root / "var"
+        self.mirror = var_dir(prof.root)
         self.remote = remote
         self._refresh: dict[str, Any] = {"running": False}
         self._sync_lock = threading.Lock()

@@ -31,6 +31,28 @@ def _number_pairs(text: str) -> set[tuple[str, str]]:
     return out
 
 
+def _plain(s: str) -> str:
+    return " ".join(str(s or "").split()).casefold()
+
+
+def untraced_bullets(resume_text: str, store: dict) -> list[str]:
+    """The bullet lines of a rendered resume that no confirmed fact says, word
+    for word - the no-invention check. Facts print verbatim, so on a resume
+    built from the store this is always empty; a line that isn't is a claim
+    the person never made."""
+    known: set[str] = set()
+    for e in store.get("entries") or []:
+        known.add(_plain(e.get("headline")))
+        known.update(_plain(f) for f in e.get("facts") or [])
+        known.update(_plain(m.get("claim")) for m in e.get("metrics") or [] if m.get("measured"))
+    out = []
+    for line in resume_text.splitlines():
+        m = re.match(r"\s*[-•]\s+(.+)$", line)
+        if m and _plain(m.group(1)) not in known:
+            out.append(m.group(1).strip())
+    return out
+
+
 def numbers_grounded(text: str, allowed: list[str]) -> tuple[bool, str]:
     text = URL.sub(" ", text)
     blob = " . ".join(URL.sub(" ", a) for a in allowed if a)

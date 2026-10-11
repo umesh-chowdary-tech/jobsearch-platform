@@ -14,8 +14,10 @@ Three kinds of file, kept apart on purpose:
                        own record of which postings it has triaged.
 
 Real people's profiles never belong in the repository. Only the fictional
-`sample-*` ones are committed (.gitignore); point JOBSEARCH_PROFILES at a
-folder outside the checkout to keep a real one well away from it.
+`sample-*` ones are committed (.gitignore); point JOBSEARCH_PROFILES (the
+profiles) and JOBSEARCH_VAR (what the agent works out, an uploaded resume
+included) at folders outside the checkout to keep a real person's data well
+away from it.
 """
 from __future__ import annotations
 
@@ -42,6 +44,12 @@ def profiles_dir(root: Path) -> Path:
     return Path(env) if env else Path(root) / "profiles"
 
 
+def var_dir(root: Path) -> Path:
+    """All machine state: var/ in the checkout, or JOBSEARCH_VAR."""
+    env = os.environ.get("JOBSEARCH_VAR")
+    return Path(env) if env else Path(root) / "var"
+
+
 @dataclass(frozen=True)
 class Profile:
     root: Path
@@ -65,7 +73,7 @@ class Profile:
     @property
     def var(self) -> Path:
         """What the agent worked out for this person."""
-        return self.root / "var" / self.id
+        return var_dir(self.root) / self.id
 
     @property
     def shared(self) -> Path:
@@ -84,7 +92,7 @@ class Profile:
 
 
 def shared_var(root: Path) -> Path:
-    return Path(root) / "var" / SHARED
+    return var_dir(root) / SHARED
 
 
 def list_profiles(root: Path) -> list[str]:

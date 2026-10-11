@@ -11,7 +11,7 @@ It grows out of a personal job-search agent and is being rebuilt step by step
 | Phase | What |
 |---|---|
 | 0 | One engine, many people, open-source ready: per-person profiles, sample profiles, CI, secret scanning, license |
-| 1 | Setup from a resume: upload, the AI drafts the facts, the person confirms each one |
+| 1 | Setup from a resume: upload, the AI drafts the facts, the person confirms each one (built: `jobsearch setup`) |
 | 2 | Invite-only hosted beta: sign-up, daily ranked jobs, tailored resumes, per-person AI caps |
 | 3 | Inbox: a forwarding address first, mail sign-in later |
 | 4 | Mobile app on the same backend |
@@ -49,6 +49,7 @@ python -m venv .venv
 .venv/Scripts/python -m pytest                      # no network needed
 
 .venv/Scripts/python -m jobsearch.cli profiles                                # the fictional samples
+.venv/Scripts/python -m jobsearch.cli setup my-name                           # your own profile, from your resume
 .venv/Scripts/python -m jobsearch.cli verify                                  # find and check boards
 .venv/Scripts/python -m jobsearch.cli watch                                   # what is new, for everyone
 .venv/Scripts/python -m jobsearch.cli --profile sample-backend triage         # against one profile
@@ -63,7 +64,7 @@ model keys; without any, everything up to ranking still runs.
 
 ## Docs
 
-[discovery](docs/discovery.md) · [watching](docs/watching.md) ·
+[setup from a resume](docs/setup.md) · [discovery](docs/discovery.md) · [watching](docs/watching.md) ·
 [triage](docs/triage.md) · [ranking](docs/ranking.md) ·
 [assembly](docs/assembly.md) · [outreach](docs/outreach.md) ·
 [inbox](docs/mail.md) · [model limits](docs/limits.md) ·

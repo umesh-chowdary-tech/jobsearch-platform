@@ -12,3 +12,5 @@ var/
 profiles/*
 !profiles/README.md
 !profiles/sample-*/
+# Local preview settings (machine-specific)
+.claude/launch.json

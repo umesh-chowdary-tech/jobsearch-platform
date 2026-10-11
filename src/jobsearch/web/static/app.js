@@ -952,6 +952,216 @@ async function viewProfile() {
       el("div", {}, (e.tech || []).map(t => el("span", { class: "pill" }, t)))))];
 }
 
+/* ── Setup: a profile from a resume ────────────────────────────────────────
+   The AI drafts; every item shows the resume line it came from; nothing is
+   in the profile until it is confirmed here. */
+
+const SETUP_TYPES = { ".pdf": "application/pdf", ".txt": "text/plain",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document" };
+const TIER_LABELS = [["core", "Strong - lead with it"], ["working", "Used it"],
+                     ["incidental", "Touched it - never listed"], ["remove", "Not a skill of mine"]];
+const ENTRY_KINDS = [["work", "Work"], ["project", "Projects"], ["education", "Education"],
+                     ["certification", "Certifications"], ["award", "Awards"]];
+const IDENTITY_NAMES = { name: "Name", location: "Location", email: "Email", phone: "Phone",
+                         linkedin: "LinkedIn", github: "GitHub" };
+
+async function setupStep(step, body) {
+  try { await api(`/api/setup/${step}`, body || {}); render(); }
+  catch (e) { toast(e.message); }
+}
+
+async function uploadResume(file, button) {
+  const ext = ((file.name || "").match(/\.[^.]+$/) || [""])[0].toLowerCase();
+  if (!SETUP_TYPES[ext]) { toast("Upload a PDF, a Word file (.docx) or a plain text file"); return; }
+  button.disabled = true; button.textContent = "Reading…";
+  try {
+    const r = await fetch("/api/setup/upload", { method: "POST", headers: { "Content-Type": SETUP_TYPES[ext] }, body: file });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+    render();
+  } catch (e) { toast(e.message); button.disabled = false; button.textContent = "Upload"; }
+}
+
+function setupUpload(s) {
+  const input = el("input", { type: "file", accept: ".pdf,.docx,.txt", "aria-label": "Your resume" });
+  const btn = el("button", { type: "button", class: s.status === "new" ? "primary" : "" }, "Upload");
+  btn.addEventListener("click", () => input.files[0] ? uploadResume(input.files[0], btn) : toast("Choose a file first"));
+  return el("div", { class: "card stack" },
+    el("div", { class: "kit-h", style: "margin-top:0" }, "1 · Your resume"),
+    el("p", { class: "small" }, "A PDF, a Word file or plain text. It stays on this computer; only its text, with your email, phone and links removed, is sent to the AI."),
+    s.file && el("p", { class: "muted small" }, `Read: ${s.lines} lines from ${s.file}. Upload again to start over.`),
+    el("div", { class: "row" }, input, btn));
+}
+
+function setupDraftCard(s) {
+  const btn = el("button", { type: "button", class: "primary" }, "Draft my facts");
+  btn.addEventListener("click", async () => {
+    btn.disabled = true; btn.textContent = "Drafting - about a minute…";
+    await setupStep("draft");
+  });
+  return el("div", { class: "card stack" },
+    el("div", { class: "kit-h", style: "margin-top:0" }, "2 · Let the AI draft your facts"),
+    el("p", { class: "small" }, "One request, counted against your daily AI limit. Every item it returns must quote a line of your resume, or it is left out."),
+    el("details", {}, el("summary", {}, "Exactly what will be sent"), el("pre", { class: "send" }, s.will_send || "")),
+    btn);
+}
+
+function setupItem(it, fields) {
+  const inputs = {};
+  const boxes = fields.map(([key, label, multi]) => {
+    const box = multi ? el("textarea", { rows: 2 }, it[key] || "") : el("input", { type: "text", value: it[key] || "" });
+    inputs[key] = box;
+    return el("label", { class: multi ? "wide" : "" }, label || "", box);
+  });
+  const act = state => {
+    const changed = {};
+    for (const [k, box] of Object.entries(inputs)) if (box.value !== (it[k] || "")) changed[k] = box.value;
+    setupStep("item", { id: it.id, state, fields: changed });
+  };
+  const from = it.source ? el("div", { class: "src" }, "From your resume: ", el("q", {}, it.source))
+    : el("div", { class: "src" }, it.by === "you" ? "Written by you" : "");
+  return el("div", { class: `setup-item ${it.state}` }, el("div", { class: "fields" }, boxes), from,
+    el("div", { class: "row" },
+      it.state !== "confirmed" && el("button", { type: "button", class: "primary", onclick: () => act("confirmed") }, "Confirm"),
+      it.state !== "removed" && el("button", { type: "button", onclick: () => act("removed") }, "Remove"),
+      it.state !== "pending" && el("button", { type: "button", onclick: () => act("pending") }, "Undo"),
+      el("span", { class: `state ${it.state}` }, it.state === "pending" ? "to check" : it.state),
+      it.edited && el("span", { class: "muted small" }, "edited by you")));
+}
+
+function techChips(items) {
+  if (!items.length) return null;
+  const pending = items.filter(t => t.state === "pending");
+  return el("div", { class: "stack" },
+    el("div", { class: "muted small" }, "Skills this work names - each from its line:"),
+    el("div", {}, items.map(t => el("span", { class: `chip ${t.state}`, title: t.source },
+      t.name,
+      t.state !== "confirmed" && el("button", { type: "button", "aria-label": `Confirm ${t.name}`, onclick: () => setupStep("item", { id: t.id, state: "confirmed" }) }, "✓"),
+      t.state !== "removed" && el("button", { type: "button", "aria-label": `Remove ${t.name}`, onclick: () => setupStep("item", { id: t.id, state: "removed" }) }, "✕")))),
+    pending.length > 1 && el("button", { type: "button", onclick: async () => {
+      for (const t of pending) await api("/api/setup/item", { id: t.id, state: "confirmed" }).catch(e => toast(e.message));
+      render();
+    } }, `Confirm all ${pending.length} skills here`));
+}
+
+function setupEntry(e, items) {
+  const facts = items.filter(i => i.kind === "fact" && i.entry === e.id);
+  const tech = items.filter(i => i.kind === "tech" && i.entry === e.id);
+  const add = el("input", { type: "text", placeholder: "Add a fact in your own words (numbers only if they are true)" });
+  return el("div", { class: `card stack entry ${e.state}` },
+    setupItem(e, [["title", "Name"], ["where", "Where"], ["period", "When"], ["headline", "What it was", true]]),
+    e.state !== "removed" && el("div", { class: "stack facts" },
+      facts.map(f => setupItem(f, [["text", "", true]])),
+      el("div", { class: "row" }, add,
+        el("button", { type: "button", onclick: () => setupStep("fact", { entry: e.id, text: add.value }) }, "Add")),
+      techChips(tech)));
+}
+
+function setupReview(s) {
+  const items = s.items, p = s.progress;
+  const of = kind => items.filter(i => i.kind === kind);
+  const out = [el("div", { class: "kit-h" }, "2 · Drafted" + (s.drafted_by ? ` by ${s.drafted_by}` : "")),
+    el("p", { class: "muted small" }, "Upload the resume again to start over from a new draft."),
+    el("div", { class: "kit-h" }, "3 · Check every item"),
+    el("p", { class: "small" }, `${p.confirmed} confirmed · ${p.pending} still to check · ${p.removed} removed. Only confirmed items go into your profile. Edit anything before confirming - your own words stand as you write them.`),
+  ];
+  const ids = of("identity");
+  if (ids.length) out.push(el("h2", {}, "About you"),
+    el("div", { class: "card stack" }, ids.map(i => setupItem(i, [["value", IDENTITY_NAMES[i.field] || i.field]]))));
+  const jobs = of("job");
+  if (jobs.length) out.push(el("h2", {}, "Jobs"), el("div", { class: "card stack" },
+    jobs.map(j => setupItem(j, [["title", "Title"], ["employer", "Employer"], ["location", "Location"], ["start", "From (YYYY-MM)"], ["end", "To (YYYY-MM or present)"]]))));
+  for (const [kind, label] of ENTRY_KINDS) {
+    const entries = of("entry").filter(e => e.type === kind);
+    if (entries.length) out.push(el("h2", {}, label), entries.map(e => setupEntry(e, items)));
+  }
+  const langs = of("language");
+  if (langs.length) out.push(el("h2", {}, "Languages"), el("div", { class: "card stack" }, langs.map(l => setupItem(l, [["value", ""]]))));
+  if (s.dropped.length) out.push(el("h2", {}, `Left out · ${s.dropped.length}`),
+    el("p", { class: "small" }, "The AI said these, but they didn't match your resume, so they were not kept."),
+    el("div", { class: "card stack" }, s.dropped.map((d, n) => el("div", { class: "spread" },
+      el("div", {}, el("div", { class: "small" }, d.what), el("div", { class: "muted small" }, d.why),
+        d.source && el("div", { class: "src" }, el("q", {}, d.source))),
+      d.entry && d.source && el("button", { type: "button", onclick: () => setupStep("restore", { index: n }) }, "Use the resume line")))));
+  return out;
+}
+
+function setupSkills(s) {
+  if (!s.skills.length) return el("div", { class: "card" }, el("div", { class: "kit-h", style: "margin-top:0" }, "4 · Skills"),
+    el("p", { class: "muted small" }, "Confirm some work and the skills its lines name, and they appear here."));
+  const picks = {};
+  const rows = s.skills.map(k => {
+    const sel = el("select", { "aria-label": `How well you know ${k.name}` },
+      TIER_LABELS.map(([v, l]) => el("option", { value: v, selected: v === k.tier }, l)));
+    picks[k.name] = sel;
+    return el("tr", {}, el("td", {}, k.name), el("td", { class: "muted small" }, `${k.backed_by} entr${k.backed_by === 1 ? "y" : "ies"}`), el("td", {}, sel));
+  });
+  return el("div", { class: "card stack" },
+    el("div", { class: "kit-h", style: "margin-top:0" }, "4 · Skills"),
+    el("p", { class: "small" }, "Only skills your confirmed work names. \"Touched it\" is never listed on a resume."),
+    el("table", {}, el("tbody", {}, rows)),
+    el("button", { type: "button", onclick: () => setupStep("skills", {
+      tiers: Object.fromEntries(Object.entries(picks).map(([n, sel]) => [n, sel.value])) }) }, "Save skill choices"));
+}
+
+function setupPrefs(s) {
+  const p = s.prefs || {};
+  const csv = v => (v || []).join(", ");
+  const preferred = el("input", { type: "text", value: csv(p.preferred) });
+  const acceptable = el("input", { type: "text", value: csv(p.acceptable) });
+  const remote = el("input", { type: "checkbox", checked: p.remote !== false });
+  const years = el("input", { type: "number", min: "0", max: "50", value: p.years ?? 0 });
+  const maxYears = el("input", { type: "number", min: "0", max: "60", value: p.max_years ?? 2 });
+  const level = el("select", {}, Object.entries(s.levels).map(([k, l]) => el("option", { value: k, selected: k === p.level }, l)));
+  const skip = Object.fromEntries(s.skip_options.map(k => [k, el("input", { type: "checkbox", checked: (p.skip || []).includes(k) })]));
+  const watch = el("input", { type: "text", value: csv(p.watch) });
+  const save = el("button", { type: "button", class: "primary" }, s.exists ? "Save and replace my profile" : "Save my profile");
+  save.addEventListener("click", async () => {
+    if (s.progress.pending && !confirm(`${s.progress.pending} item(s) are not confirmed and will be left out. Save anyway?`)) return;
+    if (s.exists && !confirm("Replace the saved profile with this one?")) return;
+    const prefs = { preferred: preferred.value, acceptable: acceptable.value, remote: remote.checked,
+      years: Number(years.value), max_years: Number(maxYears.value), level: level.value,
+      skip: Object.entries(skip).filter(([, b]) => b.checked).map(([k]) => k), watch: watch.value };
+    try {
+      const r = await api("/api/setup/save", { prefs, replace: s.exists });
+      toast(`Saved: ${r.result.entries} entries, ${r.result.skills} skills`);
+      location.hash = "#/"; location.reload();
+    } catch (e) { toast(e.message); }
+  });
+  return el("div", { class: "card stack" },
+    el("div", { class: "kit-h", style: "margin-top:0" }, "5 · What you're looking for"),
+    el("label", {}, "Cities you'd most like (comma-separated)", preferred),
+    el("label", {}, "Also fine - cities or a country", acceptable),
+    el("label", { class: "inline" }, remote, " Remote roles are fine"),
+    el("div", { class: "row" }, el("label", {}, "Years of experience", years), el("label", {}, "Skip roles asking more than (years)", maxYears)),
+    el("label", {}, "You are", level),
+    el("div", {}, el("div", { class: "muted small" }, "Roles to skip"),
+      s.skip_options.map(k => el("label", { class: "inline" }, skip[k], ` ${k}`))),
+    el("label", {}, "Companies you'd like watched (comma-separated)", watch),
+    save);
+}
+
+async function viewSetup() {
+  const s = await api("/api/setup");
+  const out = [el("h1", {}, "Set up from your resume"),
+    el("p", { class: "sub" }, `Profile "${s.profile}" · it will be saved in ${s.dir}`)];
+  if (s.exists) out.push(el("div", { class: "card" }, "Your profile is saved. ",
+    el("a", { href: "#/" }, "See today's jobs"), ", or upload a resume to set it up again."));
+  out.push(setupUpload(s));
+  if (s.status === "uploaded") out.push(setupDraftCard(s));
+  if (s.status === "drafted" || s.status === "saved") out.push(setupReview(s), setupSkills(s), setupPrefs(s));
+  return out;
+}
+
+/* Before a profile exists, setup is the only screen there is. */
+async function setupGate() {
+  try {
+    const s = await api("/api/setup");
+    document.body.classList.toggle("setup-only", !s.exists);
+    if (!s.exists && !location.hash.startsWith("#/setup")) location.hash = "#/setup";
+  } catch { /* the rest of the app reports its own errors */ }
+}
+
 /* ── router ──────────────────────────────────────────────────────────────── */
 
 async function render() {
@@ -959,7 +1169,7 @@ async function render() {
   const params = new URLSearchParams(query || "");
   const seg = (path || "/").split("/").filter(Boolean);
   const routes = { "": viewToday, postings: viewPostings, applications: viewApplications, resumes: viewResumes, outreach: viewOutreach,
-                   market: viewMarket, system: viewSystem, profile: viewProfile };
+                   market: viewMarket, system: viewSystem, profile: viewProfile, setup: viewSetup };
   let fn, name = seg[0] || "";
   if (name === "p" && seg[1]) { fn = () => viewPosting(decodeURIComponent(seg[1])); name = "postings"; }
   else fn = routes[name] || viewToday;
@@ -975,5 +1185,5 @@ async function render() {
 
 window.addEventListener("hashchange", () => { render(); view.focus({ preventScroll: true }); window.scrollTo(0, 0); });
 refreshHealth();
-render();
+setupGate().then(render);
 api("/api/job").then(s => { if (s.busy) openConsole(); }).catch(() => {});

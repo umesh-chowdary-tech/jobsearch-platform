@@ -1,6 +1,7 @@
 """The command line. Board commands are shared; the rest work on one profile.
 
     python -m jobsearch.cli profiles               list the profiles
+    python -m jobsearch.cli setup <id>             a new profile from a resume, in your browser
     python -m jobsearch.cli verify                 re-check every known board
     python -m jobsearch.cli verify --provider lever
     python -m jobsearch.cli search "Postman" "Zepto"
@@ -42,7 +43,7 @@ from .discovery import DiscoveryRun, normalise, search_company, verify_known
 from .http import default_fetcher
 from .providers import ALL_PROVIDERS
 from .models import BLOCKED, EMPTY, ERROR, NOT_FOUND, OK
-from .profile import Profile, ProfileError, list_profiles, profiles_dir, resolve, shared_var
+from .profile import Profile, ProfileError, list_profiles, profiles_dir, resolve, shared_var, var_dir
 from .watch import POLLED, SEEDED, SKIPPED, load_boards, record_new, watch_all
 from .assemble_cli import run_assemble
 from .outreach_cli import add_parser as add_outreach
@@ -320,7 +321,7 @@ def cmd_cycle(args: argparse.Namespace) -> int:
     root = _root(args)
     load_dotenv(root / ".env")
     who = [_prof(args)] if getattr(args, "profile", None) else None
-    var = root / "var"
+    var = var_dir(root)
     remote = statestore.remote_from_env()
     if remote is None:
         return run_cycle(root, args.quiet, profiles=who)
@@ -356,7 +357,7 @@ def cmd_state(args: argparse.Namespace) -> int:
     from . import statestore
     from .llm import load_dotenv
     load_dotenv(_root(args) / ".env")
-    var = _root(args) / "var"
+    var = var_dir(_root(args))
     remote = statestore.remote_from_env()
     if remote is None:
         print("DATABASE_URL is not set (put it in .env)", file=sys.stderr)
@@ -383,6 +384,24 @@ def _connector(args: argparse.Namespace) -> int:
 def _serve(args: argparse.Namespace) -> int:
     from .web.server import serve
     serve(_prof(args), port=args.port, open_browser=not args.no_browser)
+    return 0
+
+
+def _setup(args: argparse.Namespace) -> int:
+    """The app, on its setup screen, for a profile that may not exist yet."""
+    from .web.server import serve
+    root = _root(args)
+    prof = Profile(root, args.id)
+    print(f"setting up '{prof.id}'")
+    print(f"  the profile will be written to {prof.dir}")
+    print(f"  the uploaded resume and the draft stay in {prof.var / 'setup'}")
+    try:
+        prof.dir.resolve().relative_to(root.resolve())
+        print("  both are inside this checkout (gitignored). To keep a real person's data out of it,")
+        print("  set JOBSEARCH_PROFILES and JOBSEARCH_VAR in .env to folders elsewhere.")
+    except ValueError:
+        pass
+    serve(prof, port=args.port, open_browser=not args.no_browser, page="#/setup")
     return 0
 
 
@@ -460,6 +479,12 @@ def main(argv: list[str] | None = None) -> int:
     kt.add_argument("posting", help="posting id, or a unique prefix of one")
     kt.set_defaults(fn=cmd_kit)
 
+    su = sub.add_parser("setup", help="create a profile from a resume: upload, confirm each fact, save")
+    su.add_argument("id", help="the new profile's id: lowercase letters, digits and hyphens")
+    su.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8765)))
+    su.add_argument("--no-browser", action="store_true", help="start the server only")
+    su.set_defaults(fn=_setup)
+
     sv = sub.add_parser("serve", help="open the local app in your browser")
     sv.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8765)))
     sv.add_argument("--no-browser", action="store_true", help="start the server only")
@@ -477,6 +502,10 @@ def main(argv: list[str] | None = None) -> int:
     d.set_defaults(fn=cmd_dashboard)
 
     args = ap.parse_args(argv)
+    # Before anything resolves a profile: JOBSEARCH_PROFILES and JOBSEARCH_VAR
+    # may be set there.
+    from .llm import load_dotenv
+    load_dotenv(_root(args) / ".env")
     try:
         return args.fn(args)
     except ProfileError as exc:

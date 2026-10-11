@@ -56,9 +56,17 @@ hyphens.
 
 ## Starting a new profile
 
-Copy a sample folder, rename it, and replace every fact with the person's own.
-The rules in the sample files' comments are the rules: nothing goes in the
-store that the person cannot defend in an interview, no number is rounded or
-filled in, and a skill appears on a resume only when an entry's `tech` backs
-it. Phase 1 (docs/ROADMAP.md) replaces this by hand-copying with setup from an
-uploaded resume, where the person confirms each fact.
+```bash
+python -m jobsearch.cli setup <id>
+```
+
+Upload a resume, check each fact the AI drafts against the line it came from,
+say what you're looking for, and save (docs/setup.md). Only what you confirm
+is written. To keep your data outside this checkout, set `JOBSEARCH_PROFILES`
+and `JOBSEARCH_VAR` in `.env` to a private folder first.
+
+By hand works too: copy a sample folder, rename it, and replace every fact
+with the person's own. The rules in the sample files' comments are the rules:
+nothing goes in the store that the person cannot defend in an interview, no
+number is rounded or filled in, and a skill appears on a resume only when an
+entry's `tech` backs it.
