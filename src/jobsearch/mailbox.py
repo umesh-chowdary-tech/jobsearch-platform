@@ -110,7 +110,7 @@ def text_of(msg: email.message.Message) -> str:
         t = re.sub(r"<a\b[^>]*href=\"([^\"]+)\"[^>]*>", r" \1 ", t, flags=re.I)
         t = re.sub(r"<br\s*/?>|</p>|</div>|</tr>|</li>", "\n", t, flags=re.I)
         t = unescape(re.sub(r"<[^>]+>", " ", t))
-    t = re.sub(r"[ \t ​]+", " ", t)
+    t = re.sub(r"[ \t\u00a0\u200b]+", " ", t)   # also no-break and zero-width spaces
     return re.sub(r"\n\s*\n+", "\n", t).strip()
 
 

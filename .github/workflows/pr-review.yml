@@ -1,0 +1,63 @@
+# PR-Agent (https://github.com/The-PR-Agent/pr-agent, MIT): an open-source AI
+# reviewer that comments on each pull request - a summary, likely bugs and
+# security problems, and suggested changes. Advice only: CI is the gate.
+#
+# Off until the repository secret ANTHROPIC_API_KEY is set (Settings >
+# Secrets and variables > Actions). Then it reviews each new pull request
+# once, with Claude; the owner can ask again by commenting /review,
+# /improve or /describe. Nobody else's comments start it, so strangers on a
+# public repository can't spend the key. Bot pull requests (Dependabot) are
+# skipped, and pull requests from forks never see the key.
+name: pr-review
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+  issue_comment:
+    types: [created]
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+concurrency:
+  group: pr-review-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: false
+jobs:
+  review:
+    if: >-
+      github.event.sender.type != 'Bot' && (
+        github.event_name == 'pull_request' ||
+        (github.event.issue.pull_request && github.event.comment.author_association == 'OWNER' &&
+         startsWith(github.event.comment.body, '/'))
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      HAS_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+    steps:
+      - name: Not switched on
+        if: env.HAS_KEY != 'true'
+        run: echo "ANTHROPIC_API_KEY is not set - PR-Agent stays off"
+      - name: PR-Agent
+        if: env.HAS_KEY == 'true'
+        # v0.46.0, pinned by commit so a moved tag can't change what runs here.
+        uses: The-PR-Agent/pr-agent@1d01f24f455bb879c1d9c557ad7de3d72dcc7975
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANTHROPIC.KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CONFIG.MODEL: anthropic/claude-sonnet-5-5
+          CONFIG.FALLBACK_MODELS: '["anthropic/claude-haiku-5-5"]'
+          CONFIG.CUSTOM_MODEL_MAX_TOKENS: "200000"
+          # Least privilege: comments only, no pushes to the branch.
+          CONFIG.RESTRICTED_MODE: "true"
+          GITHUB_ACTION_CONFIG.AUTO_REVIEW: "true"
+          GITHUB_ACTION_CONFIG.AUTO_DESCRIBE: "false"
+          GITHUB_ACTION_CONFIG.AUTO_IMPROVE: "true"
+          PR_REVIEWER.REQUIRE_SECURITY_REVIEW: "true"
+          PR_REVIEWER.REQUIRE_TESTS_REVIEW: "true"
+          # The rules a change here must keep (docs/ROADMAP.md, "Principles").
+          PR_REVIEWER.EXTRA_INSTRUCTIONS: >-
+            This is a public job-search agent. Flag anything that could put a person's
+            data, a key or a token into the repository, logs or error messages; let a
+            resume gain a skill, number or claim the person hasn't confirmed; call a
+            model without a cap from data/llm-limits.yaml; scrape LinkedIn or Naukri or
+            ignore robots.txt; or let one signed-in person reach another's data.

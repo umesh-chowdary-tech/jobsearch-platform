@@ -18,7 +18,10 @@ export function SignIn({ config, onDone }: { config: Config | null; onDone: () =
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setErr("");
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) { setErr("Enter your email address"); return; }
+    const [local, domain = ""] = email.trim().split("@");
+    if (!local || !domain.includes(".") || email.trim().split("@").length !== 2 || /\s/.test(email.trim())) {
+      setErr("Enter your email address"); return;
+    }
     setBusy(true);
     try {
       if (dev) { await devSignIn(email.trim()); onDone(); }

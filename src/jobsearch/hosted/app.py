@@ -18,7 +18,6 @@ import io
 import json
 import logging
 import os
-import re
 import shutil
 import threading
 import zipfile
@@ -28,7 +27,7 @@ from typing import Any, Callable
 from urllib.parse import parse_qs, urlparse
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
@@ -47,9 +46,16 @@ WEB_DIST = ROOT / "web" / "dist"
 JSON_MAX = 64_000
 FILE_CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; frame-ancestors 'none'"
 RESUME_TYPES = {".pdf": "application/pdf", ".html": "text/html; charset=utf-8", ".txt": "text/plain; charset=utf-8"}
-EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 DELETE_WORDS = "delete my account"
 log = logging.getLogger("jobsearch.hosted")
+
+
+def plausible_email(email: str) -> bool:
+    """Shaped like an address, checked without a regex that could backtrack
+    on a long input. Dev sign-in only; Supabase checks real ones."""
+    local, at, domain = email.partition("@")
+    return (bool(at) and 0 < len(local) <= 64 and 3 < len(domain) <= 190 and "@" not in domain
+            and "." in domain.strip(".") and not any(c.isspace() for c in email))
 
 
 def _csp(supabase_url: str) -> str:
@@ -102,7 +108,7 @@ async def _json_body(request: Request) -> dict[str, Any]:
     try:
         data = json.loads(raw or b"{}")
     except json.JSONDecodeError:
-        raise ApiError(400, "bad JSON")
+        raise ApiError(400, "bad JSON") from None
     if not isinstance(data, dict):
         raise ApiError(400, "send a JSON object")
     return data
@@ -131,7 +137,7 @@ class Service:
         try:
             return self.verifier.verify(token.strip())
         except AuthError as exc:
-            raise ApiError(401, str(exc))
+            raise ApiError(401, str(exc)) from exc
 
     def member(self, request: Request) -> tuple[Who, Profile]:
         who = self.who(request)
@@ -171,7 +177,7 @@ def _admin_overview(svc: Service) -> dict[str, Any]:
     data = accounts.load(svc.shared)
     usage = Meter(svc.root).month_by_profile()
     people = []
-    for sub, row in sorted(data["users"].items(), key=lambda kv: kv[1].get("joined") or ""):
+    for row in sorted(data["users"].values(), key=lambda r: r.get("joined") or ""):
         prof = Profile(svc.root, row["profile"])
         people.append({"email": row.get("email"), "profile": row["profile"], "joined": row.get("joined"),
                        "profile_ready": prof.exists(),
@@ -240,7 +246,7 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
             except ApiError as exc:
                 return _json_response(*routes.as_error(exc, HOSTED))
             email = str(body.get("email") or "").strip().lower()
-            if not EMAIL.match(email):
+            if not plausible_email(email):
                 return _json_response(400, {"error": "enter an email address"})
             return _json_response(200, {"token": verifier.mint_dev(email)})
 
@@ -261,7 +267,7 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
             try:
                 accounts.join(svc.shared, who.sub, who.email, str(body.get("code") or ""))
             except accounts.AccountError as exc:
-                raise ApiError(400, str(exc))
+                raise ApiError(400, str(exc)) from exc
             return svc.me(who)
         return await run_in_threadpool(_respond, go)
 
@@ -281,9 +287,8 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
     async def resume_file(name: str, request: Request) -> Response:
         def go() -> Any:
             _, prof = svc.member(request)
-            base = (prof.var / "resumes").resolve()
-            f = (base / name).resolve()
-            if "/" in name or "\\" in name or not f.is_relative_to(base) or not f.is_file():
+            f = routes.pick_file(prof.var / "resumes", name)
+            if f is None:
                 raise ApiError(404, "not found")
             return Response(f.read_bytes(), media_type=RESUME_TYPES.get(f.suffix.lower(), "text/plain; charset=utf-8"),
                             headers={"Content-Security-Policy": FILE_CSP,
@@ -315,7 +320,7 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
                     mirror.forget(prefixes)
                 except Exception:  # noqa: BLE001
                     log.exception("forgetting %s in the database failed", prof.id)
-                    raise ApiError(503, "Couldn't delete your account right now - try again in a few minutes.")
+                    raise ApiError(503, "Couldn't delete your account right now - try again in a few minutes.") from None
             for d in (prof.dir, prof.var):
                 shutil.rmtree(d, ignore_errors=True)
             accounts.remove(svc.shared, who.sub)
@@ -348,7 +353,7 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
             try:
                 return {"codes": accounts.create_invites(svc.shared, n, str(body.get("note") or ""))}
             except accounts.AccountError as exc:
-                raise ApiError(400, str(exc))
+                raise ApiError(400, str(exc)) from exc
         return await run_in_threadpool(_respond, go)
 
     # ── the scheduled cycle, started by a cron job that knows the secret ────

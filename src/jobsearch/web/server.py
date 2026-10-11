@@ -19,7 +19,6 @@ runs (web/actions.py), captured by web/runner.py.
 from __future__ import annotations
 
 import json
-import mimetypes
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -48,6 +47,9 @@ class App:
         self.origins = {f"http://{h}" for h in self.hosts}
 
 
+# The page's own files, by extension - never a type guessed from a request.
+STATIC_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
+                ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png"}
 # Under the profile's var/<id>/.
 FILE_DIRS = {"resumes": ("resumes",), "manual": ("manual", "resumes")}
 # Scripts are same-origin files only - no inline script, no eval. Inline styles
@@ -102,7 +104,7 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
             try:
                 data = json.loads(self.rfile.read(n) or b"{}")
             except json.JSONDecodeError:
-                raise ApiError(400, "bad JSON")
+                raise ApiError(400, "bad JSON") from None
             if not isinstance(data, dict):
                 raise ApiError(400, "send a JSON object")
             return data
@@ -153,21 +155,18 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
                 from ..dashboard import _CSS
                 return self._send(200, _CSS.encode("utf-8"), "text/css; charset=utf-8",
                                   cache="no-cache")
-            f = (STATIC / rel).resolve()
-            if not f.is_relative_to(STATIC.resolve()) or not f.is_file():
+            f = routes.pick_file(STATIC, rel)
+            if f is None:
                 raise ApiError(404, "not found")
-            ctype = mimetypes.guess_type(f.name)[0] or "application/octet-stream"
-            if ctype.startswith("text/") or ctype.endswith("javascript"):
-                ctype += "; charset=utf-8"
-            self._send(200, f.read_bytes(), ctype, cache="no-cache")
+            self._send(200, f.read_bytes(), STATIC_TYPES.get(f.suffix.lower(), "application/octet-stream"),
+                       cache="no-cache")
 
         def _file(self, rel: str) -> None:
             kind, _, name = rel.partition("/")
             if kind not in FILE_DIRS or not name or "/" in name or "\\" in name:
                 raise ApiError(404, "not found")
-            base = app.prof.var.joinpath(*FILE_DIRS[kind]).resolve()
-            f = (base / name).resolve()
-            if not f.is_relative_to(base) or not f.is_file():
+            f = routes.pick_file(app.prof.var.joinpath(*FILE_DIRS[kind]), name)
+            if f is None:
                 raise ApiError(404, "not found")
             ext = f.suffix.lower()
             ctype = {".pdf": "application/pdf", ".html": "text/html; charset=utf-8"}.get(

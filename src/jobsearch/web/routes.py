@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 import re
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from .. import feedback, onboard, outreach, pipeline
@@ -63,6 +64,14 @@ HOSTED_POST = tuple(re.compile(p) for p in (
 # What a resume upload may be, by the type the page sends.
 UPLOAD_TYPES = {"application/pdf": ".pdf", "text/plain": ".txt",
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx"}
+
+
+def pick_file(folder: Path, name: str) -> Path | None:
+    """The file in `folder` named exactly `name`, found by listing the folder,
+    so the text of a request never becomes a path to open."""
+    if not folder.is_dir():
+        return None
+    return next((f for f in folder.iterdir() if f.name == name and f.is_file()), None)
 
 
 def allowed(method: str, path: str, scope: str) -> bool:
@@ -198,7 +207,7 @@ def _posting_action(prof: Profile, pid: str, what: str, body: dict[str, Any]) ->
         try:
             until = datetime.fromisoformat(str(body["until"]).replace("Z", "+00:00"))
         except ValueError:
-            raise ApiError(400, "until must be an ISO date-time")
+            raise ApiError(400, "until must be an ISO date-time") from None
         return pipeline.save_for_later(prof, pid, until=until)
     return pipeline.save_for_later(prof, pid, body.get("days"))
 
@@ -253,7 +262,7 @@ def post(prof: Profile, path: str, body: dict[str, Any], runner: Runner, scope: 
             fn = mail_learn.approve if m.group(2) == "approve" else mail_learn.reject
             return 200, fn(prof, m.group(1))
         except ValueError as exc:
-            raise ApiError(404, str(exc))
+            raise ApiError(404, str(exc)) from exc
     m = re.fullmatch(rf"/api/applications/({_ID})/(confirm|status|ignore|merge|suggestion|undo-auto)", path)
     if m:
         return 200, _application(prof, m.group(1), m.group(2), body)
@@ -296,4 +305,4 @@ def _application(prof: Profile, app_id: str, what: str, body: dict[str, Any]) ->
             raise ApiError(404, "no application to merge into")
         return A.merge(prof, app_id, into)
     except ValueError as exc:
-        raise ApiError(400, str(exc))
+        raise ApiError(400, str(exc)) from exc

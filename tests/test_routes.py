@@ -103,3 +103,12 @@ def test_the_apps_cycle_is_this_persons(prof, monkeypatch):
 
 def test_search_needs_a_company(prof, capsys):
     assert actions._search(prof, {"companies": " , "}) == 2
+
+
+def test_a_file_is_found_by_its_exact_name_in_the_folder_only(tmp_path):
+    (tmp_path / "v1.pdf").write_bytes(b"%PDF")
+    (tmp_path.parent / "secret.txt").write_text("no", encoding="utf-8")
+    assert routes.pick_file(tmp_path, "v1.pdf") == tmp_path / "v1.pdf"
+    for name in ("../secret.txt", "..", ".", "", "V1.PDF", "v1.pdf/"):
+        assert routes.pick_file(tmp_path, name) is None, name
+    assert routes.pick_file(tmp_path / "missing", "v1.pdf") is None

@@ -5,13 +5,12 @@ import argparse
 import copy
 import json
 import socket
-from pathlib import Path
 
 import pytest
 
 from jobsearch import triage_cli
 from jobsearch.dashboard import render
-from jobsearch.skills import CORE, INCIDENTAL, SCOPED, UNBACKED, WORKING, load_index
+from jobsearch.skills import CORE, SCOPED, load_index
 from jobsearch.triage import (
     EXCERPT_CHARS,
     FLAG,

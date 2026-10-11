@@ -7,7 +7,6 @@ import hashlib
 import json
 import shutil
 import time
-from pathlib import Path
 
 import pytest
 
@@ -197,3 +196,10 @@ def test_when_the_database_cant_delete_nothing_is_deleted_here_either(remote_wit
         assert r.status_code == 503 and "try again" in r.json()["error"]
         assert (root / "var" / pid / "triage-results.json").exists()
         assert client.get("/api/me", headers=a).json()["member"] is True
+
+
+def test_the_pooler_check_reads_the_host_not_the_whole_url():
+    # The text "pooler.supabase.com:6543" in a password is not the host.
+    statestore.Postgres("postgresql://u:pooler.supabase.com:6543@db.abc.supabase.co:5432/postgres")
+    with pytest.raises(ValueError, match="Neon"):
+        statestore.Postgres("postgresql://u:p@ep-cool-1-pooler.us-east-2.aws.neon.tech/db")

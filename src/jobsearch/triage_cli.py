@@ -18,7 +18,6 @@ from .triage import (
     NO_MATCH,
     REJECT,
     RecheckReport,
-    Triaged,
     angle_for,
     load_profile,
     recheck_results,

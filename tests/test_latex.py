@@ -12,7 +12,6 @@ PDF looked right and extracted "Conﬂuence" and a title split as "T echnical".
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 import pytest
 

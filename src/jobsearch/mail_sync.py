@@ -10,7 +10,6 @@ checking a rule change against real mail.
 """
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from .profile import Profile

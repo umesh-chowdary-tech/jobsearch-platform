@@ -54,7 +54,7 @@ def load(prof: Profile) -> dict[str, dict[str, Any]]:
     except (OSError, json.JSONDecodeError):
         # A corrupt file must not look like "no decisions": that would put
         # every skipped posting back on the Today screen.
-        raise PipelineError(f"{p} is unreadable - fix or remove it by hand")
+        raise PipelineError(f"{p} is unreadable - fix or remove it by hand") from None
 
 
 def _save(prof: Profile, data: dict[str, dict[str, Any]]) -> None:

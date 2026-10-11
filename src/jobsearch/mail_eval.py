@@ -24,7 +24,6 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
 from .profile import Profile
@@ -133,7 +132,7 @@ def run(prof: Profile, negatives: int = 40, dry_run: bool = False, say=print) ->
             f"about {chars // 4:,} tokens (~${chars / 4 / 1e6 * 0.042:.4f}). Nothing was sent.")
         return {"dry_run": True, "emails": len(rows), "chars": chars}
     out = []
-    for (m, k), state in zip(rows, states):
+    for (m, k), state in zip(rows, states, strict=True):
         ans = jev.ask(state, QUESTION)
         row = {"message_id": m.message_id, "date": m.date[:10], "domain": m.domain, "subject": m.subject[:120],
                "truth": k["truth"], "source": k["source"], "app": k["app"],

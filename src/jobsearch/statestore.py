@@ -31,6 +31,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterator, Protocol
+from urllib.parse import urlparse
 
 from .models import utcnow
 
@@ -218,13 +219,15 @@ class Postgres:
     def __init__(self, url: str) -> None:
         if not url:
             raise ValueError("DATABASE_URL is not set")
-        if "-pooler." in url:
+        parsed = urlparse(url)
+        host = (parsed.hostname or "").lower()
+        if "-pooler." in host:
             # PgBouncer in transaction mode hands each statement any server
             # connection, so a session advisory lock taken on one is released
             # - or kept - on another. Neon's direct URL has no "-pooler".
             raise ValueError("DATABASE_URL is Neon's pooled URL - use the direct one "
                              "(turn off 'Connection pooling' when copying it)")
-        if "pooler.supabase.com" in url and ":6543" in url:
+        if host.endswith(".pooler.supabase.com") and parsed.port == 6543:
             # The same for Supabase's transaction pooler. Its session pooler
             # (port 5432) keeps one connection per client, locks included.
             raise ValueError("DATABASE_URL is Supabase's transaction pooler (port 6543) - "

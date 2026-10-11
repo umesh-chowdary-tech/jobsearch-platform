@@ -144,7 +144,8 @@ def _postings(prof, pid="3000001"):
 
 def test_one_person_never_sees_anothers_postings_or_files(env):
     client, root = env
-    alice, bob = joined(client, root), joined(client, root, BOB, "bob@example.com")
+    alice = joined(client, root)
+    joined(client, root, BOB, "bob@example.com")
     _postings(alice)
     (alice.var / "resumes").mkdir()
     (alice.var / "resumes" / "v1.txt").write_text("alice's resume", encoding="utf-8")
@@ -283,3 +284,11 @@ def test_invites_from_the_command_line(tmp_path, capsys, monkeypatch):
     assert cli.main(["invites", "list"]) == 0
     out = capsys.readouterr().out
     assert codes[0] in out and "unused" in out and "0 account(s)" in out
+
+
+def test_the_dev_email_check_takes_no_time_on_a_long_input():
+    from jobsearch.hosted.app import plausible_email
+    assert plausible_email("a@example.com") and not plausible_email("a@example") and not plausible_email("a b@x.com")
+    started = time.time()
+    assert not plausible_email("a@" + "b" * 60_000)          # CodeQL: a backtracking regex was here
+    assert time.time() - started < 0.1
