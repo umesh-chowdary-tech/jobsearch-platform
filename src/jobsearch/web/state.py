@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .. import outreach, pipeline
+from .. import feedback, outreach, pipeline
 from ..assemble import load_library, load_store
 from ..busy import holder, stop_requested
 from ..cycle import paused
@@ -40,6 +40,11 @@ def _read(path: Path, default: Any) -> Any:
 
 def _postings(prof: Profile) -> dict[str, dict[str, Any]]:
     return (_read(prof.var / "triage-results.json", {}) or {}).get("postings") or {}
+
+
+def raw_posting(prof: Profile, pid: str) -> dict[str, Any] | None:
+    """The posting as triage stored it."""
+    return _postings(prof).get(str(pid))
 
 
 def _row(prof: Profile, p: dict[str, Any], pipe: dict, ledger: dict, variants: dict) -> dict:
@@ -128,6 +133,7 @@ def posting(prof: Profile, pid: str) -> dict[str, Any] | None:
         "files": resume_files(prof, row["variant"]) if row["variant"] else [],
         "ats": ats_for(prof, row["id"]) if row["variant"] else None,
         "emails": posting_emails(prof, row["id"]),
+        "feedback": feedback.latest(prof).get(row["id"]),
     })
     return row
 

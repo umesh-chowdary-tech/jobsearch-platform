@@ -29,7 +29,7 @@ jobs:
           python-version: ${{ matrix.python }}
           cache: pip
       - name: Install
-        run: python -m pip install -e ".[dev,server]"
+        run: python -m pip install -e ".[dev,server,hosted]"
       - name: Test
         # No network and no keys: every model and board is faked in the tests.
         run: python -m pytest -o addopts="" -q

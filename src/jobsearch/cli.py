@@ -20,6 +20,8 @@
     python -m jobsearch.cli serve                  the local app, in your browser
     python -m jobsearch.cli connector              the agent as an MCP server (hosted)
     python -m jobsearch.cli state push|pull|status mirror var/ to DATABASE_URL
+    python -m jobsearch.cli hosted --dev           the hosted service, on this machine
+    python -m jobsearch.cli invites create 5       invite codes for the hosted beta
 
 A command that needs a person takes --profile <id>, else JOBSEARCH_PROFILE,
 else the only profile there is. See profiles/README.md.
@@ -381,6 +383,31 @@ def _connector(args: argparse.Namespace) -> int:
     return serve(_prof(args))
 
 
+def _hosted(args: argparse.Namespace) -> int:
+    from .hosted.app import serve
+    serve(host=args.host, port=args.port, dev=args.dev)
+    return 0
+
+
+def cmd_invites(args: argparse.Namespace) -> int:
+    from .hosted import accounts
+    shared = shared_var(_root(args))
+    if args.action == "create":
+        try:
+            for code in accounts.create_invites(shared, args.n, args.note or ""):
+                print(code)
+        except accounts.AccountError as exc:
+            print(exc, file=sys.stderr)
+            return 2
+        return 0
+    data = accounts.load(shared)
+    for code, inv in sorted(data["invites"].items(), key=lambda kv: kv[1].get("created") or ""):
+        used = "unused" if not inv.get("used_by") else f"used {inv.get('used_at') or ''}".strip()
+        print(f"{code}  {used:<28} {inv.get('note') or ''}")
+    print(f"{len(data['users'])} account(s)")
+    return 0
+
+
 def _serve(args: argparse.Namespace) -> int:
     from .web.server import serve
     serve(_prof(args), port=args.port, open_browser=not args.no_browser)
@@ -492,6 +519,19 @@ def main(argv: list[str] | None = None) -> int:
 
     cn = sub.add_parser("connector", help="serve the agent as an MCP connector on $PORT")
     cn.set_defaults(fn=_connector)
+
+    hs = sub.add_parser("hosted", help="the hosted service: sign-in, one profile per account (docs/hosted.md)")
+    hs.add_argument("--host", default="127.0.0.1")
+    hs.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8000)))
+    hs.add_argument("--dev", action="store_true",
+                    help="sign in as any email, no Supabase project - this machine only")
+    hs.set_defaults(fn=_hosted)
+
+    iv = sub.add_parser("invites", help="invite codes for the hosted service")
+    iv.add_argument("action", choices=("create", "list"))
+    iv.add_argument("n", type=int, nargs="?", default=1, help="how many codes to create")
+    iv.add_argument("--note", help="who they are for, for your own record")
+    iv.set_defaults(fn=cmd_invites)
 
     st = sub.add_parser("state", help="mirror var/ to the database in DATABASE_URL")
     st.add_argument("action", choices=("push", "pull", "status"))

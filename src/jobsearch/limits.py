@@ -112,6 +112,22 @@ class Meter:
         return sum(float((v.get(provider) or {}).get("usd", 0))
                    for d, v in self._load()["days"].items() if d.startswith(month))
 
+    def month_by_profile(self) -> dict[str, dict[str, Any]]:
+        """Each profile's requests, tokens and dollars this month, every
+        provider together - the hosted service's cost-per-person page."""
+        month = date.today().isoformat()[:7]
+        out: dict[str, dict[str, Any]] = {}
+        for d, providers in self._load()["days"].items():
+            if not d.startswith(month):
+                continue
+            for got in providers.values():
+                for who, u in (got.get("by_profile") or {}).items():
+                    row = out.setdefault(who, {"requests": 0, "tokens": 0, "usd": 0.0})
+                    row["requests"] += int(u.get("requests", 0))
+                    row["tokens"] += int(u.get("tokens", 0))
+                    row["usd"] = round(row["usd"] + float(u.get("usd", 0)), 6)
+        return out
+
     def check(self, provider: str, tokens: int, purpose: str = "", usd: float = 0.0) -> str:
         """"" when a request of about `tokens` (and `usd`, for a provider
         priced in dollars) may be sent; else why not."""
