@@ -160,10 +160,16 @@ Made:
 
 - **License: AGPL-3.0** (2026-10-11). Anyone running a modified copy as a
   service must publish their changes.
+- **Hosting: Supabase + Render** (2026-10-11). Supabase for sign-in (email
+  magic link and Google), Postgres and resume-file storage; Render for the
+  Python API and the worker.
+- **Order: Phase 1 before any hosting** (2026-10-11). The maintainer tests as a
+  real user would - upload a resume, confirm the facts - with his own data
+  kept outside the repository.
 
 Waiting on the maintainer:
 
 - **Where to start:** India first (the current boards and cities) or global.
 - **Product name and domain** for the hosted app.
-- **Hosting accounts:** database and storage provider, and the app host.
+- **Hosting accounts:** creating the Supabase and Render accounts (Phase 2).
 - **Monthly budget** for the beta: AI and hosting.
