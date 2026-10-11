@@ -15,7 +15,7 @@ from __future__ import annotations
 import html as _html
 import re
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from .skills import SkillIndex
 

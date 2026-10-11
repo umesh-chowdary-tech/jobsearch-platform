@@ -1,14 +1,12 @@
 """The ATS match: what the assembler optimizes, so it has to be right first."""
 from __future__ import annotations
 
-from pathlib import Path
 
 import pytest
 
 import jobsearch.ats as ats
 from jobsearch.assemble import load_store, select_entries
 from jobsearch.ats import (
-    PostingKeywords,
     Scorer,
     best_descriptor,
     keywords_for,

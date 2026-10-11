@@ -2,8 +2,6 @@
 approving does. A rule is approved on what it changes, never on its words."""
 from __future__ import annotations
 
-import json
-import shutil
 from pathlib import Path
 from types import SimpleNamespace
 

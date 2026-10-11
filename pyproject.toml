@@ -29,3 +29,12 @@ addopts = "-q"
 
 [tool.setuptools.package-data]
 "jobsearch.web" = ["static/*"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+# Errors and likely bugs, enforced in CI: pyflakes, syntax errors, pylint's
+# error class and bugbear. Style is left to review.
+select = ["F", "E9", "PLE", "B"]

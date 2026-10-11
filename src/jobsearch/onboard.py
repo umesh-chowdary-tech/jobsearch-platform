@@ -38,6 +38,8 @@ from .profile import Profile
 
 MAX_BYTES = 5_000_000          # an uploaded resume
 MAX_CHARS = 20_000             # of its text sent to the model
+MAX_PAGES = 20                 # of a PDF; a resume is a few
+MAX_DOCX_XML = 20_000_000      # word/document.xml, unzipped
 KINDS = {".pdf": "pdf", ".docx": "docx", ".txt": "txt"}
 ENTRY_TYPES = ("work", "project", "education", "certification", "award")
 STATES = ("pending", "confirmed", "removed")
@@ -72,7 +74,7 @@ def load_draft(prof: Profile) -> dict[str, Any]:
     try:
         return json.loads(p.read_text(encoding="utf-8")) or {}
     except (OSError, json.JSONDecodeError):
-        raise SetupError(f"{p} is unreadable - delete it and upload the resume again")
+        raise SetupError(f"{p} is unreadable - delete it and upload the resume again") from None
 
 
 def _save(prof: Profile, draft: dict[str, Any]) -> None:
@@ -89,9 +91,21 @@ def _docx_text(data: bytes) -> str:
     ns = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as z:
-            root = ElementTree.fromstring(z.read("word/document.xml"))
+            info = z.getinfo("word/document.xml")
+            if info.file_size > MAX_DOCX_XML:
+                raise SetupError("that Word file is too large once unzipped")
+            with z.open(info) as f:
+                xml = f.read(MAX_DOCX_XML + 1)     # the declared size can lie; this can't
+        if len(xml) > MAX_DOCX_XML:
+            raise SetupError("that Word file is too large once unzipped")
+        # Word never writes a DTD. One here could declare entities that
+        # expand without end, so the file is refused, not parsed.
+        if b"<!DOCTYPE" in xml or b"<!ENTITY" in xml:
+            raise SetupError("that Word file holds something a resume doesn't - save it again from Word")
+        # Bounded, and no DTD reaches the parser (above).
+        root = ElementTree.fromstring(xml)  # noqa: S314  # nosec B314
     except (zipfile.BadZipFile, KeyError, ElementTree.ParseError) as exc:
-        raise SetupError(f"that Word file could not be read ({type(exc).__name__})")
+        raise SetupError(f"that Word file could not be read ({type(exc).__name__})") from exc
     lines = []
     for para in root.iter(f"{ns}p"):
         bits = []
@@ -108,9 +122,15 @@ def _pdf_text(data: bytes) -> str:
     from pypdf import PdfReader
     try:
         reader = PdfReader(io.BytesIO(data))
-        return "\n".join((page.extract_text() or "") for page in reader.pages)
+        pages = len(reader.pages)
     except Exception as exc:  # noqa: BLE001 - pypdf raises many kinds; all mean "unreadable"
-        raise SetupError(f"that PDF could not be read ({type(exc).__name__})")
+        raise SetupError(f"that PDF could not be read ({type(exc).__name__})") from exc
+    if pages > MAX_PAGES:
+        raise SetupError(f"that PDF has {pages} pages - upload a resume of up to {MAX_PAGES}")
+    try:
+        return "\n".join((page.extract_text() or "") for page in reader.pages)
+    except Exception as exc:  # noqa: BLE001
+        raise SetupError(f"that PDF could not be read ({type(exc).__name__})") from exc
 
 
 def extract_text(data: bytes, filename: str) -> str:
@@ -501,7 +521,7 @@ def restore(prof: Profile, index: int) -> dict[str, Any]:
         try:
             gone = d["dropped"][index]
         except (IndexError, KeyError, TypeError):
-            raise SetupError("no such left-out item")
+            raise SetupError("no such left-out item") from None
         if not gone.get("entry") or not gone.get("source"):
             raise SetupError("only a fact with its resume line can be added back")
         n = 1

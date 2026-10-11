@@ -144,7 +144,8 @@ def _postings(prof, pid="3000001"):
 
 def test_one_person_never_sees_anothers_postings_or_files(env):
     client, root = env
-    alice, bob = joined(client, root), joined(client, root, BOB, "bob@example.com")
+    alice = joined(client, root)
+    joined(client, root, BOB, "bob@example.com")
     _postings(alice)
     (alice.var / "resumes").mkdir()
     (alice.var / "resumes" / "v1.txt").write_text("alice's resume", encoding="utf-8")

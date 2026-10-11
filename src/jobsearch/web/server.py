@@ -102,7 +102,7 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
             try:
                 data = json.loads(self.rfile.read(n) or b"{}")
             except json.JSONDecodeError:
-                raise ApiError(400, "bad JSON")
+                raise ApiError(400, "bad JSON") from None
             if not isinstance(data, dict):
                 raise ApiError(400, "send a JSON object")
             return data

@@ -3,7 +3,6 @@ so the rule is the store's rule: nothing in it they cannot defend."""
 from __future__ import annotations
 
 import json
-import shutil
 from pathlib import Path
 
 import pytest

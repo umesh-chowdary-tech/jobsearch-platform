@@ -51,7 +51,8 @@ def call(app, method, path, body=None, headers=None, raw=None):
     return out
 
 
-def upload(app, data=RESUME.encode(), ctype="text/plain", origin=None):
+def upload(app, data=None, ctype="text/plain", origin=None):
+    data = RESUME.encode() if data is None else data
     h = {"Content-Type": ctype}
     if origin is not None:
         h["Origin"] = origin

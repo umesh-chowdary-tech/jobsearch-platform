@@ -75,7 +75,7 @@ def load(prof: Profile) -> dict[str, Any]:
     except (OSError, json.JSONDecodeError):
         # An unreadable ledger must not look empty: the next sync would
         # rebuild it from sixty days of mail and lose every manual correction.
-        raise ValueError(f"{p} is unreadable - fix or remove it by hand")
+        raise ValueError(f"{p} is unreadable - fix or remove it by hand") from None
     d.setdefault("apps", {}); d.setdefault("seen", [])
     d.setdefault("naukri", {"applied": {}, "status_pings": [], "neo": {}})
     return d

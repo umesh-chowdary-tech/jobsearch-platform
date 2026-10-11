@@ -86,7 +86,7 @@ def _save_proposals(prof: Profile, props: dict[str, dict[str, Any]]) -> None:
 
 
 def _key(kind: str, value: str, means: str = "") -> str:
-    return hashlib.sha1(f"{kind}|{_norm(value)}|{means}".encode()).hexdigest()[:10]
+    return hashlib.sha1(f"{kind}|{_norm(value)}|{means}".encode(), usedforsecurity=False).hexdigest()[:10]
 
 
 def pending(prof: Profile) -> list[dict[str, Any]]:
@@ -223,7 +223,9 @@ def propose_from(prof: Profile, app: dict[str, Any], emails: list[tuple[dict[str
     if phrase:
         texts = [f"{e['subject']} {e['text']}" for e in payload["emails"]]
         # What the rules make of the email the phrase is in.
-        holder = next(((e, body) for (e, _, body), t in zip(emails, texts) if _norm(phrase) in _norm(t)), None)
+        # The payload may carry fewer emails than were read; pair what it has.
+        holder = next(((e, body) for (e, _, body), t in zip(emails, texts, strict=False)
+                       if _norm(phrase) in _norm(t)), None)
         already = R.classify(holder[0]["sender"], holder[0]["subject"], holder[1], data_dir).kind if holder else ""
         why = check_phrase(phrase, means, texts, company, role, already)
         pid = _key("phrase", phrase, means)

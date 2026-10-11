@@ -6,7 +6,6 @@ from __future__ import annotations
 import http.client
 import json
 import re
-import shutil
 import socket
 import threading
 import time

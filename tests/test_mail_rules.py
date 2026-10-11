@@ -297,3 +297,11 @@ def test_the_shared_list_names_no_ones_employers():
     empty, and approved senders live in each profile's mail-learned.yaml."""
     doc = yaml.safe_load((ROOT / "data" / "mail-senders.yaml").read_text(encoding="utf-8"))
     assert doc["employers"] == {}
+
+
+@pytest.mark.parametrize("subject", ["Your new matches are ready", "Congratulations on your first matches"])
+def test_a_marketplaces_matches_are_noise(subject):
+    """The pattern held a literal backspace character where a word boundary
+    was meant, so "your matches" alone never matched."""
+    assert R.NOISE.search(subject)
+    assert not R.NOISE.search("Rematches for the role you applied to")

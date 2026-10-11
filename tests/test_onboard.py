@@ -139,6 +139,31 @@ def _pdf(text: str) -> bytes:
 
 # ── reading ──────────────────────────────────────────────────────────────────
 
+def test_a_word_file_that_unzips_too_large_is_refused(monkeypatch):
+    """A .docx is a zip: 5 MB of it can unpack to gigabytes on the server."""
+    monkeypatch.setattr(O, "MAX_DOCX_XML", 200)
+    with pytest.raises(O.SetupError, match="too large once unzipped"):
+        O.extract_text(_docx(RESUME), "resume.docx")
+
+
+def test_a_word_file_with_a_dtd_is_refused_not_parsed():
+    """Word never writes one; a DTD could declare entities that expand without end."""
+    xml = ('<?xml version="1.0"?><!DOCTYPE d [<!ENTITY a "aaaaaaaaaa"><!ENTITY b "&a;&a;&a;&a;">]>'
+           '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+           '<w:body><w:p><w:r><w:t>&b;</w:t></w:r></w:p></w:body></w:document>')
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("word/document.xml", xml)
+    with pytest.raises(O.SetupError, match="save it again from Word"):
+        O.extract_text(buf.getvalue(), "resume.docx")
+
+
+def test_a_pdf_with_more_pages_than_a_resume_is_refused(monkeypatch):
+    monkeypatch.setattr(O, "MAX_PAGES", 0)
+    with pytest.raises(O.SetupError, match="has 1 pages"):
+        O.extract_text(_pdf(RESUME), "resume.pdf")
+
+
 @pytest.mark.parametrize("name, data", [("cv.txt", RESUME.encode()), ("cv.docx", _docx(RESUME)),
                                         ("cv.pdf", _pdf(RESUME))])
 def test_text_comes_out_of_every_kind_of_file(name, data):

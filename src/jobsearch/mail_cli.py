@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import argparse
 from typing import Callable
-from pathlib import Path
 
 from .profile import Profile
 from . import applications as apps

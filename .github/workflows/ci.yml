@@ -34,6 +34,21 @@ jobs:
         # No network and no keys: every model and board is faked in the tests.
         run: python -m pytest -o addopts="" -q
 
+  lint:
+    name: lint (ruff, bandit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install ruff==0.16.9 bandit==1.9.4
+      - name: ruff - errors and likely bugs (rules in pyproject.toml)
+        run: ruff check src tests
+      - name: bandit - security findings, medium severity and up
+        run: bandit -q -r src -ll
+
   web:
     name: web app (type-check, audit, build)
     runs-on: ubuntu-latest

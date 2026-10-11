@@ -28,8 +28,11 @@ their careers, so a few rules matter more than any feature.
 
 ```bash
 python -m venv .venv
-.venv/Scripts/python -m pip install -e ".[dev,server]"   # .venv/bin/python on macOS/Linux
+.venv/Scripts/python -m pip install -e ".[dev,server,hosted]"   # .venv/bin/python on macOS/Linux
 .venv/Scripts/python -m pytest
+.venv/Scripts/python -m pip install ruff==0.16.9 bandit==1.9.4
+.venv/Scripts/python -m ruff check src tests      # errors and likely bugs (pyproject.toml)
+.venv/Scripts/python -m bandit -q -r src -ll      # security, medium and up
 ```
 
 The tests need no network and no keys: boards, models and mailboxes are faked.
@@ -43,8 +46,12 @@ The tests need no network and no keys: boards, models and mailboxes are faked.
   comments that say *why* (often the bug that motivated it).
 - Run the tests, and scan for secrets before you push:
   `gitleaks git --redact .` (https://github.com/gitleaks/gitleaks).
-- Open a pull request describing what changed and why. CI runs the tests on
-  Linux and Windows and a gitleaks scan; both must pass.
+- Open a pull request describing what changed and why. `main` takes changes
+  only through pull requests, and CI must pass: the tests on Linux and
+  Windows, ruff and bandit, the web app's type-check and build, and a
+  gitleaks scan. CodeQL scans every pull request too, and PR-Agent (an
+  open-source AI reviewer) comments on it when the maintainer has switched
+  it on. Its review is advice; the checks are the gate.
 
 ## Reporting a security problem
 

@@ -46,7 +46,7 @@ from .http import default_fetcher
 from .providers import ALL_PROVIDERS
 from .models import BLOCKED, EMPTY, ERROR, NOT_FOUND, OK
 from .profile import Profile, ProfileError, list_profiles, profiles_dir, resolve, shared_var, var_dir
-from .watch import POLLED, SEEDED, SKIPPED, load_boards, record_new, watch_all
+from .watch import SEEDED, SKIPPED, load_boards, record_new, watch_all
 from .assemble_cli import run_assemble
 from .outreach_cli import add_parser as add_outreach
 from .cycle import run_cycle

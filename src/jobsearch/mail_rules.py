@@ -110,7 +110,7 @@ NOISE = re.compile(
     r"almost there|finish your application|complete your application|"
     # A marketplace's matches, not an application: "Congratulations on your
     # first matches: 53 roles awaiting your response".
-    r"your (?:first |new )?matches|roles? (?:are )?awaiting your|roles? matching your", re.I)
+    r"your (?:first |new )?matches\b|roles? (?:are )?awaiting your|roles? matching your", re.I)
 
 
 def is_candidate(from_addr: str, subject: str, data_dir: Any, me: str = "") -> bool:

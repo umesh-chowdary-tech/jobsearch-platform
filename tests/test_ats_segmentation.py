@@ -7,7 +7,6 @@ would have caught it. The person here is the fictional sample profile.
 """
 from __future__ import annotations
 
-from pathlib import Path
 
 import pytest
 

@@ -28,7 +28,7 @@ from typing import Any, Callable
 from urllib.parse import parse_qs, urlparse
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
@@ -102,7 +102,7 @@ async def _json_body(request: Request) -> dict[str, Any]:
     try:
         data = json.loads(raw or b"{}")
     except json.JSONDecodeError:
-        raise ApiError(400, "bad JSON")
+        raise ApiError(400, "bad JSON") from None
     if not isinstance(data, dict):
         raise ApiError(400, "send a JSON object")
     return data
@@ -131,7 +131,7 @@ class Service:
         try:
             return self.verifier.verify(token.strip())
         except AuthError as exc:
-            raise ApiError(401, str(exc))
+            raise ApiError(401, str(exc)) from exc
 
     def member(self, request: Request) -> tuple[Who, Profile]:
         who = self.who(request)
@@ -171,7 +171,7 @@ def _admin_overview(svc: Service) -> dict[str, Any]:
     data = accounts.load(svc.shared)
     usage = Meter(svc.root).month_by_profile()
     people = []
-    for sub, row in sorted(data["users"].items(), key=lambda kv: kv[1].get("joined") or ""):
+    for row in sorted(data["users"].values(), key=lambda r: r.get("joined") or ""):
         prof = Profile(svc.root, row["profile"])
         people.append({"email": row.get("email"), "profile": row["profile"], "joined": row.get("joined"),
                        "profile_ready": prof.exists(),
@@ -261,7 +261,7 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
             try:
                 accounts.join(svc.shared, who.sub, who.email, str(body.get("code") or ""))
             except accounts.AccountError as exc:
-                raise ApiError(400, str(exc))
+                raise ApiError(400, str(exc)) from exc
             return svc.me(who)
         return await run_in_threadpool(_respond, go)
 
@@ -315,7 +315,7 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
                     mirror.forget(prefixes)
                 except Exception:  # noqa: BLE001
                     log.exception("forgetting %s in the database failed", prof.id)
-                    raise ApiError(503, "Couldn't delete your account right now - try again in a few minutes.")
+                    raise ApiError(503, "Couldn't delete your account right now - try again in a few minutes.") from None
             for d in (prof.dir, prof.var):
                 shutil.rmtree(d, ignore_errors=True)
             accounts.remove(svc.shared, who.sub)
@@ -348,7 +348,7 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
             try:
                 return {"codes": accounts.create_invites(svc.shared, n, str(body.get("note") or ""))}
             except accounts.AccountError as exc:
-                raise ApiError(400, str(exc))
+                raise ApiError(400, str(exc)) from exc
         return await run_in_threadpool(_respond, go)
 
     # ── the scheduled cycle, started by a cron job that knows the secret ────

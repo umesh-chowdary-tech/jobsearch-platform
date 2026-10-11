@@ -198,7 +198,7 @@ def _posting_action(prof: Profile, pid: str, what: str, body: dict[str, Any]) ->
         try:
             until = datetime.fromisoformat(str(body["until"]).replace("Z", "+00:00"))
         except ValueError:
-            raise ApiError(400, "until must be an ISO date-time")
+            raise ApiError(400, "until must be an ISO date-time") from None
         return pipeline.save_for_later(prof, pid, until=until)
     return pipeline.save_for_later(prof, pid, body.get("days"))
 
@@ -253,7 +253,7 @@ def post(prof: Profile, path: str, body: dict[str, Any], runner: Runner, scope: 
             fn = mail_learn.approve if m.group(2) == "approve" else mail_learn.reject
             return 200, fn(prof, m.group(1))
         except ValueError as exc:
-            raise ApiError(404, str(exc))
+            raise ApiError(404, str(exc)) from exc
     m = re.fullmatch(rf"/api/applications/({_ID})/(confirm|status|ignore|merge|suggestion|undo-auto)", path)
     if m:
         return 200, _application(prof, m.group(1), m.group(2), body)
@@ -296,4 +296,4 @@ def _application(prof: Profile, app_id: str, what: str, body: dict[str, Any]) ->
             raise ApiError(404, "no application to merge into")
         return A.merge(prof, app_id, into)
     except ValueError as exc:
-        raise ApiError(400, str(exc))
+        raise ApiError(400, str(exc)) from exc

@@ -30,7 +30,6 @@ import os
 import threading
 import traceback
 from contextlib import nullcontext
-from pathlib import Path
 from typing import Any, Literal
 
 import yaml
@@ -438,8 +437,9 @@ def build_app(prof: Profile, secret: str, remote: statestore.Remote | None) -> A
     tools = Tools(prof, remote)
     tools.pull()                                     # a fresh disk starts from the database
     srv = build_server(tools)
+    # All interfaces: a hosted service is reached through its platform's proxy.
     app = srv.streamable_http_app(
-        streamable_http_path="/mcp", stateless_http=True, json_response=True, host="0.0.0.0",
+        streamable_http_path="/mcp", stateless_http=True, json_response=True, host="0.0.0.0",  # nosec B104
         # The Host header is Render's hostname; the secret path is the check.
         transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False))
     return _secret_gate(app, secret, tools)
@@ -451,6 +451,6 @@ def serve(prof: Profile) -> int:
     load_dotenv(prof.env)
     secret = os.environ.get("CONNECTOR_SECRET", "").strip()
     app = build_app(prof, secret, statestore.remote_from_env())
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)),
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)),  # nosec B104
                 proxy_headers=True, forwarded_allow_ips="*")
     return 0
