@@ -16,8 +16,9 @@ only part that knows a database exists.
     how "changed here" is told apart from "changed there".
   - Both sides changed one file: the remote copy wins and the local copy is
     kept in var/sync-conflicts/, so nothing is lost silently.
-  - A file deleted on one side is not deleted on the other. Nothing in var/ is
-    deleted on purpose, and a missing file must not wipe the other copy.
+  - A file deleted on one side is not deleted on the other: a missing file
+    must not wipe the other copy. The one deletion is `forget`, asked for by
+    name - a person deleting their account on the hosted service.
   - Pull and push take a Postgres advisory lock, so the PC and the server
     never interleave a sync.
 """
@@ -77,6 +78,7 @@ class Remote(Protocol):
     def hashes(self) -> dict[str, str]: ...
     def get(self, paths: list[str]) -> dict[str, bytes]: ...
     def put(self, rows: list[tuple[str, bytes, str]]) -> None: ...
+    def delete(self, paths: list[str]) -> None: ...
     def cycle_lock(self) -> Any: ...     # context manager yielding True if got
 
 
@@ -169,6 +171,25 @@ def push(var: Path, remote: Remote) -> SyncReport:
     return rep
 
 
+def forget(var: Path, remote: Remote, prefixes: list[str]) -> list[str]:
+    """Delete every mirrored file under these prefixes from the database and
+    from the manifest - before the local files go, so a failure here leaves
+    everything in place to try again rather than rows that come back."""
+    var = Path(var)
+    prefixes = [p.rstrip("/") + "/" for p in prefixes if p.strip("/")]
+    if not prefixes:
+        return []
+    with remote.lock():
+        gone = sorted(p for p in remote.hashes() if p.startswith(tuple(prefixes)))
+        if gone:
+            remote.delete(gone)
+        m = _manifest(var)
+        kept = {k: v for k, v in m.items() if not k.startswith(tuple(prefixes))}
+        if kept != m:
+            _save_manifest(var, kept)
+    return gone
+
+
 def status(var: Path, remote: Remote) -> dict[str, list[str]]:
     """What a sync would do, without doing it."""
     var = Path(var)
@@ -203,6 +224,11 @@ class Postgres:
             # - or kept - on another. Neon's direct URL has no "-pooler".
             raise ValueError("DATABASE_URL is Neon's pooled URL - use the direct one "
                              "(turn off 'Connection pooling' when copying it)")
+        if "pooler.supabase.com" in url and ":6543" in url:
+            # The same for Supabase's transaction pooler. Its session pooler
+            # (port 5432) keeps one connection per client, locks included.
+            raise ValueError("DATABASE_URL is Supabase's transaction pooler (port 6543) - "
+                             "use the session pooler's URL (port 5432)")
         self.url = url
         self._ready = False
 
@@ -268,6 +294,10 @@ class Postgres:
                 "ON CONFLICT (path) DO UPDATE SET content = EXCLUDED.content, "
                 "sha256 = EXCLUDED.sha256, updated_at = now()",
                 rows)
+
+
+    def delete(self, paths: list[str]) -> None:
+        self._conn().execute("DELETE FROM var_files WHERE path = ANY(%s)", (paths,))
 
 
 def remote_from_env() -> Postgres | None:

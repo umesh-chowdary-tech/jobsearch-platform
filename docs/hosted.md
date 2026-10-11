@@ -83,14 +83,34 @@ passes `/api` to the service.
 | `CRON_SECRET` | what the cron job sends to start a cycle |
 | `ANTHROPIC_API_KEY`, `GROQ_API_KEY` | the models, capped in `data/llm-limits.yaml` |
 
+## Keeping var/ across restarts
+
+Render's free service loses its disk when it sleeps. With `DATABASE_URL` set,
+the service pulls var/ from Postgres when it starts, pushes a few seconds
+after anything changes, sweeps every two minutes for what background jobs
+wrote, and pushes when it stops (`hosted/mirror.py`, on `statestore.py`).
+Deleting an account deletes that person's rows in the database first; if the
+database can't be reached, nothing is deleted and the page says to try again.
+
+Use Supabase's **session** pooler URL (port 5432). The transaction pooler
+(port 6543) can't hold the lock a sync takes, and the service refuses it.
+
+## Deploying
+
+What needs the maintainer's accounts, in order:
+
+1. **Supabase**: a project in the Mumbai region. Authentication > Providers:
+   email (magic link) and Google. Authentication > URL configuration: the
+   Render URL as the Site URL and a redirect URL. From Project settings: the
+   URL, the anon key, and Database > the session pooler's connection string.
+2. **Render**: New > Blueprint on this repository, keep `jobsearch-hosted`,
+   fill in the values it asks for (`render.yaml`).
+3. **GitHub**: repository secrets `HOSTED_URL` (the Render URL) and
+   `CRON_SECRET` (copied from Render), for `.github/workflows/cycle.yml`.
+4. Sign in, open Admin, make invite codes.
+
 ## Not yet
 
-- **Keeping var/ across restarts.** Render's free service loses its disk
-  when it sleeps. Next: mirror var/ to Supabase's Postgres with
-  `statestore.py`, as the connector already does, including deleting a
-  person's rows when they delete their account.
-- **Deploying:** a Render blueprint and the Supabase project (sign-in by
-  email link and Google, the redirect URL).
 - **Privacy policy and terms** (India's DPDP Act: consent, purpose, export,
   deletion, breach handling) before anyone outside the maintainer's circle
   joins.

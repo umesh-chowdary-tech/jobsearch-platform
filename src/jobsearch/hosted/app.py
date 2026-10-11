@@ -22,6 +22,7 @@ import re
 import shutil
 import threading
 import zipfile
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import parse_qs, urlparse
@@ -31,7 +32,7 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
-from .. import onboard
+from .. import onboard, statestore
 from ..limits import Meter
 from ..profile import Profile, shared_var, var_dir
 from ..web import routes
@@ -39,6 +40,7 @@ from ..web.routes import HOSTED, ApiError
 from ..web.runner import Runner
 from . import accounts
 from .auth import AuthError, Verifier, Who
+from .mirror import Mirror
 
 ROOT = Path(__file__).resolve().parents[3]
 WEB_DIST = ROOT / "web" / "dist"
@@ -107,10 +109,12 @@ async def _json_body(request: Request) -> dict[str, Any]:
 
 
 class Service:
-    def __init__(self, root: Path, verifier: Verifier, cron_secret: str = "") -> None:
+    def __init__(self, root: Path, verifier: Verifier, cron_secret: str = "",
+                 mirror: Mirror | None = None) -> None:
         self.root = root
         self.verifier = verifier
         self.cron_secret = cron_secret
+        self.mirror = mirror
         self.shared = shared_var(root)
         self._runners: dict[str, Runner] = {}
         self._lock = threading.Lock()
@@ -179,14 +183,26 @@ def _admin_overview(svc: Service) -> dict[str, Any]:
 
 
 def create_app(root: Path | None = None, verifier: Verifier | None = None, static_dir: Path | None = None,
-               cron_secret: str = "") -> FastAPI:
+               cron_secret: str = "", remote: statestore.Remote | None = None, mirror_delay: float = 3.0) -> FastAPI:
+    """`remote`: where var/ is kept between restarts (Postgres in production,
+    hosted/mirror.py); without one, var/ is only on this disk."""
     root = Path(root or ROOT)
     if verifier is None:
         verifier = Verifier(os.environ.get("SUPABASE_URL", ""), os.environ.get("SUPABASE_JWT_SECRET", ""))
-    svc = Service(root, verifier, cron_secret)
+    mirror = Mirror(var_dir(root), remote, delay=mirror_delay) if remote is not None else None
+    svc = Service(root, verifier, cron_secret, mirror)
     supabase_url = "" if verifier.dev else os.environ.get("SUPABASE_URL", "")
     csp = _csp(supabase_url)
-    app = FastAPI(title="jobsearch", docs_url=None, redoc_url=None, openapi_url=None)
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        if mirror:
+            await run_in_threadpool(mirror.start)
+        yield
+        if mirror:
+            await run_in_threadpool(mirror.stop)
+
+    app = FastAPI(title="jobsearch", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     app.state.service = svc
 
     @app.middleware("http")
@@ -200,6 +216,8 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
             resp.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         if request.url.path.startswith(("/api/", "/files/")):
             resp.headers["Cache-Control"] = "no-store"
+        if mirror and request.method == "POST" and resp.status_code < 400:
+            mirror.touch()
         return resp
 
     # ── open to anyone ──────────────────────────────────────────────────────
@@ -287,6 +305,17 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
             who, prof = svc.member(request)
             if str(body.get("confirm") or "").strip().lower() != DELETE_WORDS:
                 raise ApiError(400, f'type "{DELETE_WORDS}" to confirm')
+            if mirror:
+                # The database's copy first: if that fails, nothing is gone
+                # here either, and deleting again later finishes the job.
+                var = var_dir(svc.root).resolve()
+                prefixes = [d.resolve().relative_to(var).as_posix() for d in (prof.var, prof.dir)
+                            if d.resolve().is_relative_to(var)]
+                try:
+                    mirror.forget(prefixes)
+                except Exception:  # noqa: BLE001
+                    log.exception("forgetting %s in the database failed", prof.id)
+                    raise ApiError(503, "Couldn't delete your account right now - try again in a few minutes.")
             for d in (prof.dir, prof.var):
                 shutil.rmtree(d, ignore_errors=True)
             accounts.remove(svc.shared, who.sub)
@@ -337,6 +366,8 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
                 run_cycle(svc.root, quiet=True, lock=True)
             except Exception:  # noqa: BLE001 - logged; the next tick tries again
                 log.exception("cycle failed")
+            if mirror:
+                mirror.touch()
         svc.cycle = threading.Thread(target=run, name="cycle", daemon=True)
         svc.cycle.start()
         return _json_response(202, {"started": True})
@@ -382,6 +413,10 @@ def serve(host: str = "127.0.0.1", port: int = 8000, dev: bool = False) -> None:
         print("DEV SIGN-IN: anyone who can reach this port can sign in as anyone. This machine only.", flush=True)
     else:
         verifier = Verifier(os.environ.get("SUPABASE_URL", ""), os.environ.get("SUPABASE_JWT_SECRET", ""))
-    app = create_app(ROOT, verifier, cron_secret=os.environ.get("CRON_SECRET", ""))
+    remote = statestore.remote_from_env()
+    if remote is None and not dev:
+        print("DATABASE_URL is not set: var/ lives only on this disk and is lost when the service restarts.",
+              flush=True)
+    app = create_app(ROOT, verifier, cron_secret=os.environ.get("CRON_SECRET", ""), remote=remote)
     uvicorn.run(app, host=host, port=port, proxy_headers=not dev,
                 forwarded_allow_ips=os.environ.get("FORWARDED_ALLOW_IPS", "127.0.0.1"))

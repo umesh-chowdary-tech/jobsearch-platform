@@ -1,11 +1,49 @@
-# Render Blueprint: one person's MCP connector, on the free plan.
-# New > Blueprint in the Render dashboard, pick your copy of this repo, then
-# fill in the values it asks for. See docs/connector.md.
+# Render Blueprint, on the free plan. New > Blueprint in the Render dashboard,
+# pick your copy of this repo, then fill in the values it asks for.
 #
-# The profile it serves must reach the server without entering this public
+#   jobsearch-hosted     the hosted service and its web app (docs/hosted.md)
+#   jobsearch-connector  one person's MCP connector (docs/connector.md)
+#
+# Delete the service you don't want from the blueprint before applying it.
+#
+# The connector's profile must reach the server without entering this public
 # repository: point JOBSEARCH_PROFILES at where you put it (a private disk or
-# repository), never commit a real person's profile here.
+# repository), never commit a real person's profile here. The hosted service
+# keeps everyone's profiles in var/, mirrored to its database.
 services:
+  - type: web
+    name: jobsearch-hosted
+    runtime: python
+    plan: free
+    region: singapore            # nearest to Supabase's Mumbai region; keep the two close
+    branch: main
+    buildCommand: pip install -e ".[hosted]" && cd web && npm ci && npm run build
+    startCommand: python -m jobsearch.cli hosted --host 0.0.0.0
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.5
+      - key: NODE_VERSION
+        value: "22"
+      - key: FORWARDED_ALLOW_IPS  # Render's proxy sets X-Forwarded-*
+        value: "*"
+      - key: SUPABASE_URL         # Project settings > API
+        sync: false
+      - key: SUPABASE_ANON_KEY    # public by design
+        sync: false
+      - key: DATABASE_URL         # the SESSION pooler's URL (port 5432), not the transaction one
+        sync: false
+      - key: JOBSEARCH_ADMINS     # your email
+        sync: false
+      - key: CRON_SECRET          # also a GitHub secret, for .github/workflows/cycle.yml
+        generateValue: true
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: JOBSEARCH_CONTACT    # how job boards can reach whoever runs this
+        sync: false
+
   - type: web
     name: jobsearch-connector
     runtime: python
