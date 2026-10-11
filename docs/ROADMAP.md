@@ -96,6 +96,10 @@ it's done.
 - Privacy policy and terms (India's DPDP Act: consent, purpose, export,
   deletion, breach handling), data export and account deletion.
 - A feedback button on every rating ("good match?") to build the evaluation set.
+- **The Claude connector for every account.** Each person adds the agent to
+  their own Claude (claude.ai or the app) and signs in with OAuth; its tools
+  see only that person's profile and results, within their caps. It replaces
+  today's one-person connector behind a secret URL (docs/connector.md).
 - Invite codes to keep the beta to 20–50 people.
 - **Done when:** 20+ people have used it for two weeks, cost per person is
   measured, and at least 100 "good match?" answers are collected.
@@ -129,6 +133,15 @@ it's done.
   cost about $0.06.
 - **Caps:** per person per day, a global per month, and per provider (in
   `data/llm-limits.yaml`). Reaching one pauses that work until the next day.
+- **Jev for the cheap, typed questions.** Jev (TypeSafe) answers fixed
+  questions - pick one, yes/no, a score - with a confidence, writes no prose,
+  and costs about $0.04 per million tokens. Candidate uses, each switched on
+  only after it scores well on a set with known answers:
+  1. sorting the inbox emails the rules can't place (the evaluation,
+     `mail eval-jev`, already exists);
+  2. the first ranking pass, before Claude re-checks the strong ones;
+  3. the no-invention check below: "is this resume line backed by a
+     confirmed fact? yes/no" - an answer that can't add a claim.
 - **Hosting:** free and starter tiers during the beta. Cost per active person
   is reported weekly.
 
@@ -141,12 +154,15 @@ it's done.
   resume traces back to a confirmed profile fact.
 - **Tests and CI on every push.** `main` is always deployable.
 
-## Decisions waiting on the maintainer
+## Decisions
 
-- **License:**
-  - MIT: anyone can do anything, including run a closed copy.
-  - AGPL-3.0: anyone running a modified copy as a service must publish their
-    changes.
+Made:
+
+- **License: AGPL-3.0** (2026-10-11). Anyone running a modified copy as a
+  service must publish their changes.
+
+Waiting on the maintainer:
+
 - **Where to start:** India first (the current boards and cities) or global.
 - **Product name and domain** for the hosted app.
 - **Hosting accounts:** database and storage provider, and the app host.

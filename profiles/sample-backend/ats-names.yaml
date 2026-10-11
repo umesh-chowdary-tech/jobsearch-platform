@@ -1,0 +1,19 @@
+# ats-names.yaml - this person's own notes on Workday forms. FICTIONAL SAMPLE.
+#
+# Read over data/ats-names.yaml by the Apply kit (apply_kit.py): names seen on
+# forms she filled, and which of Workday's suggestions come off or stay for
+# her. Optional - a profile without one gets the shared names only.
+
+workday_remove:
+  - name: "Database Administration"
+    why: "no DBA work in the store"
+  - name: "Quality Assurance (QA)"
+    why: "a misread of question answering (QA) - not testing"
+  - name: "DevOps"
+    why: "too broad a claim; add CI/CD, Docker and Jenkins instead"
+
+workday_keep:
+  - name: "Artificial Intelligence (AI)"
+    why: "true - LLM and agent work"
+  - name: "Information Technology"
+    why: "her degree"

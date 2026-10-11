@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Job search</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%232a78d6'/%3E%3Cpath d='M4 8.5l2.5 2.5L12 5.5' stroke='white' stroke-width='2' fill='none'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/base.css">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<div class="shell">
+  <nav class="side" aria-label="Sections">
+    <div class="brand">Job search</div>
+    <a href="#/" data-view="today">Today</a>
+    <a href="#/postings" data-view="postings">Postings</a>
+    <a href="#/applications" data-view="applications">Applications</a>
+    <a href="#/resumes" data-view="resumes">Resumes</a>
+    <a href="#/outreach" data-view="outreach">Outreach</a>
+    <a href="#/market" data-view="market">Market</a>
+    <a href="#/system" data-view="system">System</a>
+    <a href="#/profile" data-view="profile">Profile</a>
+  </nav>
+  <div class="main">
+    <header class="top">
+      <span id="health" class="health">Loading…</span>
+      <div class="top-actions">
+        <button id="stop-run" type="button" hidden>Stop</button>
+        <select id="pause-for" aria-label="Pause the scheduled cycle">
+          <option value="">Pause schedule…</option>
+          <option value="1">for 1 hour</option>
+          <option value="3">for 3 hours</option>
+          <option value="8">for 8 hours</option>
+          <option value="24">for a day</option>
+          <option value="until">until I resume</option>
+        </select>
+        <button id="resume" type="button" hidden>Resume schedule</button>
+        <button id="run-cycle" type="button">Run cycle</button>
+      </div>
+    </header>
+    <main id="view" tabindex="-1"></main>
+  </div>
+</div>
+<section id="console" class="console" hidden aria-live="polite">
+  <div class="console-head">
+    <strong id="console-title"></strong>
+    <span id="console-state"></span>
+    <button id="console-close" type="button" aria-label="Hide output">Hide</button>
+  </div>
+  <pre id="console-lines"></pre>
+</section>
+<div id="toast" class="toast" role="status" hidden></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

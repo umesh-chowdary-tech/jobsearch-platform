@@ -1,0 +1,65 @@
+# ats-names.yaml - what an applicant tracking system calls a skill. Shared.
+#
+# Workday does not take "Python"; it picks from its own list, where the entry is
+# "Python (Programming Language)". Its suggestions are guessed from resume text
+# and can be wrong - on one real form it offered "Oracle Database" from a course
+# title, and "Quality Assurance" from "extractive QA".
+#
+# Every name is one of two kinds, and the Apply kit shows which:
+#   seen: <date>   observed on a real Workday form - type it, it will be there
+#   (no seen)      a best guess at Workday's wording - type the short form and
+#                  pick the closest match it offers
+#
+# When an application shows the real name, record it here with `seen`. Each
+# form confirms or corrects a guess, and the next kit is more exact.
+#
+# Keys are the canonical skill names from skills.yaml / skill-vocabulary.yaml.
+# The kit only ever offers a skill the person's store backs (core, working,
+# scoped), so an entry here never claims anything for anyone.
+#
+# Which of Workday's suggestions to remove or keep depends on the person, so
+# those lists live in their profile: profiles/<id>/ats-names.yaml, with the
+# same `workday_remove` / `workday_keep` shape (see profiles/sample-backend).
+
+workday:
+  # seen on a real Workday form, 2026-09-25
+  Python: {name: "Python (Programming Language)", seen: 2026-09-25}
+  JavaScript: {name: "JavaScript", seen: 2026-09-25}
+  PostgreSQL: {name: "PostgreSQL", seen: 2026-09-25}
+
+  # best guesses - confirm on the next form
+  LLM: {name: "Large Language Models (LLM)"}
+  Agentic: {name: "AI Agents"}
+  RAG: {name: "Retrieval-Augmented Generation (RAG)"}
+  Prompt Engineering: {name: "Prompt Engineering"}
+  Fine-tuning: {name: "Fine-Tuning"}
+  MCP: {name: "Model Context Protocol (MCP)"}
+  Claude APIs: {name: "Anthropic Claude"}
+  Vector DB: {name: "Vector Databases"}
+  AWS: {name: "Amazon Web Services (AWS)"}
+  Serverless: {name: "Serverless Computing"}
+  CI/CD: {name: "Continuous Integration and Continuous Delivery (CI/CD)"}
+  Docker: {name: "Docker (Software)"}
+  Jenkins: {name: "Jenkins"}
+  Observability: {name: "Observability"}
+  TypeScript: {name: "TypeScript"}
+  Node.js: {name: "Node.js"}
+  React: {name: "React.js"}
+  React Native: {name: "React Native"}
+  Express.js: {name: "Express.js"}
+  FastAPI: {name: "FastAPI"}
+  Java: {name: "Java (Programming Language)"}
+  Spring Boot: {name: "Spring Boot"}
+  REST: {name: "RESTful APIs"}
+  SQL: {name: "SQL (Programming Language)"}
+  PL/pgSQL: {name: "PL/pgSQL"}
+  MongoDB: {name: "MongoDB"}
+  Redshift: {name: "Amazon Redshift"}
+  Supabase: {name: "Supabase"}
+  Jest: {name: "Jest (JavaScript Testing Framework)"}
+  pytest: {name: "Pytest"}
+  PyTorch: {name: "PyTorch (Machine Learning Library)"}
+  transformers: {name: "Hugging Face Transformers"}
+  scikit-learn: {name: "Scikit-Learn (Python Package)"}
+  Salesforce: {name: "Salesforce"}
+  Splunk: {name: "Splunk"}

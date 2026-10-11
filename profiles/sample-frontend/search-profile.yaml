@@ -1,0 +1,33 @@
+# search-profile.yaml - FICTIONAL SAMPLE: a junior frontend developer.
+# Same fields as profiles/sample-backend/search-profile.yaml.
+
+location:
+  preferred: [Bengaluru, Bangalore]
+  acceptable: [India]
+  remote_terms: [remote, "work from home", wfh, anywhere, distributed]
+  reject_if_only: [United States, USA, UK, London, Singapore, Canada, Germany, Australia]
+
+seniority:
+  years_experience: 1
+  max_years_required: 3
+  level: an individual contributor, early in his career
+  reject_titles: [senior, sr, staff, principal, director, vp, head of, architect,
+                  manager, lead, chief]
+  flag_titles: [intern, internship, trainee]
+
+reject_if_core_requirement: [Angular]
+
+require_title_signal: [engineer, developer, frontend, "front-end", "front end",
+                       "ui ", web, react, software, "full stack", "full-stack"]
+
+reject_function: [sales, marketing, recruiter, "customer success", finance, legal,
+                  operations, "technical writer", "qa engineer", "test engineer",
+                  "data engineer", "data scientist", devops, "site reliability"]
+
+scoring:
+  weights:
+    core: 3
+    working: 2
+    scoped: 1
+    incidental: 0
+  shortlist: 10

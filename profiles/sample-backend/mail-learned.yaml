@@ -1,0 +1,27 @@
+# Rules learned from emails the built-in rules were unsure of. FICTIONAL SAMPLE.
+# Each was suggested by the model, replayed against past mail, and approved by
+# hand in the app (Applications > Rules waiting for you). Edit or delete
+# freely: the file is re-read when it changes. tests/test_mail_learned.py
+# checks every entry still does what it was approved to do.
+phrases:
+- phrase: we've got your submission and will be in touch
+  means: received
+  example: Thanks for completing the assignment for the Backend Engineer role at Globex - we've got
+    your submission and will be in touch.
+  learned_from:
+    app_id: globex-backend-engineer
+    company: Globex
+    subject: Globex - your assignment
+    date: '2026-09-30'
+  approved_at: '2026-10-01T10:00:00+00:00'
+  replay: changed 1 of 40 emails
+senders:
+- sender: globex@myworkday.com
+  company: Globex Corporation
+  example: Globex Corporation
+  learned_from:
+    app_id: do-not-reply-2026-09-30
+    company: Do Not Reply
+    subject: Follow up on your job application received
+    date: '2026-09-30'
+  approved_at: '2026-10-01T10:05:00+00:00'

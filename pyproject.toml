@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jobsearch"
+version = "0.1.0"
+description = "A job-search agent for anyone: watches job boards, ranks postings against a person's confirmed experience, tailors resumes"
+requires-python = ">=3.11"
+license = "AGPL-3.0-only"
+readme = "README.md"
+dependencies = ["requests>=2.31", "PyYAML>=6.0", "pypdf>=4.0", "anthropic>=1.11"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+# The MCP connector (connector.py, statestore.py). Not needed for the CLI or
+# the local app.
+server = ["mcp>=2.3,<3", "psycopg[binary]>=3.2", "uvicorn>=0.30"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.setuptools.package-data]
+"jobsearch.web" = ["static/*"]

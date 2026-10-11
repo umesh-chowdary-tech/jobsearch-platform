@@ -1,0 +1,72 @@
+# search-profile.yaml - the hard filters. FICTIONAL SAMPLE. See docs/triage.md, pass 1.
+#
+# These run first and free, before any scoring. Most postings stop here, which
+# is the point: a few dozen boards produce thousands of postings and almost
+# none of them are in the right city at the right level.
+
+location:
+  # A posting passes if its location names one of these places (whole words:
+  # "India" does not match "Indiana"), OR reads as remote WITHOUT naming any
+  # other place. "Remote - CA" and "NYC or Remote" are remote from there, and
+  # are rejected. See location_verdict.
+  preferred: [Pune]
+  acceptable: [India, Mumbai, Bengaluru, Bangalore, Hyderabad, Chennai]
+  remote_terms: [remote, "work from home", wfh, anywhere, distributed]
+  # Only picks the wording of a rejection; the list does not need to be complete.
+  reject_if_only: [United States, USA, "U.S.", UK, London, Singapore, Dublin,
+                   Canada, Germany, Berlin, Amsterdam, Sydney, Tokyo, "San Francisco",
+                   "New York", Austin, Seattle, Boston, Toronto, Poland, Warsaw]
+
+seniority:
+  years_experience: 4
+  # A posting asking for more than this many years is rejected. Two years of
+  # slack, because stated minimums are usually aspirational.
+  max_years_required: 6
+  # How the model is told what she is. Free text.
+  level: an individual contributor, not yet a lead
+  # Title words that mean the role is out of reach regardless of years,
+  # matched as whole words.
+  reject_titles: [staff, principal, director, vp, vice president, head of,
+                  architect, distinguished, fellow, manager, lead, chief]
+  # Title words that mean the role is beneath the current level. Not rejected -
+  # flagged.
+  flag_titles: [intern, internship, trainee, fresher, graduate, apprentice]
+
+# A posting whose PRIMARY ask is one of these is rejected outright - nothing in
+# the store backs them. See skills.yaml `banned`.
+reject_if_core_requirement: [Kafka, Angular, Salesforce]
+
+# An ALLOWLIST on the title, checked after the blocklist below. Every entry
+# names the CRAFT, not a function or a domain: "analyst" or "platform" alone
+# would let in Credit Risk Analyst and Platform Partnerships Manager.
+require_title_signal: [engineer, developer, sde, swe, programmer, architect,
+                       software, backend, "back-end", frontend, "front-end",
+                       "full stack", "full-stack", fullstack, devops, sre,
+                       "site reliability", infrastructure, data scientist,
+                       "machine learning", "ml ", scientist, technologist,
+                       "technical staff", qa, tester, mobile, android, ios]
+
+# Roles that are not what she is looking for, matched on title. Phrases, not
+# bare words - this list matches substrings, and "qa" alone would catch "Qatar".
+reject_function: [sales, marketing, recruiter, recruiting, "customer success",
+                  "account executive", "business development", finance, legal,
+                  "people partner", "talent acquisition", collections, operations,
+                  support engineer, "technical writer", designer,
+                  "qa engineer", "qa analyst", "qa automation", "quality assurance",
+                  "quality engineer", sdet, "test engineer", "engineer in test",
+                  "engineer - test", tester, "test automation", "performance test",
+                  "customer experience", "technical support", "customer engineer",
+                  devrel, "developer relations", "developer advocate", "developer evangelist",
+                  "field engineer", "field security", "solutions engineer", "solution engineer",
+                  "data engineer", "data scientist", "data science", "decision scientist",
+                  "business intelligence"]
+
+scoring:
+  # Pass 2 weights. `incidental` is zero by design.
+  weights:
+    core: 3
+    working: 2
+    scoped: 1
+    incidental: 0
+  # How many postings reach the model in pass 3.
+  shortlist: 10

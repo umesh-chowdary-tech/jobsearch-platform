@@ -1,0 +1,31 @@
+# Polls the boards on a timetable for a deployed connector. Render's free plan
+# has no cron and sleeps after 15 quiet minutes, so this wakes the connector
+# and asks it to refresh. Needs one repository secret, CONNECTOR_URL: the
+# connector's URL up to and including the secret segment, e.g.
+# https://jobsearch-connector.onrender.com/<secret>. Without it, it does nothing.
+name: refresh
+on:
+  schedule:
+    - cron: "17 1-17/3 * * *"   # every 3 hours, 01:17-17:17 UTC
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Wake the connector and start a refresh
+        env:
+          CONNECTOR_URL: ${{ secrets.CONNECTOR_URL }}
+        run: |
+          if [ -z "$CONNECTOR_URL" ]; then echo "CONNECTOR_URL is not set - no connector to refresh"; exit 0; fi
+          # A sleeping free instance takes about a minute to wake.
+          for i in 1 2 3; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 120 -X POST "$CONNECTOR_URL/refresh") || code=000
+            echo "attempt $i: HTTP $code"
+            # 202 started, 409 already running - both fine.
+            if [ "$code" = 202 ] || [ "$code" = 409 ]; then exit 0; fi
+            sleep 20
+          done
+          exit 1

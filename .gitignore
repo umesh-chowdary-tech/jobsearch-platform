@@ -8,3 +8,7 @@ var/
 !.env.example
 # Claude Code worktrees live inside the repo folder
 .claude/worktrees/
+# Profiles hold real people's facts. Only the fictional samples are committed.
+profiles/*
+!profiles/README.md
+!profiles/sample-*/

@@ -1,0 +1,36 @@
+# skills.yaml - FICTIONAL SAMPLE: a junior frontend developer.
+# Tiers as in profiles/sample-backend/skills.yaml.
+
+tiers:
+  core:
+    - skill: React
+      backed_by: 3
+    - skill: TypeScript
+      backed_by: 3
+    - skill: JavaScript
+      backed_by: 1
+  working:
+    frontend:
+      - HTML
+      - CSS
+      - Next.js
+      - Tailwind CSS
+      - Storybook
+      - Accessibility
+    backend:
+      - Firebase
+    testing:
+      - Jest
+      - Unit Testing
+    practices:
+      - Git
+      - Code Review
+      - Agile
+
+not_skills: []
+
+banned:
+  - skill: Angular
+    reason: listed on a college resume; never used
+
+always: []

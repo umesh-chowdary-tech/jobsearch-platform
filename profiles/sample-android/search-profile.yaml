@@ -1,0 +1,30 @@
+# search-profile.yaml - FICTIONAL SAMPLE: a senior Android lead.
+# Same fields as profiles/sample-backend/search-profile.yaml.
+
+location:
+  preferred: [Chennai]
+  acceptable: [India, Bengaluru, Bangalore, Hyderabad]
+  remote_terms: [remote, "work from home", wfh, anywhere, distributed]
+  reject_if_only: [United States, USA, UK, London, Singapore, Canada, Germany, Dubai]
+
+seniority:
+  years_experience: 10
+  max_years_required: 12
+  level: a tech lead who has led a team of five
+  reject_titles: [director, vp, vice president, head of, chief, distinguished, fellow]
+  flag_titles: [intern, internship, trainee, fresher, junior, associate]
+
+reject_if_core_requirement: [Flutter]
+
+require_title_signal: [android, mobile, kotlin, engineer, developer]
+
+reject_function: [sales, marketing, recruiter, "customer success", finance, legal,
+                  operations, "qa engineer", "test engineer", ios, "data engineer"]
+
+scoring:
+  weights:
+    core: 3
+    working: 2
+    scoped: 1
+    incidental: 0
+  shortlist: 10

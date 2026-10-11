@@ -1,0 +1,41 @@
+# company-names.yaml - how a company is written in a sentence a human reads.
+#
+# The ATS slug is not a name. Outreach drafted from the raw data said "the
+# Frontend Engineer role at razorpaysoftwareprivatelimited", and the boards'
+# own names are no better: "HackerRank Careers", "Rubrik Job Board", "InMobi "
+# with a trailing space. Lever and Ashby boards report no name at all. (The
+# one that looked wrong was right: purestorage's board says "Everpure", which
+# is Pure Storage's new name - see below.)
+#
+# Keyed by provider:slug, exactly as in var/_shared/boards.json. A board missing from
+# here falls back to a cleaned board name and is flagged in the draft's checks,
+# so a guessed name is never silently sent.
+
+greenhouse:razorpaysoftwareprivatelimited: Razorpay
+greenhouse:groww: Groww
+greenhouse:inmobi: InMobi
+greenhouse:druva: Druva
+greenhouse:hackerrank: HackerRank
+greenhouse:rubrik: Rubrik
+greenhouse:databricks: Databricks
+greenhouse:mongodb: MongoDB
+greenhouse:gitlab: GitLab
+greenhouse:cloudflare: Cloudflare
+greenhouse:stripe: Stripe
+greenhouse:twilio: Twilio
+greenhouse:okta: Okta
+greenhouse:samsara: Samsara
+greenhouse:coinbase: Coinbase
+greenhouse:zscaler: Zscaler
+# Pure Storage renamed itself Everpure. Confirmed 2026-09-25 from the board
+# itself: every posting's contact is @purestorage.com, and a Japanese posting
+# reads "Everpure (formerly Pure Storage)". A referral request should use the
+# name the company uses now, so the slug stays and the name changes.
+greenhouse:purestorage: Everpure
+lever:cred: CRED
+lever:meesho: Meesho
+lever:zeta: Zeta
+lever:paytm: Paytm
+lever:fampay: FamPay
+ashby:sarvam: Sarvam AI
+ashby:atlan: Atlan

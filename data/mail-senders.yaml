@@ -1,0 +1,50 @@
+# mail-senders.yaml - who is writing, for the inbox reader. Shared.
+#
+# employers: a sender domain that belongs to one company. The company is taken
+#   from here, not guessed from the display name. Add a company's domain when
+#   its mail is misread; a person's own approved senders go in their profile's
+#   mail-learned.yaml instead (mail_learn.py).
+# platforms: domains shared by many employers (an ATS, a hiring tool). The
+#   company comes from the display name ("Globex People Services" -> Globex)
+#   or the subject ("Thank you for applying to Globex").
+#   kekamail.com is a platform, not the employer Keka.
+# feeds: job alerts and newsletters. Never an application; never read.
+
+employers: {}
+
+platforms:
+  - myworkday.com
+  - greenhouse-mail.io
+  - us.greenhouse-mail.io
+  - greenhouse.io
+  - us.greenhouse-jobs.com
+  - ashbyhq.com
+  - lever.co
+  - gem.com
+  - successfactors.com
+  - successfactors.eu
+  - workflow.mail.us2.cloud.oracle.com
+  - kekamail.com
+  - turbohire.co
+  - eightfold.ai
+  - connect.hackajob.com
+  - berribot.com
+  - linkedin.com
+  - naukri.com
+
+feeds:
+  - hirist.tech
+  - jobfeed.hirist.com
+  - ambitionbox.com
+  - match.indeed.com
+  - jobalert.indeed.com
+  - indeed.com
+  - glassdoor.com
+  - minis.naukri.com
+  - jobs.naukri.com
+  - em.linkedin.com
+  - instahyre.com
+  - talent500.co
+  - noreply12.jobs2web.com
+# Not google.com: a Google application would be confirmed from it. Its job
+# alerts and account notices are dropped by subject instead.

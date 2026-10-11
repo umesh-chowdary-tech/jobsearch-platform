@@ -1,0 +1,108 @@
+# master-store.yaml - FICTIONAL SAMPLE: a senior Android lead.
+#
+# Meera Placeholder, her employers and her apps are made up; any resemblance to
+# a real person or company is a coincidence. Same schema as every profile - see
+# profiles/sample-backend/master-store.yaml for the rules it follows. Two
+# employers, so a resume carries two dated position lines.
+
+identity:
+  name: Meera Placeholder
+  location: Chennai, India
+  email: meera.placeholder@example.com
+  phone: ""
+  linkedin: ""
+  github: ""
+  title:
+    official: Lead Android Engineer
+    descriptor_flexes: false
+    approved_descriptors: []
+    rule: Lead with the official title.
+  employment:
+    - employer: Globex Mobile
+      location: Chennai, India
+      start: 2021-01
+      end: present
+      title: Lead Android Engineer
+    - employer: Umbrella Apps
+      location: Chennai, India
+      start: 2016-06
+      end: 2020-12
+      title: Android Developer
+  languages: [Tamil, English]
+
+entries:
+
+  - id: globex-wallet-app
+    title: "Globex Wallet - Android App"
+    type: work
+    where: Globex Mobile
+    period: 2021-present
+    headline: Led the Android team behind the Globex Wallet app
+    facts:
+      - leads a team of five Android engineers
+      - moved the app from XML layouts to Jetpack Compose, screen by screen
+      - introduced modular Gradle builds that cut the clean build from ~14 minutes to ~6
+    metrics:
+      - measured: true
+        claim: clean build time went from ~14 minutes to ~6
+    tech: [Kotlin, Android, Jetpack Compose, Coroutines, Gradle, Hilt, Room, Retrofit,
+           Code Review, System Design, Agile, Git]
+    angles: [mobile, leadership]
+    evidence: internal
+    confidence: high
+
+  - id: globex-offline-sync
+    title: "Offline Sync"
+    type: work
+    where: Globex Mobile
+    period: 2022-present
+    headline: Designed offline-first sync for the wallet's transaction history
+    facts:
+      - transactions made offline are stored with Room and synced with WorkManager when the network returns
+      - conflicts are resolved on the server; the app shows the result instead of guessing
+    metrics: []
+    tech: [Kotlin, Android, Room, WorkManager, Coroutines, REST]
+    angles: [mobile]
+    evidence: internal
+    confidence: high
+
+  - id: umbrella-news-app
+    title: "Umbrella News - Android App"
+    type: work
+    where: Umbrella Apps
+    period: 2016-06 to 2020-12
+    headline: Built and maintained Umbrella's news reader app for Android
+    facts:
+      - built the article reader, offline downloads and push notifications
+      - migrated the codebase from Java to Kotlin
+    metrics: []
+    tech: [Java, Kotlin, Android, Firebase, REST, Git]
+    angles: [mobile]
+    evidence: internal
+    confidence: high
+
+  - id: proj-compose-library
+    title: "Open-Source Chart Library"
+    type: project
+    where: personal
+    period: 2023
+    headline: Published a small Jetpack Compose chart library
+    facts:
+      - line and bar charts drawn with the Compose Canvas API
+    metrics: []
+    tech: [Kotlin, Jetpack Compose]
+    angles: [mobile]
+    evidence: https://example.com/meera/compose-charts
+    confidence: high
+
+  - id: education-btech
+    type: education
+    where: Example University
+    period: 2012-08 to 2016-05
+    headline: B.Tech, Electronics and Communication Engineering
+    facts: []
+    metrics: []
+    tech: []
+    angles: [all]
+    evidence: transcript
+    confidence: high

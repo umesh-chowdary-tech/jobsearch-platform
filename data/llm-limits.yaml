@@ -1,0 +1,61 @@
+# llm-limits.yaml - a daily cap on every model provider, counted locally.
+#
+# Counted in var/_shared/llm-usage.json and checked BEFORE a request is sent: a
+# request that would pass a cap is never made, and the run that wanted it stops
+# (see limits.py). A provider with no entry here is not used at all - a new
+# provider gets a limit before it gets a request. Reaching a cap pauses the
+# work until the next day; it never falls back to a weaker model.
+#
+# Two levels:
+#   the provider's own lines   everyone together, per day (and month)
+#   per_profile                each person's share of that provider's day, so
+#                              one busy profile can't spend everyone's budget
+#
+# Days are local calendar days. Tokens are what the provider reports: prompt
+# plus reply for Groq and OpenRouter, input only for Jev (its replies are free).
+# 0 turns a provider off. Edit and save; the next request reads the new value.
+# These are starting values for a small beta - set them to what you will pay.
+
+groq:
+  # Free tier for openai/gpt-oss-120b: 1,000 requests and 200,000 tokens a day,
+  # 8,000 a minute. Groq enforces its own; these stop us short of it, so a
+  # refusal is ours (and says why) rather than a 429 per cycle.
+  requests_per_day: 950
+  tokens_per_day: 190000
+  # Ranking stops this many tokens early, so the day's budget can't all go on
+  # rating postings and leave none for the inbox's unclear emails.
+  keep_for_mail: 25000
+  per_profile:
+    requests_per_day: 200
+    tokens_per_day: 40000
+
+openrouter:
+  # Paid per token, and off: a rate-limit fallback once spent its credits.
+  # Raise both numbers to turn it back on.
+  requests_per_day: 0
+  tokens_per_day: 0
+
+claude:
+  # Anthropic API - job ratings (rank.py), resume summaries, outreach openers.
+  # Prepaid credit. When a cap is reached, ratings wait for the next day.
+  requests_per_day: 200
+  tokens_per_day: 400000
+  usd_per_day: 0.15
+  usd_per_month: 4.00
+  # Ranking stops this much short each day, so drafting a resume or an
+  # outreach note still works after a busy day of ratings.
+  keep_usd_for_clicks: 0.03
+  # Claude Opus 5.5, per million tokens. Thinking is billed as output.
+  price_per_mtok: {input: 4.00, output: 20.00, cache_write: 5.00, cache_read: 0.20}
+  per_profile:
+    requests_per_day: 40
+    usd_per_day: 0.05
+
+jev:
+  # TypeSafe's Jev: $0.042 per million input tokens, replies free. These caps
+  # bound the spend to about $0.04 a day and $0.42 a month.
+  requests_per_day: 1000
+  tokens_per_day: 1000000
+  tokens_per_month: 10000000
+  per_profile:
+    requests_per_day: 300

@@ -1,0 +1,194 @@
+# ats-registry.yaml — seed registry for the watcher. Shared by every profile.
+# Every slug below was checked live on 2026-09-20. Re-verify before trusting.
+#
+# Endpoints:
+#   greenhouse: https://boards-api.greenhouse.io/v1/boards/{slug}/jobs
+#   lever:      https://api.lever.co/v0/postings/{slug}?mode=json
+#   ashby:      https://api.ashbyhq.com/posting-api/job-board/{slug}
+#   workday:    POST https://{tenant}.{wdN}.myworkdayjobs.com/wday/cxs/{tenant}/{site}/jobs
+#               slug is tenant.wdN.site[@Country] - see the workday section below
+#   oracle:     GET https://{host}.oraclecloud.com/hcmRestApi/resources/latest/recruitingCEJobRequisitions
+#               slug is host@SiteNumber[@Location] - read off the careers URL
+#   amazon:     GET https://www.amazon.jobs/en/search.json - slug is COUNTRY@category+category
+#   atlassian:  GET https://www.atlassian.com/endpoint/careers/listings - every job at once;
+#               slug is Country@Team[+Team], filtered here
+#   microsoft:  GET https://apply.careers.microsoft.com/api/pcsx/search (Eightfold) - slug is
+#               location@profession[+profession]; 10 s between requests (it rate-limits)
+#   zoho:       GET https://{org}.zohorecruit.{com|in|eu...}/jobs/{Portal} - a career
+#               page whose job list is JSON; slug is the host[@Portal]
+#
+# Constraints the fetcher must honour:
+#   - public endpoints only, no logins, no auth-walled pages
+#   - respect robots.txt; cache it per host
+#   - <= 1 request/second per host
+#   - never solve CAPTCHAs; if a host starts challenging, drop it
+#   - no LinkedIn and no Naukri scraping, ever
+
+verified:
+  greenhouse:
+    - razorpaysoftwareprivatelimited
+    - groww
+    - inmobi
+    - druva
+    - hackerrank
+    - rubrik
+    - databricks
+    - mongodb
+    - gitlab
+    - cloudflare
+    - stripe
+    - twilio
+    - okta
+    - samsara
+    - coinbase
+    - zscaler
+    - slug: purestorage
+      company: Everpure
+      note: >
+        Pure Storage, renamed Everpure. Identity confirmed 2026-09-25: all 366
+        postings give the same purestorage.com recruiting address as the
+        contact, and a Japanese posting reads "Everpure (formerly Pure
+        Storage)".
+  lever:
+    - cred
+    - meesho
+    - zeta
+    - paytm
+    - fampay
+  ashby:
+    - sarvam
+    - atlan
+  # Workday slugs cannot be guessed from a name - `search` never tries them.
+  # Read the three parts off the careers URL:
+  #   https://wf.wd1.myworkdayjobs.com/WellsFargoJobs -> wf.wd1.WellsFargoJobs
+  # A company's own careers site often hides this; its Apply button links to it.
+  # "@India" polls one country. Big employers need it: Wells Fargo is ~1,800
+  # postings (91 requests a poll) and ~160 in India (10). The probe refuses a
+  # board over 1,000 postings with no country rather than poll part of it.
+  # Changing the country changes the board key, so it starts a fresh baseline.
+  workday:
+    - slug: wf.wd1.WellsFargoJobs@India
+      company: Wells Fargo
+      note: >
+        checked live 2026-09-24 - 162 India postings (94 Bengaluru, 61 Hyderabad,
+        7 in two cities) plus one it lists but will not show. Board name reads
+        "I16 Wells Fargo International Solutions Private LTD".
+  # Oracle Recruiting Cloud: host, the site number from the careers URL
+  # (.../sites/CX_1001/jobs), and a location by name. Without one, JPMorgan is
+  # 7,478 postings; and Oracle ignores an unknown location id, so the name is
+  # looked up in its own location list each poll and the count cross-checked.
+  oracle:
+    - slug: jpmc.fa.oraclecloud.com@CX_1001@India
+      company: JPMorgan Chase
+      note: >
+        checked live 2026-09-28 - 325 India postings (168 Bengaluru, 156 in
+        Maharashtra). Posting ids are jpmc-<Job number>, the number the
+        employer's application emails quote, so applications link to postings.
+    - slug: ebxr.fa.us2.oraclecloud.com@CX_1@India
+      company: DTCC
+      note: >
+        Depository Trust & Clearing Corporation (the job text says so; the host
+        names no one). Checked live 2026-09-29: 434 postings worldwide, 93 in
+        India (83 Hyderabad). The careers link also filtered to "Information
+        Technology"; triage drops the other categories by title instead.
+  # Amazon: amazon.jobs's own search API. India is 2,368 postings, mostly
+  # warehouse, finance and support, so the slug names Amazon's categories to
+  # poll. Slugs are the ones in amazon.jobs URLs; Applied Science's is
+  # machine-learning-science. Checked live 2026-09-28: 600 postings.
+  amazon:
+    - slug: IND@software-development+machine-learning-science+data-science+solutions-architect+systems-quality-security-engineering
+      company: Amazon
+      note: >
+        Software Development 404, Applied Science 88, Solutions Architect 51,
+        Systems/Quality/Security Engineering 35, Data Science 22. Asked for from
+        amazon.jobs/content/en/locations/india/hyderabad (nine cities, full time).
+  # Atlassian: its careers page's own listing endpoint, one request for all
+  # 287 jobs worldwide; the team and country are filtered here, as the page's
+  # own filters do in the browser. Team names are Atlassian's ("Engineering",
+  # "Analytics & Data Science", "Security").
+  atlassian:
+    - slug: India@Engineering
+      company: Atlassian
+      note: >
+        checked live 2026-09-28 - 29 Engineering postings in India (Bengaluru and
+        remote-India), from atlassian.com/company/careers/all-jobs?team=Engineering&location=India.
+        Also in India: Analytics & Data Science 4, Security 2.
+  # Microsoft: its careers site runs on Eightfold; /api/pcsx is public and
+  # allowed by robots.txt. India is 229 postings; the profession filter keeps
+  # the engineering ones. Posting ids are microsoft-<Job number>, the number
+  # the employer's application emails quote.
+  microsoft:
+    - slug: india@software engineering+research, applied, & data sciences+security engineering
+      company: Microsoft
+      note: >
+        checked live 2026-09-29 - 99 postings (79 software engineering). The host
+        answers "429 Please try again later" to bursts: http.HOST_INTERVAL spaces
+        its requests 10 s apart, so a poll takes ~100 s.
+  # Zoho Recruit: the slug is the career site's host, data centre included
+  # (.com or .in), plus "@Portal" if the portal isn't named Careers. Read it
+  # off a job link: https://minfytech.zohorecruit.com/jobs/Careers/4964... ->
+  # minfytech.zohorecruit.com. Found 2026-09-26 searching zohorecruit career
+  # sites; every one was checked live the same day.
+  zoho:
+    - slug: minfytech.zohorecruit.com
+      company: Minfy Technologies
+      note: 72 postings - AWS/cloud, Java, DevOps; Hyderabad
+    - slug: kanerika.zohorecruit.com
+      company: Kanerika Software
+      note: 26 postings - data engineering, Java, AI governance; Hyderabad
+    - slug: otsi-global.zohorecruit.com
+      company: OTSI
+      note: 30 postings, many non-engineering
+    - slug: loginradius.zohorecruit.in
+      company: LoginRadius
+      note: 6 postings - CIAM product company; SDET and implementation roles
+
+# Valid boards, but no India roles at the time of checking. Keep polling - cheap.
+valid_no_india_roles:
+  - OpenAI
+  - Notion
+  - Perplexity
+  - Cohere
+  - Deel
+  - ElevenLabs
+
+# 404 on the guessed slug. These companies may still use an ATS under a different
+# slug - fingerprint the careers page instead of re-probing these guesses.
+slug_404_do_not_reprobe:
+  - PhonePe
+  - Postman
+  - BrowserStack
+  - Innovaccer
+  - Chargebee
+  - Sprinklr
+  - ThoughtSpot
+  - Nutanix
+  - Jupiter
+  - SpotDraft
+  - Upstox
+  - Swiggy
+  - ShareChat
+  - Dream11
+  - Zepto
+  - Rippling
+  - Anthropic
+
+# Out of scope.
+excluded:
+  - host: smartrecruiters.com
+    reason: postings API is disallowed by robots.txt (tested 2026-09-20)
+  - host: linkedin.com
+    reason: terms prohibit scraping; the account is an asset that cannot be risked
+  - host: naukri.com
+    reason: terms prohibit scraping
+
+# Tier 3 - headless browser. Expensive (~3-8s, 1-5MB per page vs ~0.1-0.5s and a few
+# KB for an API). Keep this list short and poll it at 30-60 min, not 15.
+tier3:
+  - company: Google
+    reason: own careers system - no ATS API, no JSON-LD (checked), JS-rendered
+    approach: >
+      Result URLs carry every filter, so one URL per search plus first-page job-ID
+      diffing is the cheap approach - no LLM reads a page until an ID is new.
+    url_filters: "location=India&employment_type=FULL_TIME&sort_by=date"
+

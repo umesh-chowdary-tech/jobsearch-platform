@@ -1,0 +1,407 @@
+# master-store.yaml - one defensible set of facts about one person's work.
+#
+# FICTIONAL SAMPLE. Kavya Example, her employer and her projects are made up;
+# any resemblance to a real person or company is a coincidence. The tests run
+# against this file, so it exercises every part of the schema.
+#
+# GOVERNING RULE: nothing in this file goes on a resume unless the person can
+# defend it in an interview. The assembler SELECTS and REWORDS; it never inflates.
+#
+# Assembler rules (enforced, not advisory):
+#   1. Never invent or round a number. If `metrics` is empty, describe WHAT changed,
+#      not by how much.
+#   2. `evidence: internal` = claimable but not linkable (employer work).
+#   3. ATS keyword coverage comes from `tech`, never from `metrics`.
+#   4. A skill appears on a resume only if some entry's `tech` backs it.
+#   5. Entries with `status: parked` or `confidence: low` are never emitted without
+#      a human decision first.
+
+identity:
+  name: Kavya Example
+  location: Pune, India
+  email: kavya.example@example.com
+  phone: "+91 00000 00000"
+  linkedin: ""
+  github: ""
+  title:
+    official: Software Engineer II        # the title on the offer letter
+    descriptor_flexes: true               # e.g. "Software Engineer II (Backend AI Engineer)"
+    approved_descriptors:
+      - Backend AI Engineer
+      - Backend Software Engineer
+      - AI Platform Engineer
+    rule: >
+      Always lead with the official title. The descriptor in parentheses is chosen
+      per posting from the descriptors above; never coin a new one.
+  # One row per employer. The resume's position line - title, employer, dates -
+  # comes from here, never from whichever workstreams a variant happened to
+  # select: rebuilt from the entries alone, a range loses its start month when
+  # the oldest entry is cut for length, and a parser reads "2022" as January.
+  employment:
+    - employer: Acme Freight
+      location: Pune, India
+      start: 2022-04
+      end: present
+      title: Software Engineer II
+
+  # Spoken languages, in the person's own order. No proficiency levels are
+  # recorded - a form that asks gets the person's answer, not a guess.
+  languages: [Marathi, Hindi, English]
+
+entries:
+
+  # ---------------------------------------------------------- Acme: work ---
+
+  - id: acme-agent-platform
+    title: "Agent Platform - Operations AI"
+    type: work
+    where: Acme Freight
+    period: 2025-present
+    headline: Built Acme's internal AI agent platform for the operations team
+    facts:
+      - one of two engineers on the platform, working with its tech lead
+      - took it from prototype to production in under 4 months
+      - built MCP servers that give the agents read access to shipment and billing data
+      - adopted by 30+ operations analysts
+    metrics:
+      - measured: true
+        claim: weekly report preparation went from ~2 days to ~2 hours
+    tech: [Claude APIs, MCP, Python, AWS, Claude Code, LLM, Agentic, Prompt Engineering,
+           System Design, Code Review, Agile, Git,
+           GitHub Copilot, AI-assisted Development]
+    angles: [ai-platform, agentic]
+    evidence: internal
+    confidence: high
+
+  - id: acme-support-agent
+    title: "On-call Agent"
+    type: work
+    where: Acme Freight
+    period: 2025-present
+    headline: Built an on-call agent that turns bursts of alerts into one Jira incident
+    facts:
+      - groups related alerts from the monitoring channel and drafts one Jira incident with their history
+      - quotes the matching Confluence runbook section instead of paraphrasing it
+      - files nothing until the on-call engineer approves the draft
+    metrics: []
+    tech: [MCP, Python, Jira, Confluence, LLM, Agentic]
+    angles: [agentic, ai-platform, hitl]
+    evidence: internal
+    confidence: high
+
+  - id: acme-track
+    title: "Acme Track - Shipment Tracking Platform"
+    type: work
+    where: Acme Freight
+    period: 2022-present
+    headline: Backend engineer on Acme Track, the shipment tracking platform
+    facts:
+      - handles ~2M shipment events a day for ~3,000 business customers
+      - built the delay alerts, the customer notification service and the tracking API
+      - built on Python 3.12 and FastAPI, with a React 18 dashboard
+    metrics:
+      - measured: true
+        claim: ~2M shipment events a day for ~3,000 business customers
+    tech: [Python, FastAPI, TypeScript, JavaScript, React, PostgreSQL, Redshift, AWS Lambda,
+           Splunk, Docker, Jest, REST, Serverless,
+           Unit Testing, Code Review, Agile, Git, Debugging,   # unit tests are the Jest ones
+           Claude Code, GitHub Copilot, AI-assisted Development]
+    angles: [backend, fullstack, data]
+    evidence: internal
+    confidence: high
+
+  - id: acme-daily-digest
+    title: "Daily Exceptions Digest"
+    type: work
+    where: Acme Freight
+    period: 2022-present
+    headline: Automated a daily digest of delayed shipments for account managers
+    facts:
+      - AWS Lambda job that runs every morning
+      - collects the previous day's delayed shipments and posts them to each account manager's queue
+    metrics: []
+    tech: [AWS Lambda, Python, Serverless]
+    angles: [backend]
+    evidence: internal
+    confidence: high
+    notes: >
+      Not an AI pipeline - there is no model in this job. Do not describe it as AI work.
+
+  - id: acme-billing-reconciler
+    title: "Billing Reconciler"
+    type: work
+    where: Acme Freight
+    period: 2022-present
+    headline: Built a nightly check that compares carrier invoices with the rates Acme booked
+    facts:
+      - flags invoices billed above the booked rate, per carrier and lane
+      - shows daily totals instead of one alert per invoice
+    metrics: []
+    tech: [Python, React, TypeScript, PostgreSQL]
+    angles: [data, backend]
+    evidence: internal
+    confidence: high
+
+  - id: acme-synthetic-checks
+    title: "Production Smoke Tests"
+    type: work
+    where: Acme Freight
+    period: 2022-present
+    headline: Set up hourly smoke tests that book and cancel a test shipment in production
+    facts:
+      - Docker plus Jenkins pipeline that runs the booking flow end to end every hour
+    metrics: []
+    tech: [Docker, Jenkins, CI/CD, Observability]
+    angles: [devops, backend]
+    evidence: internal
+    confidence: high
+
+  - id: acme-portal-migration
+    title: "Customer Portal Migration"
+    type: work
+    where: Acme Freight
+    period: within the Acme tenure, early; exact months not established
+    headline: Migrated the customer portal from a legacy stack to Spring Boot and React
+    facts:
+      - rebuilt the customer portal on Spring Boot, React and MongoDB
+      - used by every business customer to book pickups
+      - stored uploaded shipping documents in Azure Blob Storage
+    metrics: []
+    priority: low                         # the first entry to cut when a resume runs long
+    tech: [Java, Spring Boot, React, MongoDB]   # the only entry backing Java, Spring Boot
+                                                # and MongoDB. Azure is deliberately NOT here.
+    angles: [fullstack, backend]
+    evidence: internal
+    confidence: high
+    notes: >
+      Lowest-priority Acme entry: it appears only when a posting needs what it alone
+      carries (Java, Spring Boot, MongoDB).
+      AZURE: the platform team ran the storage account; she only wrote the upload code.
+      So Azure stays OUT of `tech` and never appears under Skills. It is safe only as a
+      bullet phrased exactly as the fact above.
+
+  - id: acme-early-tenure
+    title: "Internal Tools"
+    type: work
+    where: Acme Freight
+    period: 2022-04 to ~2023
+    headline: Built dispatch tools and reporting scripts early in the Acme tenure
+    facts:
+      - built a dispatch-board tool and two reporting scripts in TypeScript and Node.js
+      - rewrote the slowest reporting queries
+      - joined the production on-call rotation from the second month
+    metrics: []                           # no percentages were ever measured
+    tech: [TypeScript, JavaScript, Node.js, SQL, REST, Debugging]
+    angles: [backend, data]
+    priority: low
+    evidence: internal
+    confidence: high
+
+  # ------------------------------------------------------------- projects ---
+
+  - id: proj-llm-finetune
+    title: "Tariff Helper - Llama 3.2 QLoRA Fine-Tune"
+    type: project
+    where: personal
+    period: 2025
+    headline: Fine-tuned a small open-weight LLM on public customs-tariff questions
+    facts:
+      - fine-tuned Llama 3.2 1B Instruct with QLoRA using Hugging Face PEFT
+      - trained on a public dataset of customs-tariff questions and answers
+      - compared it with the base model on 200 held-out questions
+      - serves it locally with Ollama
+    metrics: []
+    tech: [Python, PyTorch, PEFT, QLoRA, Llama 3.2, Ollama, LLM, Fine-tuning, NLP]
+    angles: [ml, ai-platform]
+    evidence: https://example.com/kavya/tariff-helper
+    confidence: high
+
+  - id: proj-rag-assistant
+    title: "Tariff Helper - Schedule Q&A (RAG)"
+    type: project
+    where: personal
+    period: 2025
+    headline: Built a RAG assistant that answers questions over published tariff schedules
+    facts:
+      - indexes the schedules in PostgreSQL with pgvector, using all-MiniLM-L6-v2 embeddings
+      - answers with Gemma and cites the schedule section each answer came from
+      - FastAPI backend with a small React front end
+    metrics: []
+    tech: [Python, PostgreSQL, Vector DB, sentence-transformers, transformers, Gemma, RAG, LLM,
+           FastAPI, React, NLP]
+    angles: [ml, ai-platform]
+    evidence: https://example.com/kavya/tariff-helper
+    confidence: high
+
+  - id: proj-extraction-models
+    title: "Document Classifier & Field Extractor"
+    type: project
+    where: personal
+    period: 2025
+    headline: Trained two DistilBERT models for shipping-document analysis and measured them honestly
+    facts:
+      - fine-tuned DistilBERT as a document-type classifier on a public set of scanned shipping documents
+      - fine-tuned DistilBERT with a span-extraction head to pull fields from invoices
+      - found near-duplicate documents shared by the train and test splits, removed them and measured again
+    metrics:
+      - measured: true
+        claim: document classifier - test accuracy 0.91, macro F1 0.84
+      - measured: true
+        claim: field extractor - exact match 0.61, token F1 0.72 over whole documents
+    tech: [Python, PyTorch, transformers, DistilBERT, datasets, scikit-learn, NLP]
+    angles: [ml, ai-platform]
+    evidence: https://example.com/kavya/doc-models
+    confidence: high
+
+  - id: proj-library-app
+    title: "Shelf - Neighbourhood Library App"
+    type: project
+    where: personal
+    period: null                          # build window not recorded yet
+    headline: Built a mobile app for a neighbourhood library to lend books
+    facts:
+      - members browse the catalogue, reserve a book and get a reminder before it is due
+      - librarians check books in and out by scanning the barcode
+      - late fees are paid in the app through Razorpay
+    metrics: []                           # no user numbers exist; never claim any
+    tech: [TypeScript, React Native, Expo, Expo Router, Supabase, PostgreSQL, PL/pgSQL, Razorpay, OAuth]
+    angles: [product, mobile, fullstack]
+    evidence: private-repo
+    confidence: high
+    status: working prototype, paused - not launched
+    notes: >
+      The repository is private, so this entry has no linkable evidence: describe the
+      work, never imply users, traction or revenue.
+
+  - id: proj-etl-agent
+    title: "CSV Import Agent"
+    type: project
+    where: personal
+    period: 2026
+    headline: Built an agent that imports messy CSV exports with human-in-the-loop review
+    facts:
+      - maps messy exports to a target schema, cleans and validates them, and loads them through an API
+      - sends only genuinely ambiguous rows to a person, with an audit trail of every decision
+      - review web UI for resolving the rows it was unsure of
+    metrics: []
+    tech: [Python, FastAPI, React, TypeScript, pytest, LLM, Agentic, REST,
+           System Design,
+           Claude Code, AI-assisted Development]
+    angles: [agentic, hitl, fullstack, backend]
+    evidence: https://example.com/kavya/csv-import-agent
+    confidence: high
+
+  - id: proj-low-confidence
+    title: "Route Optimizer"
+    type: project
+    where: personal
+    period: 2024
+    headline: Prototyped a delivery route optimizer
+    facts:
+      - compared two routing heuristics on a sample of delivery addresses
+    metrics: []
+    tech: [Python, Go]
+    angles: [backend]
+    evidence: none
+    confidence: low                       # not confirmed - never emitted until it is
+    notes: Kept to show that an unconfirmed entry never reaches a resume or a model.
+
+  # ------------------------------------------- education / recognition -----
+
+  - id: education-be
+    type: education
+    where: Example Institute of Technology
+    period: 2018-08 to 2022-05
+    headline: B.E., Information Technology
+    facts:
+      - CGPA 7.8
+    metrics:
+      - measured: true
+        claim: CGPA 7.8
+    tech: []
+    angles: [all]
+    evidence: transcript
+    confidence: high
+
+  - id: publication-crop-disease
+    title: "Crop Disease Classification (student paper)"
+    type: project
+    where: college
+    period: 2022
+    headline: Published a student paper on crop-disease image classification
+    facts:
+      - student research paper, 2022
+    metrics: []
+    tech: [Python, computer vision]
+    angles: [ml]
+    evidence: https://example.com/kavya/crop-disease-paper
+    confidence: high
+
+  - id: award-customer
+    type: award
+    where: Acme Freight
+    period: 2024
+    headline: Customer Hero award, 2024
+    facts:
+      - named Customer Hero for 2024 by the operations team
+    metrics: []
+    tech: []
+    angles: [backend]
+    evidence: internal
+    confidence: high
+
+  - id: award-hackathon
+    type: award
+    where: Acme Freight
+    period: 2024
+    headline: Winner, Acme internal hackathon 2024
+    facts:
+      - won Acme's internal hackathon in 2024 with a delay-prediction prototype
+    metrics: []
+    tech: []
+    angles: [ai-platform]
+    evidence: internal
+    confidence: high
+
+  - id: cert-aws-developer
+    type: certification
+    where: AWS
+    period: 2024
+    headline: AWS Certified Developer - Associate
+    facts:
+      - certified 2024
+    metrics: []
+    tech: [AWS]
+    angles: [backend]
+    evidence: credential
+    confidence: high
+
+  - id: cert-courses
+    type: certification
+    where: Example Academy
+    period: 2021-2022
+    headline: Online courses in Data Structures, Databases and Cloud Computing
+    facts:
+      - Data Structures (2021)
+      - Databases (2022)
+      - Cloud Computing (2022)
+    metrics: []
+    tech: [Python, SQL]
+    angles: [backend, data]
+    evidence: credential
+    confidence: high
+
+  - id: profile-coding
+    type: profile
+    where: personal
+    period: null
+    headline: Active on Stack Overflow
+    facts:
+      - 2,000+ reputation answering Python and FastAPI questions
+    metrics:
+      - measured: true
+        claim: 2,000+ Stack Overflow reputation
+    tech: []
+    angles: [backend]
+    evidence: public-profile
+    confidence: high

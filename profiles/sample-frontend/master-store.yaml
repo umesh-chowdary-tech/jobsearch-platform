@@ -1,0 +1,92 @@
+# master-store.yaml - FICTIONAL SAMPLE: a junior frontend developer.
+#
+# Rohan Sample, his employer and his projects are made up; any resemblance to a
+# real person or company is a coincidence. Same schema as every profile - see
+# profiles/sample-backend/master-store.yaml for the rules it follows.
+
+identity:
+  name: Rohan Sample
+  location: Bengaluru, India
+  email: rohan.sample@example.com
+  phone: ""
+  linkedin: ""
+  github: ""
+  title:
+    official: Associate Software Engineer
+    descriptor_flexes: true
+    approved_descriptors:
+      - Frontend Engineer
+      - React Developer
+    rule: >
+      Always lead with the official title; the descriptor in parentheses is one
+      of the approved ones.
+  employment:
+    - employer: Initech Software
+      location: Bengaluru, India
+      start: 2025-07
+      end: present
+      title: Associate Software Engineer
+  languages: [Kannada, English, Hindi]
+
+entries:
+
+  - id: initech-checkout
+    title: "Checkout Redesign"
+    type: work
+    where: Initech Software
+    period: 2025-present
+    headline: Rebuilt the checkout pages of Initech's retail web app in React and TypeScript
+    facts:
+      - moved the checkout flow from class components to function components with hooks
+      - added form validation and error states for every payment step
+      - wrote unit tests with Jest and React Testing Library for the new pages
+    metrics: []
+    tech: [React, TypeScript, JavaScript, HTML, CSS, Jest, Unit Testing, Git, Code Review, Agile]
+    angles: [frontend]
+    evidence: internal
+    confidence: high
+
+  - id: initech-design-system
+    title: "Design System Components"
+    type: work
+    where: Initech Software
+    period: 2025-present
+    headline: Built shared components for Initech's design system
+    facts:
+      - built accessible button, modal and form components used across three internal apps
+      - documented each component with Storybook
+    metrics: []
+    tech: [React, TypeScript, CSS, Storybook, Accessibility]
+    angles: [frontend]
+    evidence: internal
+    confidence: high
+
+  - id: proj-expense-tracker
+    title: "Expense Tracker"
+    type: project
+    where: personal
+    period: 2025
+    headline: Built a shared expense tracker for flatmates as a Next.js app
+    facts:
+      - splits shared bills and shows who owes whom
+      - stores data in Firebase with Google sign-in
+    metrics: []
+    tech: [Next.js, React, TypeScript, Firebase, Tailwind CSS]
+    angles: [frontend, fullstack]
+    evidence: https://example.com/rohan/expense-tracker
+    confidence: high
+
+  - id: education-bca
+    type: education
+    where: Example College of Computer Applications
+    period: 2022-06 to 2025-05
+    headline: BCA, Computer Applications
+    facts:
+      - CGPA 8.2
+    metrics:
+      - measured: true
+        claim: CGPA 8.2
+    tech: []
+    angles: [all]
+    evidence: transcript
+    confidence: high

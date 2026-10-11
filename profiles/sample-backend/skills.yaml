@@ -1,0 +1,170 @@
+# skills.yaml - the skills layer over master-store.yaml. FICTIONAL SAMPLE.
+#
+# The store answers "what did this person do". This answers "what may go under
+# Skills". They are not the same question: conflating them is how a framework
+# nobody used ends up on a resume.
+#
+# THE TEST FOR EVERY TIER: what happens when an interviewer follows up.
+#
+#   core       Can be interrogated for twenty minutes. Lead with these.
+#   working    Used it in real work. Can explain the decisions and the tradeoffs.
+#   incidental Touched it. NEVER appears under Skills. May only be described
+#              inside a bullet that makes the shallowness obvious.
+#
+# Rules the assembler follows:
+#   1. Only `core` and `working` may be emitted as skills.
+#   2. `incidental` may appear in a bullet, phrased as `safe_phrasing` says.
+#   3. A skill is emitted only if an entry being emitted backs it.
+#   4. Model names are not skills: "open-weight LLMs (Qwen2.5, Gemma)" is fine,
+#      a bare "Qwen2.5" in a skills list is not.
+
+tiers:
+
+  core:
+    # Backed by several entries, or central to the headline work.
+    - skill: Python
+      backed_by: 10
+    - skill: FastAPI
+      backed_by: 2
+    - skill: PostgreSQL
+      backed_by: 3
+    - skill: TypeScript
+      backed_by: 4
+    - skill: React
+      backed_by: 4
+    - skill: Claude APIs
+      backed_by: 1
+      note: one entry, but it is the headline work - depth, not count
+    - skill: MCP (Model Context Protocol)
+      backed_by: 2
+    - skill: LLM
+      backed_by: 4
+    - skill: Agentic
+      backed_by: 3
+    - skill: AWS (Lambda)
+      backed_by: 3
+
+  working:
+    backend:
+      - JavaScript
+      - Node.js
+      - Serverless
+      - REST
+      - Java
+      - Spring Boot
+      - SQL
+    data:
+      - MongoDB
+      - PL/pgSQL
+      - skill: Redshift
+        scope: >
+          Query authoring and optimization through the application layer, not
+          administration of the warehouse.
+        safe_phrasing: "wrote and optimized queries against Redshift"
+        never: ["Redshift administration", "data warehouse design", "cluster tuning"]
+        why_scoped: >
+          A bare "Redshift" invites questions about distribution keys, sort keys
+          and VACUUM. The query work is real; the cluster work is not hers.
+    ml:
+      - RAG
+      - Fine-tuning
+      - Vector DB
+      - Prompt Engineering
+      - PyTorch
+      - transformers
+      - scikit-learn
+      - PEFT
+      - QLoRA
+      - sentence-transformers
+      - Ollama
+      - NLP
+    devops:
+      - Docker
+      - Jenkins
+      - Splunk
+      - CI/CD
+      - Observability
+    testing:
+      - Jest
+      - pytest
+      - Unit Testing     # the Jest unit tests on Acme Track
+    practices:
+      - System Design
+      - Code Review
+      - Agile
+      - Debugging
+      - Git
+      - AI-assisted Development
+    ai_tools:
+      - Claude Code
+      - GitHub Copilot
+    mobile_product:
+      - React Native
+      - Expo
+      - Supabase
+      - Razorpay
+
+  incidental:
+    # Never under Skills. The safe_phrasing is the ONLY way each may appear.
+    - skill: Azure
+      backed_by: [acme-portal-migration]
+      why: wrote upload code against a storage account the platform team ran
+      safe_phrasing: "stored uploaded shipping documents in Azure Blob Storage"
+      never: ["Azure", "Azure cloud", "Azure administration", "cloud: Azure"]
+
+    - skill: computer vision
+      backed_by: [publication-crop-disease]
+      why: one student paper, not touched since
+      safe_phrasing: "published a student paper on crop-disease image classification"
+      never: ["Computer Vision", "CV/ML"]
+
+    - skill: OAuth
+      backed_by: [proj-library-app]
+      why: used Google sign-in as a client; did not implement a provider
+      safe_phrasing: "Google OAuth sign-in"
+      never: ["OAuth 2.0", "identity and access management"]
+
+# ── Not skills at all ───────────────────────────────────────────────────────
+not_skills:
+  - item: datasets
+    reason: a Hugging Face library, too granular to list
+    use: fold into `transformers`
+  - item: Expo Router
+    reason: a router inside Expo
+    use: fold into `Expo`
+  - item: Llama 3.2
+    reason: a model name
+    use: "open-weight LLMs (Llama 3.2, Gemma)"
+  - item: Gemma
+    reason: a model name
+    use: same as Llama 3.2
+  - item: DistilBERT
+    reason: a model name
+    use: "fine-tuned DistilBERT for document classification and field extraction"
+  - item: Confluence
+    reason: a wiki
+    use: "quotes the matching Confluence runbook"
+  - item: Jira
+    reason: a tracker - building an agent against its API is not "uses Jira"
+    use: "built an on-call agent that drafts Jira incidents"
+
+# ── Never, under any circumstance ─────────────────────────────────────────────
+# Known-false: listed on an old resume with nothing behind them.
+banned:
+  - skill: LangChain
+    reason: on an old resume; no project uses it
+  - skill: LlamaIndex
+    reason: on an old resume; no project uses it
+  - skill: Kafka
+    reason: on an old resume; the event pipeline uses a managed queue she did not build
+  - skill: Angular
+    reason: on an old resume; never used
+  - skill: Tomcat
+    reason: on an old resume; never used
+
+# On every resume, whatever the posting asks for - still only where an emitted
+# entry backs them. Pinning decides what the Skills line keeps, never what is true.
+always:
+  - AI-assisted Development
+  - Claude Code
+  - GitHub Copilot

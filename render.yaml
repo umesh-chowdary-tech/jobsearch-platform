@@ -1,0 +1,30 @@
+# Render Blueprint: one person's MCP connector, on the free plan.
+# New > Blueprint in the Render dashboard, pick your copy of this repo, then
+# fill in the values it asks for. See docs/connector.md.
+#
+# The profile it serves must reach the server without entering this public
+# repository: point JOBSEARCH_PROFILES at where you put it (a private disk or
+# repository), never commit a real person's profile here.
+services:
+  - type: web
+    name: jobsearch-connector
+    runtime: python
+    plan: free
+    region: singapore            # pick the region nearest your users; keep the database there too
+    branch: main
+    # -e on purpose: the code finds data/ and var/ relative to its own source
+    # files, so it has to run from the checkout, not from site-packages.
+    buildCommand: pip install -e ".[server]"
+    startCommand: python -m jobsearch.cli connector
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.5
+      - key: DATABASE_URL        # Neon's direct URL, not the -pooler one
+        sync: false
+      - key: CONNECTOR_SECRET    # a long random string; the URL is the password
+        sync: false
+      - key: JOBSEARCH_PROFILE   # the profile this connector serves
+        sync: false
+      - key: JOBSEARCH_PROFILES  # where that profile's folder is on the server
+        sync: false

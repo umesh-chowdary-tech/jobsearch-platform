@@ -1,0 +1,178 @@
+# skill-vocabulary.yaml — the detection dictionary.
+#
+# What triage looks for in a posting's text. Canonical name -> aliases.
+#
+# This is deliberately SEPARATE from skills.yaml. That file (in each profile)
+# says what one person can claim; this one, shared, says what a posting might
+# ask for. A term here that is absent
+# from skills.yaml is a gap, which is the whole point of counting.
+#
+# Matching is whole-word and case-insensitive. Aliases exist because a posting
+# saying "NodeJS" and a store saying "Node.js" mean the same thing, and counting
+# them separately makes the gap ledger meaningless.
+#
+# Terms shorter than three characters are not listed: matching "R" or "Go" by
+# word boundary produces far more noise than signal. Go is listed explicitly
+# below with disambiguating aliases only.
+
+languages:
+  Python: [python, python3]
+  TypeScript: [typescript, ts]
+  JavaScript: [javascript, js, es6, ecmascript]
+  Java: [java]
+  Go: [golang, "go lang"]          # bare "go" is too noisy to match
+  Rust: [rust]
+  C++: ["c++", cpp]
+  "C#": ["c#", csharp, "dotnet", ".net"]
+  Ruby: [ruby]
+  PHP: [php]
+  Scala: [scala]
+  Kotlin: [kotlin]
+  Swift: [swift]
+  SQL: [sql]
+  Bash: [bash, shell scripting]
+
+frontend:
+  React: [react, reactjs, "react.js"]
+  Next.js: ["next.js", nextjs]
+  Vue: [vue, vuejs, "vue.js"]
+  Angular: [angular, angularjs]
+  Svelte: [svelte]
+  Redux: [redux]
+  Tailwind: [tailwind, tailwindcss]
+  HTML: [html, html5]
+  CSS: [css, css3, sass, scss]
+
+backend:
+  Node.js: ["node.js", nodejs, node]
+  Express.js: ["express.js", expressjs, express]
+  Django: [django]
+  Flask: [flask]
+  FastAPI: [fastapi]
+  Spring Boot: ["spring boot", springboot, spring]
+  Rails: ["ruby on rails", rails]
+  GraphQL: [graphql]
+  gRPC: [grpc]
+  REST: ["rest api", "restful", "rest apis"]
+  Microservices: [microservices, microservice]
+
+mobile:
+  React Native: ["react native"]
+  Expo: [expo]
+  Flutter: [flutter]
+  Android: [android]
+  iOS: [ios]
+
+data:
+  PostgreSQL: [postgresql, postgres, psql]
+  MySQL: [mysql]
+  MongoDB: [mongodb, mongo]
+  Redis: [redis]
+  Cassandra: [cassandra]
+  DynamoDB: [dynamodb]
+  Elasticsearch: [elasticsearch, opensearch]
+  Redshift: [redshift]
+  Snowflake: [snowflake]
+  BigQuery: [bigquery]
+  Databricks: [databricks]
+  Spark: [spark, pyspark, "apache spark"]
+  Kafka: [kafka, "apache kafka"]
+  Airflow: [airflow, "apache airflow"]
+  dbt: [dbt]
+  ETL: [etl, elt]
+  Supabase: [supabase]
+
+cloud_devops:
+  AWS: [aws, "amazon web services", ec2, s3, lambda]
+  GCP: [gcp, "google cloud", "google cloud platform"]
+  Azure: [azure]
+  Docker: [docker, containerization]
+  Kubernetes: [kubernetes, k8s]
+  Terraform: [terraform]
+  Jenkins: [jenkins]
+  GitHub Actions: ["github actions"]
+  CI/CD: ["ci/cd", cicd, "continuous integration", "continuous delivery"]
+  Linux: [linux, unix]
+  Nginx: [nginx]
+  Splunk: [splunk]
+  Datadog: [datadog]
+  Prometheus: [prometheus, grafana]
+  Serverless: [serverless]
+
+ml_ai:
+  PyTorch: [pytorch, torch]
+  TensorFlow: [tensorflow, keras]
+  scikit-learn: ["scikit-learn", sklearn, "scikit learn"]
+  transformers: [transformers, "hugging face", huggingface]
+  LangChain: [langchain]
+  LlamaIndex: [llamaindex, "llama index"]
+  RAG: [rag, "retrieval augmented generation", "retrieval-augmented"]
+  LLM: [llm, llms, "large language model", "large language models"]
+  MCP: [mcp, "model context protocol"]
+  Fine-tuning: ["fine-tuning", "fine tuning", finetuning, lora, qlora]
+  Vector DB: ["vector database", "vector db", faiss, pinecone, weaviate, chromadb, "vector store"]
+  Prompt Engineering: ["prompt engineering", "prompt design"]
+  MLOps: [mlops, llmops]
+  NLP: [nlp, "natural language processing"]
+  Computer Vision: ["computer vision", opencv]
+  Agentic: [agentic, "ai agents", "agent framework", "multi-agent", "multi agent"]
+  Claude APIs: [claude, anthropic]
+  OpenAI: [openai, "gpt-4", chatgpt]
+
+# Ways of working rather than technologies. A resume prints these once per job
+# ("Practices:" under the employer), not under every workstream's stack line,
+# where "Agile, Code Review" repeated six times crowded out the actual stack.
+# Above `baseline` on purpose: a skill's category is the first one it appears in,
+# and Debugging is also baseline (kept out of the gap ledger).
+methods:
+  # The phrase postings use far more than any tool's name: 70 of 530 kept
+  # postings ask for it, against 27 naming Copilot (2026-10-08).
+  AI-assisted Development: ["ai-assisted development", "ai assisted development",
+                            "ai-assisted software development", "ai-assisted coding",
+                            "ai-assisted development tools", "ai coding assistant",
+                            "ai coding assistants", "ai coding tools", "ai pair programming",
+                            "ai-powered development", "ai-powered coding", "coding assistants"]
+  # The assistants are how the code gets written, not what it is built with:
+  # under each stack line they pushed React and Node.js off a workstream's.
+  Claude Code: ["claude code"]
+  GitHub Copilot: ["github copilot", copilot]
+  Agile: [agile, scrum, safe, kanban]
+  System Design: ["system design", "distributed systems"]
+  TDD: [tdd, "test driven", "test-driven"]
+  Unit Testing: ["unit testing", "unit tests", "automated testing"]
+  Code Review: ["code review", "code reviews"]
+  Debugging: [debugging, troubleshooting]
+
+practices:
+  Jest: [jest]
+  pytest: [pytest]
+  JUnit: [junit]
+  Observability: [observability, monitoring, telemetry]
+
+tools:
+  Git: [git, github, gitlab, bitbucket]
+  Jira: [jira]
+  Confluence: [confluence]
+  Salesforce: [salesforce, apex]
+  Figma: [figma]
+
+# ── Baseline ─────────────────────────────────────────────────────────────────
+# Table stakes for any backend engineer. Detected so a posting naming them is
+# understood, but EXCLUDED from the gap ledger: "learn Git" is not a plan, and
+# letting these sit near the top of the list would crowd out the real gaps.
+baseline:
+  Git: [git, github, gitlab, bitbucket, "version control"]
+  Agile: [agile, scrum, safe, kanban]
+  Code Review: ["code review", "code reviews", "peer review"]
+  Linux: [linux, unix]
+  Unit Testing: ["unit testing", "unit tests", "automated testing"]
+  Debugging: [debugging, troubleshooting]
+
+# ── Implications ─────────────────────────────────────────────────────────────
+# Detecting the key also counts the values.
+#
+# "Claude Code" has a longer alias than "claude", so longest-first matching
+# let it consume the span: a posting naming Claude Code never credited a
+# store's `Claude APIs`. A tool's name must not shadow the skill under it.
+implies:
+  Claude Code: [Claude APIs]

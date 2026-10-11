@@ -1,0 +1,37 @@
+# skills.yaml - FICTIONAL SAMPLE: a senior Android lead.
+# Tiers as in profiles/sample-backend/skills.yaml.
+
+tiers:
+  core:
+    - skill: Kotlin
+      backed_by: 4
+    - skill: Android
+      backed_by: 3
+    - skill: Jetpack Compose
+      backed_by: 2
+    - skill: Coroutines
+      backed_by: 2
+  working:
+    mobile:
+      - Room
+      - WorkManager
+      - Hilt
+      - Retrofit
+      - Gradle
+      - Firebase
+    backend:
+      - Java
+      - REST
+    practices:
+      - Code Review
+      - System Design
+      - Agile
+      - Git
+
+not_skills: []
+
+banned:
+  - skill: Flutter
+    reason: one tutorial, years ago
+
+always: []
