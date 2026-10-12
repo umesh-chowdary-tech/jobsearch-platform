@@ -61,6 +61,25 @@ export function SignIn({ config, onDone }: { config: Config | null; onDone: () =
   );
 }
 
+/** An account an admin paused: nothing is done for it, but its data is still
+ * its owner's to download or delete. */
+export function Paused({ me, onSignOut, settings }: { me: Me; onSignOut: () => void; settings: React.ReactNode }) {
+  const [leaving, setLeaving] = useState(false);
+  if (leaving) return <div className="legal-page">{settings}</div>;
+  return (
+    <div className="gate">
+      <div className="card stack">
+        <Brand />
+        <h1>Your account is paused</h1>
+        <p className="sub">Signed in as {me.email}. The people running this service paused it, so nothing is done with
+          your data for now. You can still download or delete everything kept for you.</p>
+        <button onClick={() => setLeaving(true)}>Download or delete my data</button>
+        <button className="quiet" onClick={onSignOut}>Sign out</button>
+      </div>
+    </div>
+  );
+}
+
 export function Reconsent({ me, onAgreed, onSignOut, settings }: {
   me: Me; onAgreed: (m: Me) => void; onSignOut: () => void; settings: React.ReactNode;
 }) {

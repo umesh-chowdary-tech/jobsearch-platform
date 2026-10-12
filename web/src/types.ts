@@ -63,6 +63,7 @@ export interface PostingDetail extends Row {
 export interface Me {
   email: string;
   member: boolean;
+  suspended?: boolean;
   profile_ready: boolean;
   admin: boolean;
   consent?: { version: string; at: string } | null;
@@ -144,11 +145,56 @@ export interface SetupState {
   result?: { entries: number; skills: number };
 }
 
+export interface AdminCounts {
+  ranked: number; strong: number; possible: number; resumes: number; applied: number; answers: number; good: number;
+}
+
+export interface AdminPerson {
+  email: string; profile: string; joined: string | null; last_seen: string | null; suspended: string | null;
+  invite: string | null; profile_ready: boolean;
+  month: { requests: number; tokens: number; usd: number };
+  counts: AdminCounts | null;
+  own_usd_per_day: number | null;
+}
+
 export interface AdminOverview {
-  people: { email: string; profile: string; joined: string; profile_ready: boolean;
-            month: { requests: number; tokens: number; usd: number } }[];
+  people: AdminPerson[];
+  active: { week: number; month: number };
+  joins: { week: string; n: number }[];
+  funnel: { step: string; n: number }[];
+  totals: AdminCounts;
   invites_unused: { code: string; created: string; note: string }[];
   invites_used: number;
+  invites_used_by: { code: string; used_at: string | null; email: string }[];
   month_usd: number;
   missing_settings?: string[];
+  ai: {
+    days: { day: string; usd: number; requests: number }[];
+    today_usd: number; month_usd: number; forecast_usd: number;
+    budget_usd: number | null; day_cap_usd: number | null;
+    by_job: { job: string; tokens: number; usd: number }[];
+    by_model: { model: string; requests: number; usd: number }[];
+    groq_today: { requests: number; requests_cap: number | null; tokens: number; tokens_cap: number | null };
+  };
+  jobs: {
+    days: { day: string; runs: number; failed: number; new: number }[];
+    runs: number; failed: number; avg_took: number | null;
+    last: { at: string; text: string; failed: boolean } | null;
+    boards: { total: number; live_postings: number; stale: { name: string; last_ok: string }[]; stale_count: number };
+  };
+  health: {
+    keys: Record<string, boolean>;
+    database: { last_ok: string | null; last_error: { at: string; kind: string } | null } | null;
+    cycle_paused: { since: string; until: string | null } | null;
+    busy: { what: string; since?: string } | null;
+    running: boolean;
+    errors: { at: string; where: string; what: string }[];
+  };
+  settings: {
+    ai_paused: boolean;
+    caps: { usd_per_month: number | null; usd_per_day: number | null; person_usd_per_day: number | null };
+    ceiling: { usd_per_month: number; usd_per_day: number; person_usd_per_day: number };
+    routes: { job: string; label: string; current: string; choices: { id: string; label: string }[] }[];
+  };
+  log: { at: string; by: string; action: string; target: string; detail: string }[];
 }

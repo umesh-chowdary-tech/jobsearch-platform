@@ -38,12 +38,50 @@ KEEP_DAYS = 40
 MAIL = "mail"
 
 
+# The admin page's changes over data/llm-limits.yaml, in var/_shared (so the
+# hosted service's database keeps them with the rest of var/):
+#   {"paused": true,                                  no AI request at all
+#    "providers": {"claude": {"usd_per_month": 8, "per_profile": {...}}},
+#    "people": {"u-...": {"claude": {"usd_per_day": 0.5}}}}   one person's own share
+OVERRIDES = "llm-limits.json"
+
+
+def load_overrides(root: Path) -> dict[str, Any]:
+    try:
+        doc = json.loads((shared_var(Path(root)) / OVERRIDES).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return doc if isinstance(doc, dict) else {}
+
+
+def save_overrides(root: Path, doc: dict[str, Any]) -> None:
+    var = shared_var(Path(root))
+    var.mkdir(parents=True, exist_ok=True)
+    tmp = var / (OVERRIDES + ".tmp")
+    tmp.write_text(json.dumps(doc, indent=1, sort_keys=True), encoding="utf-8")
+    os.replace(tmp, var / OVERRIDES)
+
+
 def load_limits(root: Path) -> dict[str, dict[str, Any]]:
+    """Each provider's caps: data/llm-limits.yaml, with the admin page's
+    changes over it. A provider missing from the file stays unused - a change
+    can move a cap, never add a provider."""
     p = Path(root) / "data" / "llm-limits.yaml"
     if not p.exists():
         return {}
     doc = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
-    return {str(k): dict(v or {}) for k, v in doc.items()}
+    out = {str(k): dict(v or {}) for k, v in doc.items()}
+    for name, caps in (load_overrides(root).get("providers") or {}).items():
+        if name not in out or not isinstance(caps, dict):
+            continue
+        merged = dict(out[name])
+        for k, v in caps.items():
+            if k == "per_profile" and isinstance(v, dict):
+                merged["per_profile"] = {**(merged.get("per_profile") or {}), **v}
+            else:
+                merged[k] = v
+        out[name] = merged
+    return out
 
 
 def price_for(caps: dict[str, Any], model: str = "") -> dict[str, Any] | None:
@@ -139,6 +177,10 @@ class Meter:
         return sum(float((v.get(provider) or {}).get("usd", 0))
                    for d, v in self._load()["days"].items() if d.startswith(month))
 
+    def days(self) -> dict[str, dict[str, Any]]:
+        """Every day kept (KEEP_DAYS), by provider - for the admin page."""
+        return self._load().get("days") or {}
+
     def month_by_profile(self) -> dict[str, dict[str, Any]]:
         """Each profile's requests, tokens and dollars this month, every
         provider together - the hosted service's cost-per-person page."""
@@ -158,6 +200,9 @@ class Meter:
     def check(self, provider: str, tokens: int, purpose: str = "", usd: float = 0.0) -> str:
         """"" when a request of about `tokens` (and `usd`, for a provider
         priced in dollars) may be sent; else why not."""
+        over = load_overrides(self.root)
+        if over.get("paused"):
+            return "AI is paused on the admin page"
         caps = load_limits(self.root).get(provider)
         if caps is None:
             return f"no limit set for {provider} in data/llm-limits.yaml - not used until one is"
@@ -189,11 +234,14 @@ class Meter:
         if upm is not None and self.month_usd(provider) + usd > float(upm):
             return (f"monthly spend limit reached (${self.month_usd(provider):.2f} of ${float(upm):.2f},"
                     f" data/llm-limits.yaml)")
-        return self._check_share(provider, caps, tokens, usd)
+        return self._check_share(provider, caps, tokens, usd, over)
 
-    def _check_share(self, provider: str, caps: dict[str, Any], tokens: int, usd: float) -> str:
-        """The profile's own cap for the day, from `per_profile`."""
-        pp = caps.get("per_profile") or {}
+    def _check_share(self, provider: str, caps: dict[str, Any], tokens: int, usd: float,
+                     over: dict[str, Any]) -> str:
+        """The profile's own cap for the day: `per_profile`, or the one the
+        admin page set for this person."""
+        own = ((over.get("people") or {}).get(self.who) or {}).get(provider) or {}
+        pp = {**(caps.get("per_profile") or {}), **own}
         if not (self.who and pp):
             return ""
         u = self.used_by(provider, self.who)
@@ -208,9 +256,10 @@ class Meter:
                     f" {where})")
         return ""
 
-    def record(self, provider: str, tokens: int, purpose: str = "", usd: float = 0.0) -> None:
+    def record(self, provider: str, tokens: int, purpose: str = "", usd: float = 0.0, model: str = "") -> None:
         """One request sent, and the tokens (and dollars) it cost - 0 when it
-        was refused."""
+        was refused. The job and the model are kept too, for the admin page's
+        cost by job and by model."""
         today = date.today().isoformat()
         with _locked(self.var):
             blob = self._load()
@@ -223,6 +272,15 @@ class Meter:
             if purpose:
                 by = row.setdefault("by_purpose", {})
                 by[purpose] = by.get(purpose, 0) + max(0, int(tokens))
+                if usd:
+                    up = row.setdefault("usd_by_purpose", {})
+                    up[purpose] = round(float(up.get(purpose, 0)) + float(usd), 6)
+            if model:
+                bm = row.setdefault("by_model", {}).setdefault(model, {"requests": 0, "tokens": 0})
+                bm["requests"] += 1
+                bm["tokens"] += max(0, int(tokens))
+                if usd:
+                    bm["usd"] = round(float(bm.get("usd", 0)) + float(usd), 6)
             if self.who:
                 mine = row.setdefault("by_profile", {}).setdefault(self.who, {"requests": 0, "tokens": 0})
                 mine["requests"] += 1
