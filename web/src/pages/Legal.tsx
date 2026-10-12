@@ -4,11 +4,21 @@
 // paragraphs, bullet lists, tables, **bold** and [links](#/page).
 
 import type { ReactNode } from "react";
+import { operator, type Operator } from "../auth";
 import privacy from "../legal/privacy.md?raw";
 import terms from "../legal/terms.md?raw";
 
 export const LEGAL_VERSION = "2026-10-12-draft";
 const DOCS: Record<string, string> = { privacy, terms };
+
+/** The blanks in the text - who runs the service, where, and how to reach
+ * them - filled from its settings. One that isn't set stays in [brackets]. */
+export function fill(md: string, op?: Operator): string {
+  return md
+    .replaceAll("[Operator name]", op?.name || "[Operator name]")
+    .replaceAll("[city]", op?.city || "[city]")
+    .replaceAll("[contact email]", op?.email ? `[${op.email}](mailto:${op.email})` : "[contact email]");
+}
 
 function safeHref(href: string): string | null {
   return /^(https:\/\/|mailto:|#\/)/.test(href) ? href : null;
@@ -77,7 +87,7 @@ export function renderMarkdown(md: string): ReactNode[] {
 export function Legal({ doc, standalone }: { doc: string; standalone?: boolean }) {
   const md = DOCS[doc];
   if (!md) return null;
-  const body = <article className="legal">{renderMarkdown(md)}</article>;
+  const body = <article className="legal">{renderMarkdown(fill(md, operator()))}</article>;
   if (!standalone) return body;
   return (
     <div className="legal-page">

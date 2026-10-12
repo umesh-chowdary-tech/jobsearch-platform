@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, get } from "./api";
-import { loadConfig, onChange, signOut, token, type Config } from "./auth";
+import { appName, loadConfig, onChange, signOut, token, type Config } from "./auth";
 import type { Me, Overview } from "./types";
 import { ago, applyTheme, Icon, useDark, useRoute, type IconName } from "./ui";
 import { SignIn, Join, Reconsent } from "./pages/SignIn";
@@ -114,7 +114,7 @@ function Shell({ me, onMe, onSignOut }: { me: Me; onMe: (m: Me) => void; onSignO
   return (
     <div className="shell">
       <nav className="side" aria-label="Sections">
-        <div className="brand"><span className="mark"><Icon name="brief" /></span><span>Job search</span></div>
+        <div className="brand"><span className="mark"><Icon name="brief" /></span><span>{appName()}</span></div>
         {nav.map(n => (
           <a key={n.view} href={n.hash} className={view === n.view ? "on" : ""} aria-current={view === n.view ? "page" : undefined}>
             <Icon name={n.icon} /><span>{n.label}</span>

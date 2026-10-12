@@ -345,3 +345,45 @@ def test_a_changed_notice_is_agreed_to_before_anything_else_happens(env, monkeyp
     me = client.post("/api/consent", json={"consent": "2027-01-01"}, headers=a).json()
     assert me["consent_current"] is True and me["consent"]["version"] == "2027-01-01"
     assert client.get("/api/setup", headers=a).status_code == 200
+
+
+# ── who runs this copy: settings, never the repository ───────────────────────
+
+def test_the_notices_blanks_come_from_settings_as_plain_words(env, monkeypatch):
+    """The repository is public and anyone's to deploy, so who runs a copy is
+    a setting. The notice is Markdown: a setting can't add a link to it."""
+    client, _ = env
+    op = client.get("/api/config").json()["operator"]
+    assert op == {"name": "", "city": "", "email": ""}
+    monkeypatch.setenv("JOBSEARCH_APP_NAME", "  Sample   Jobs ")
+    monkeypatch.setenv("JOBSEARCH_OPERATOR", "Sample [Operator](https://evil.example) **Ltd**")
+    monkeypatch.setenv("JOBSEARCH_CITY", "Pune\nIndia")
+    monkeypatch.setenv("JOBSEARCH_PRIVACY_EMAIL", "privacy@example.com")
+    cfg = client.get("/api/config").json()
+    assert cfg["name"] == "Sample Jobs"
+    assert cfg["operator"] == {"name": "Sample Operatorhttps://evil.example Ltd", "city": "Pune India",
+                               "email": "privacy@example.com"}
+    for bad in ("not an email", "a@b.c](https://evil.example)", "x@example.com\n"):
+        monkeypatch.setenv("JOBSEARCH_PRIVACY_EMAIL", bad)
+        assert client.get("/api/config").json()["operator"]["email"] in ("", "x@example.com")
+
+
+def test_the_admin_page_names_the_blanks_still_unset(env, monkeypatch):
+    client, _ = env
+    boss = auth(token(email="boss@example.com"))
+    assert client.get("/api/admin/overview", headers=boss).json()["missing_settings"] == [
+        "JOBSEARCH_OPERATOR", "JOBSEARCH_CITY", "JOBSEARCH_PRIVACY_EMAIL"]
+    monkeypatch.setenv("JOBSEARCH_OPERATOR", "Sample Operator")
+    monkeypatch.setenv("JOBSEARCH_CITY", "Pune")
+    monkeypatch.setenv("JOBSEARCH_PRIVACY_EMAIL", "privacy@example.com")
+    assert client.get("/api/admin/overview", headers=boss).json()["missing_settings"] == []
+
+
+def test_the_notices_only_blanks_are_the_ones_settings_fill():
+    """Any other [word] left in the text would show on the live page as a
+    blank no setting can fill. ([text](link) is a link, not a blank.)"""
+    import re
+    for doc in ("privacy.md", "terms.md"):
+        text = (ROOT / "web" / "src" / "legal" / doc).read_text(encoding="utf-8")
+        blanks = set(re.findall(r"\[([^\]]+)\](?!\()", text))
+        assert blanks <= {"Operator name", "city", "contact email"}, (doc, blanks)

@@ -1,6 +1,6 @@
 # Terms of use
 
-**Draft for the invite-only beta, not yet reviewed by a lawyer. Words in [brackets] are still to be filled in.**
+**Draft for the invite-only beta, not yet reviewed by a lawyer.**
 
 Version 2026-10-12-draft. By joining with an invite code you agree to these terms and to the [privacy notice](#/privacy).
 

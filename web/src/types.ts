@@ -150,4 +150,5 @@ export interface AdminOverview {
   invites_unused: { code: string; created: string; note: string }[];
   invites_used: number;
   month_usd: number;
+  missing_settings?: string[];
 }

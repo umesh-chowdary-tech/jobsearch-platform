@@ -9,7 +9,8 @@ from samples import make_root
 def _no_profile_env(monkeypatch):
     """A developer's own settings must not leak in: a JOBSEARCH_PROFILES
     pointing at a real profile folder would put a real person under test."""
-    for name in ("JOBSEARCH_PROFILES", "JOBSEARCH_VAR", "JOBSEARCH_PROFILE", "MAIL_PROFILE", "JOBSEARCH_CONTACT"):
+    for name in ("JOBSEARCH_PROFILES", "JOBSEARCH_VAR", "JOBSEARCH_PROFILE", "MAIL_PROFILE", "JOBSEARCH_CONTACT",
+                 "JOBSEARCH_APP_NAME", "JOBSEARCH_OPERATOR", "JOBSEARCH_CITY", "JOBSEARCH_PRIVACY_EMAIL"):
         monkeypatch.delenv(name, raising=False)
 
 

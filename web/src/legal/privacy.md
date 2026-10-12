@@ -1,12 +1,12 @@
 # Privacy notice
 
-**Draft for the invite-only beta, not yet reviewed by a lawyer. Words in [brackets] are still to be filled in.**
+**Draft for the invite-only beta, not yet reviewed by a lawyer.**
 
 Version 2026-10-12-draft. This notice explains what this service keeps about you, why, who it is shared with, and how you control it. It is written for India's Digital Personal Data Protection Act, 2023 and its Rules.
 
 ## Who runs this service
 
-[Operator name], [city], India, is responsible for your personal data here (the "Data Fiduciary"). Questions, requests and complaints: [contact email]. We answer within [30] days.
+[Operator name], [city], India, is responsible for your personal data here (the "Data Fiduciary"). Questions, requests and complaints: [contact email]. We answer within 30 days.
 
 ## What we keep, and why
 
@@ -40,7 +40,7 @@ So some of your data is processed outside India, in countries the law allows tra
 
 ## How long we keep it
 
-As long as you have an account. When you delete your account, everything kept for you is deleted at once from the live service, and from backups within [30] days. Records the law requires us to keep (for example, of a data breach) are kept only as long as it requires.
+As long as you have an account. When you delete your account, everything kept for you is deleted at once from the live service, and from backups within 30 days. Records the law requires us to keep (for example, of a data breach) are kept only as long as it requires.
 
 ## Your rights
 

@@ -1,6 +1,6 @@
 import React, { useState, type FormEvent } from "react";
 import { post } from "../api";
-import { devSignIn, emailLink, google, type Config } from "../auth";
+import { appName, devSignIn, emailLink, google, type Config } from "../auth";
 import type { Me } from "../types";
 import { Icon } from "../ui";
 import { LEGAL_VERSION } from "./Legal";
@@ -10,7 +10,7 @@ function LegalLinks() {
 }
 
 function Brand() {
-  return <div className="brand"><span className="mark"><Icon name="brief" /></span><span>Job search</span></div>;
+  return <div className="brand"><span className="mark"><Icon name="brief" /></span><span>{appName()}</span></div>;
 }
 
 export function SignIn({ config, onDone }: { config: Config | null; onDone: () => void }) {

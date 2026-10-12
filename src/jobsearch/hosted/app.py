@@ -58,6 +58,29 @@ def plausible_email(email: str) -> bool:
             and "." in domain.strip(".") and not any(c.isspace() for c in email))
 
 
+def _plain(name: str, limit: int) -> str:
+    """A setting shown on the pages, as plain words: the privacy notice is
+    Markdown, and a setting mustn't add a link or bold to it."""
+    text = " ".join(os.environ.get(name, "").split())
+    return "".join(c for c in text if c not in "*[]()|<>`_\\#")[:limit].strip()
+
+
+# The privacy notice's blanks, each filled from a setting of the same meaning.
+OPERATOR_SETTINGS = {"name": "JOBSEARCH_OPERATOR", "city": "JOBSEARCH_CITY", "email": "JOBSEARCH_PRIVACY_EMAIL"}
+
+
+def operator() -> dict[str, str]:
+    """Who runs this copy of the service, where, and the address people write
+    to about their data - from its settings, never from this repository, which
+    is public and anyone's to deploy. A blank one stays [in brackets] on the
+    page, and the admin page says which."""
+    email = os.environ.get(OPERATOR_SETTINGS["email"], "").strip()
+    if not plausible_email(email) or any(c in email for c in "*[]()|<>`\\"):
+        email = ""
+    return {"name": _plain(OPERATOR_SETTINGS["name"], 80), "city": _plain(OPERATOR_SETTINGS["city"], 60),
+            "email": email}
+
+
 def _csp(supabase_url: str) -> str:
     origin = ""
     if supabase_url:
@@ -189,7 +212,9 @@ def _admin_overview(svc: Service) -> dict[str, Any]:
                        "profile_ready": prof.exists(),
                        "month": usage.get(row["profile"], {"requests": 0, "tokens": 0, "usd": 0.0})})
     unused = [{"code": c, **v} for c, v in data["invites"].items() if not v.get("used_by")]
+    op = operator()
     return {"people": people, "invites_unused": unused,
+            "missing_settings": [env for key, env in OPERATOR_SETTINGS.items() if not op[key]],
             "invites_used": sum(1 for v in data["invites"].values() if v.get("used_by")),
             "month_usd": round(sum(p["month"]["usd"] for p in people), 4)}
 
@@ -243,6 +268,7 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
         # nothing more. Every request here is checked by its token.
         return {"auth": "dev" if verifier.dev else "supabase", "supabase_url": supabase_url,
                 "consent_version": accounts.CONSENT_VERSION,
+                "name": _plain("JOBSEARCH_APP_NAME", 40), "operator": operator(),
                 "supabase_anon_key": "" if verifier.dev else os.environ.get("SUPABASE_ANON_KEY", "")}
 
     if verifier.dev:
