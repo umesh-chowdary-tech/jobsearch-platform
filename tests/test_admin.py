@@ -36,6 +36,19 @@ def do(client, **body):
     return client.post("/api/admin/do", json=body, headers=BOSS)
 
 
+def test_an_admin_joins_without_a_code_and_nobody_else_does(env):
+    """Invites are made on the admin page, so a new service's first admin
+    would otherwise have no way in."""
+    from jobsearch.hosted.accounts import CONSENT_VERSION
+    client, root = env
+    yes = {"code": "", "consent": CONSENT_VERSION}
+    assert client.post("/api/invite", json=yes, headers=auth(token())).status_code == 400
+    r = client.post("/api/invite", json=yes, headers=BOSS)
+    assert r.status_code == 200 and r.json()["member"] is True
+    assert client.post("/api/invite", json=yes, headers=BOSS).status_code == 200    # already in
+    assert accounts.load(shared_var(root))["invites"] == {}
+
+
 def test_only_admins_reach_the_switches(env):
     client, root = env
     alice = joined(client, root)
@@ -177,6 +190,30 @@ def test_job_updates_can_be_paused_and_run_now(env, monkeypatch):
     client.app.state.service.cycle.join(5)
     assert ran == [False]
     assert do(client, action="cycle_resume").json()["overview"]["health"]["cycle_paused"] is None
+
+
+def test_a_new_copy_checks_the_registrys_boards_once(env, monkeypatch):
+    """A new copy of the service knows no boards: "Check job boards" probes the
+    registry's and keeps the ones that answer for the job updates to watch."""
+    from jobsearch import discovery
+    from jobsearch.discovery import DiscoveryRun
+    from jobsearch.models import OK, BoardProbe
+    client, root = env
+    seen = []
+
+    def fake_verify(fetcher, known):
+        known = list(known)
+        seen.extend(known)
+        provider, slug, company = known[0]
+        return DiscoveryRun(probes=[BoardProbe(provider=provider, slug=slug, company=company, status=OK,
+                                               board_name="Sample Board", url="https://example.com")])
+    monkeypatch.setattr(discovery, "verify_known", fake_verify)
+    monkeypatch.setattr("jobsearch.http.default_fetcher", lambda var: None)
+    assert client.get("/api/admin/overview", headers=BOSS).json()["jobs"]["boards"]["total"] == 0
+    assert do(client, action="boards_check").json()["started"] is True
+    client.app.state.service.cycle.join(5)
+    assert len(seen) > 1                                          # every board in data/ats-registry.yaml
+    assert client.get("/api/admin/overview", headers=BOSS).json()["jobs"]["boards"]["total"] == 1
 
 
 def test_every_change_is_written_down(env):

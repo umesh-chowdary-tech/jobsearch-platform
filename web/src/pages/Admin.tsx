@@ -396,8 +396,9 @@ function JobsTab({ o, act }: { o: AdminOverview; act: Act }) {
         : db.last_error ? `Saving to the database failed ${ago(db.last_error.at)} (${db.last_error.kind})`
         : `Saved to the database ${db.last_ok ? ago(db.last_ok) : "—"}` },
     { ok: !o.missing_settings?.length, text: o.missing_settings?.length ? `Settings missing: ${o.missing_settings.join(", ")}` : "Privacy notice settings are filled in" },
-    { ok: !j.boards.stale_count, text: j.boards.total ? `${j.boards.total} job boards, ${j.boards.live_postings} open postings`
-        + (j.boards.stale_count ? `; ${j.boards.stale_count} not read for 2 days` : "") : "No job boards yet" },
+    { ok: !!j.boards.total && !j.boards.stale_count, text: j.boards.total ? `${j.boards.total} job boards, ${j.boards.live_postings} open postings`
+        + (j.boards.stale_count ? `; ${j.boards.stale_count} not read for 2 days` : "")
+        : "No job boards yet - press “Check job boards” once, so job updates have boards to watch" },
   ];
   const newTotal = j.days.reduce((a, d) => a + d.new, 0);
   return (
@@ -417,6 +418,9 @@ function JobsTab({ o, act }: { o: AdminOverview; act: Act }) {
           {h.cycle_paused
             ? <button onClick={() => act({ action: "cycle_resume" }, "Scheduled updates resumed")}>Resume schedule</button>
             : <button onClick={() => act({ action: "cycle_pause" }, "Scheduled updates paused")}>Pause schedule</button>}
+          <button disabled={h.running} title="Check every company board in the registry and keep the ones that answer"
+                  onClick={() => act({ action: "boards_check" }, "Checking job boards - this takes a few minutes")}>
+            Check job boards</button>
           {h.busy && <span className="small muted">Busy: {h.busy.what}{h.busy.since ? `, ${ago(h.busy.since)}` : ""}</span>}
         </div>
         {j.last && <p className={`small ${j.last.failed ? "fail" : "muted"}`}>Last run {ago(j.last.at)}: {j.last.text}</p>}
@@ -452,6 +456,7 @@ const ACTIONS: Record<string, string> = {
   person_limit: "Changed a person's AI limit", revoke_invite: "Cancelled an invite", ai_pause: "Paused all AI",
   ai_resume: "Resumed AI", caps: "Changed spending limits", route: "Changed a job's model",
   cycle_run: "Ran a job update", cycle_pause: "Paused job updates", cycle_resume: "Resumed job updates",
+  boards_check: "Checked the job boards",
 };
 
 function LogTab({ o }: { o: AdminOverview }) {

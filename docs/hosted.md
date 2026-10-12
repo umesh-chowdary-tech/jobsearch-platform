@@ -126,12 +126,15 @@ What needs the maintainer's accounts, in order:
    The mirror's table locks itself down either way: row-level security with
    no policies, and no grants to Supabase's `anon` and `authenticated` roles
    (statestore.py, `SCHEMA`).
-2. **Render**: New > Blueprint on this repository, keep `jobsearch-hosted`,
-   fill in the values it asks for (`render.yaml`), including who runs the service for the
-   privacy notice.
+2. **Render**: New > Blueprint on this repository (`render.yaml`: the one
+   service, `jobsearch-hosted`), and fill in the values it asks for, including
+   who runs the service for the privacy notice.
 3. **GitHub**: repository secrets `HOSTED_URL` (the Render URL) and
    `CRON_SECRET` (copied from Render), for `.github/workflows/cycle.yml`.
-4. Sign in, open Admin, make invite codes.
+4. Sign in with an email in `JOBSEARCH_ADMINS`, then on the admin page:
+   *Jobs & health > Check job boards* once - a new copy knows no boards until
+   then - and *People > Make codes* for the people you invite. To join
+   yourself, use one of your own codes.
 
 ## Not yet
 

@@ -56,6 +56,7 @@ class Service(Protocol):
 
     def delete_account(self, sub: str, prof: Profile) -> None: ...
     def start_cycle(self, forced: bool = False) -> tuple[int, dict[str, Any]]: ...
+    def start_boards_check(self) -> tuple[int, dict[str, Any]]: ...
 
 
 # ── recent errors, for the health card ──────────────────────────────────────
@@ -435,6 +436,12 @@ def act(svc: Service, by: str, body: dict[str, Any]) -> dict[str, Any]:
         if status != 202:
             raise AdminError(data.get("error") or "couldn't start it")
         record(shared, by, "cycle_run")
+        out["started"] = True
+    elif action == "boards_check":
+        status, data = svc.start_boards_check()
+        if status != 202:
+            raise AdminError(data.get("error") or "couldn't start it")
+        record(shared, by, "boards_check")
         out["started"] = True
     elif action in ("cycle_pause", "cycle_resume"):
         if action == "cycle_pause":

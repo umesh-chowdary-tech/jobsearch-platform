@@ -62,8 +62,8 @@ Don't paste it into chats or screenshots; to revoke it, change
    breaks the locks that keep a PC and the server from polling at once.)
 2. **Seed it** - put `DATABASE_URL=<that URL>` in `.env`, then
    `pip install -e ".[server]"` and `python -m jobsearch.cli state push`.
-3. **Render** - *New -> Blueprint*, pick your copy of this repo. It reads
-   `render.yaml` and asks for `DATABASE_URL` (the same Neon URL),
+3. **Render** - *New -> Blueprint*, pick your copy of this repo and set
+   *Blueprint Path* to `render-connector.yaml`. It asks for `DATABASE_URL` (the same Neon URL),
    `CONNECTOR_SECRET` (a long random string) and `JOBSEARCH_PROFILE` (the
    profile it serves). The profile's files must be on the server: keep a real
    person's profile in a private place (`JOBSEARCH_PROFILES`), never in this

@@ -218,6 +218,33 @@ class Service:
             self._runners.pop(prof.id, None)
         log.info("deleted account %s", prof.id)
 
+    def start_boards_check(self) -> tuple[int, dict[str, Any]]:
+        """Check every board in data/ats-registry.yaml, in the background, and
+        keep the ones that answer for the job updates to watch. A new copy of
+        the service knows no boards until this has run once."""
+        with self._lock:
+            if self.cycle and self.cycle.is_alive():
+                return 409, {"error": "a job update or a board check is already running"}
+
+            def run() -> None:
+                from .. import discovery
+                from ..busy import busy
+                from ..http import default_fetcher
+                from ..registry import known_boards, load_registry, write_run
+                try:
+                    with busy(self.shared, "checking job boards") as got:
+                        if got:
+                            reg = load_registry(self.root / "data" / "ats-registry.yaml")
+                            found = discovery.verify_known(default_fetcher(self.shared), known_boards(reg))
+                            write_run(self.shared, found.probes, found.escalations, found.summary())
+                except Exception:  # noqa: BLE001 - logged; the admin page shows it
+                    log.exception("checking job boards failed")
+                if self.mirror:
+                    self.mirror.touch()
+            self.cycle = threading.Thread(target=run, name="boards", daemon=True)
+            self.cycle.start()
+        return 202, {"started": True}
+
     def start_cycle(self, forced: bool = False) -> tuple[int, dict[str, Any]]:
         """The scheduled cycle, in the background. The cron job's tick skips
         while the schedule is paused; `forced` - "Run now" on the admin page -
@@ -345,7 +372,8 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
             who = svc.who(request)
             try:
                 accounts.join(svc.shared, who.sub, who.email, str(body.get("code") or ""),
-                              str(body.get("consent") or ""))
+                              str(body.get("consent") or ""),
+                              admin=bool(who.email and who.email in accounts.admins()))
             except accounts.AccountError as exc:
                 raise ApiError(400, str(exc)) from exc
             return svc.me(who)

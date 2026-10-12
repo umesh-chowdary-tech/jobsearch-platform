@@ -70,11 +70,13 @@ def _norm(code: str) -> str:
     return f"{c[:4]}-{c[4:]}" if len(c) == 8 else c
 
 
-def join(shared: Path, sub: str, email: str, code: str, consent: str) -> dict[str, Any]:
+def join(shared: Path, sub: str, email: str, code: str, consent: str, admin: bool = False) -> dict[str, Any]:
     """Use an invite, agreeing to the privacy notice and terms of
     CONSENT_VERSION - which version, and when, is kept with the account (the
     DPDP Act asks for consent that can be shown). Giving the same code again
-    is harmless; a code someone else used is refused."""
+    is harmless; a code someone else used is refused. An admin may join
+    without one: invites are made on the admin page, so a new service's first
+    admin would otherwise have no way in."""
     if consent != CONSENT_VERSION:
         raise AccountError("agree to the privacy notice and terms to join")
     code = _norm(code)
@@ -82,13 +84,14 @@ def join(shared: Path, sub: str, email: str, code: str, consent: str) -> dict[st
         data = load(shared)
         if sub in data["users"]:
             return data["users"][sub]
-        inv = data["invites"].get(code)
-        if inv is None:
-            raise AccountError("that invite code isn't right - check it and try again")
-        if inv.get("used_by") and inv["used_by"] != sub:
-            raise AccountError("that invite code has already been used")
-        inv.update(used_by=sub, used_at=utcnow())
-        row = {"email": email, "profile": profile_id(sub), "invite": code, "joined": utcnow(),
+        if not (admin and not code):
+            inv = data["invites"].get(code)
+            if inv is None:
+                raise AccountError("that invite code isn't right - check it and try again")
+            if inv.get("used_by") and inv["used_by"] != sub:
+                raise AccountError("that invite code has already been used")
+            inv.update(used_by=sub, used_at=utcnow())
+        row = {"email": email, "profile": profile_id(sub), "invite": code or None, "joined": utcnow(),
                "consent": {"version": consent, "at": utcnow()}}
         data["users"][sub] = row
         _save(shared, data)

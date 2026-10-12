@@ -119,7 +119,7 @@ export function Join({ me, onJoined, onSignOut }: { me: Me; onJoined: (m: Me) =>
   const [err, setErr] = useState("");
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!code.trim()) { setErr("Enter your invite code"); return; }
+    if (!code.trim() && !me.admin) { setErr("Enter your invite code"); return; }
     if (!agree) { setErr("Tick the box to agree to the privacy notice and terms"); return; }
     try { onJoined(await post<Me>("/api/invite", { code, consent: LEGAL_VERSION })); }
     catch (x) { setErr((x as Error).message); }
@@ -129,7 +129,9 @@ export function Join({ me, onJoined, onSignOut }: { me: Me; onJoined: (m: Me) =>
       <form className="card stack" onSubmit={submit}>
         <Brand />
         <h1>Your invite code</h1>
-        <p className="sub">Signed in as {me.email}. The beta is invite only - enter the code you were given.</p>
+        <p className="sub">Signed in as {me.email}. {me.admin
+          ? "You run this service, so you can join without a code."
+          : "The beta is invite only - enter the code you were given."}</p>
         <label htmlFor="code">Invite code</label>
         <input id="code" placeholder="ABCD-EFGH" autoComplete="off" value={code}
                onChange={e => { setCode(e.target.value); setErr(""); }} />
