@@ -46,10 +46,37 @@ def load_limits(root: Path) -> dict[str, dict[str, Any]]:
     return {str(k): dict(v or {}) for k, v in doc.items()}
 
 
-def cost_usd(caps: dict[str, Any], usage: dict[str, int]) -> float:
-    """Dollars for one request, from the provider's `price_per_mtok` and the
-    token counts it reported (input, output, cache_write, cache_read)."""
+def price_for(caps: dict[str, Any], model: str = "") -> dict[str, Any] | None:
+    """Dollars per million tokens for `model`. `price_per_mtok` is either one
+    price for the provider or one per model name; None when it has none."""
     price = caps.get("price_per_mtok") or {}
+    if not price:
+        return None
+    if "input" in price:
+        return price
+    got = price.get(model)
+    return dict(got) if isinstance(got, dict) else None
+
+
+def unpriced(caps: dict[str, Any], model: str) -> str:
+    """Why `model` can't be sent a request under dollar caps it has no price
+    for - a cap in dollars can't hold for a model nobody priced. "" if it can."""
+    in_dollars = any(k in caps for k in ("usd_per_day", "usd_per_month")) or \
+        "usd_per_day" in (caps.get("per_profile") or {})
+    if in_dollars and price_for(caps, model) is None:
+        return f"no price for {model} in data/llm-limits.yaml - not used until one is"
+    return ""
+
+
+def cost_usd(caps: dict[str, Any], usage: dict[str, int], model: str = "") -> float:
+    """Dollars for one request, from the model's price (`price_for`) and the
+    token counts it reported (input, output, cache_write, cache_read). A reply
+    from a model with no price - one the API switched to - is counted at the
+    dearest listed price, so it can only overstate what was spent."""
+    price = price_for(caps, model)
+    if price is None:
+        listed = [p for p in (caps.get("price_per_mtok") or {}).values() if isinstance(p, dict)]
+        price = max(listed, key=lambda p: float(p.get("output", 0)), default={})
     return sum(float(price.get(k, 0)) * int(usage.get(k, 0) or 0) for k in price) / 1e6
 
 

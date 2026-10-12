@@ -221,7 +221,7 @@ class _Block:
 class _Msg:
     def __init__(self, text, stop="end_turn", usage=None):
         self.content = [_Block("thinking"), _Block("text", text)]
-        self.stop_reason, self.stop_details, self.model = stop, None, "claude-opus-5-5"
+        self.stop_reason, self.stop_details, self.model = stop, None, "claude-haiku-5-5"
         self.usage = usage or _Usage(2600, 2300, 2400, 0)
 
 
@@ -255,9 +255,9 @@ def test_claude_answers_through_the_sdk_and_its_cost_is_counted(claude):
     _FakeAnthropic.reply = _Msg('{"rankings": []}')
     ans = LLM(P(claude), providers=["claude"], purpose="rank").ask_json(
         "sys", "postings", max_tokens=4000, cached_prefix="PROFILE")
-    assert ans.ok and ans.data == {"rankings": []} and ans.attribution == "claude-opus-5-5 via claude"
+    assert ans.ok and ans.data == {"rankings": []} and ans.attribution == "claude-haiku-5-5 via claude"
     kw = _FakeAnthropic.sent[0]
-    assert kw["model"] == "claude-opus-5-5" and "temperature" not in kw         # Opus 5.5 takes none
+    assert kw["model"] == "claude-haiku-5-5" and "temperature" not in kw        # Haiku 5.5 takes none
     assert kw["messages"][0]["content"][0] == {"type": "text", "text": "PROFILE",
                                                "cache_control": {"type": "ephemeral"}}
     assert kw["fallbacks"] == "default" and kw["output_config"] == {"effort": "low"}
@@ -287,3 +287,53 @@ def test_no_credit_left_stops_the_run(claude):
     _FakeAnthropic.reply = anthropic.BadRequestError("Your credit balance is too low", response=resp, body=None)
     ans = LLM(P(claude), providers=["claude"]).ask_json("s", "u")
     assert ans.limited == "Claude: the account's credit has run out"
+
+
+# ── a price for each model ───────────────────────────────────────────────────
+
+PRICES = ("price_per_mtok: {claude-haiku-5-5: {input: 0.1, output: 0.5, cache_write: 0.125, cache_read: 0.01},\n"
+          "                 claude-opus-5-5: {input: 4.0, output: 20.0, cache_write: 5.0, cache_read: 0.2}}")
+
+
+def _priced_root(root):
+    (root / "data" / "llm-limits.yaml").write_text(
+        "claude: {requests_per_day: 100, tokens_per_day: 1000000, usd_per_day: 0.15, usd_per_month: 4.0,\n"
+        f"         {PRICES}}}\n")
+    return root
+
+
+def test_each_model_is_counted_at_its_own_price():
+    from jobsearch.limits import cost_usd, price_for
+    import yaml
+    caps = yaml.safe_load(PRICES)
+    use = {"input": 2600, "output": 2300, "cache_write": 2400, "cache_read": 0}
+    assert round(cost_usd(caps, use, "claude-opus-5-5"), 4) == 0.0684
+    assert round(cost_usd(caps, use, "claude-haiku-5-5"), 6) == 0.00171
+    # A model the API switched to, with no price: the dearest listed price.
+    assert price_for(caps, "claude-other") is None
+    assert cost_usd(caps, use, "claude-other") == cost_usd(caps, use, "claude-opus-5-5")
+
+
+def test_the_shipped_prices_cover_the_default_model():
+    from jobsearch.limits import price_for
+    from jobsearch.llm import KNOWN
+    assert price_for(load_limits(ROOT)["claude"], KNOWN["claude"].default_model)
+
+
+def test_a_model_with_no_price_is_never_sent_a_request(claude, monkeypatch):
+    _priced_root(claude)
+    monkeypatch.setenv("CLAUDE_MODEL", "claude-unpriced-9")
+    _FakeAnthropic.reply = AssertionError("sent to a model with no price")
+    ans = LLM(P(claude), providers=["claude"], purpose="rank").ask_json("sys", "postings", max_tokens=500)
+    assert not ans.ok and "no price for claude-unpriced-9" in ans.limited
+    assert _FakeAnthropic.sent == []
+
+
+def test_the_reply_is_counted_at_the_price_of_the_model_that_answered(claude, monkeypatch):
+    _priced_root(claude)
+    monkeypatch.setenv("CLAUDE_MODEL", "claude-haiku-5-5")
+    reply = _Msg('{"rankings": []}')
+    reply.model = "claude-opus-5-5"               # a server-side fallback answered
+    _FakeAnthropic.reply = reply
+    assert LLM(P(claude), providers=["claude"], purpose="rank").ask_json("sys", "postings", max_tokens=500).ok
+    assert Meter(claude).used("claude")["usd"] == 0.0684

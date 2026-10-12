@@ -21,7 +21,7 @@ from typing import Any
 
 import requests
 
-from .limits import Meter, cost_usd, estimate_tokens, load_limits
+from .limits import Meter, cost_usd, estimate_tokens, load_limits, unpriced
 from .profile import Profile
 
 
@@ -87,19 +87,21 @@ KNOWN: dict[str, Provider] = {
         default_model="meta-llama/llama-3.3-70b-instruct",
     ),
     # Through the official SDK, not an OpenAI-compatible shim (_ask_claude).
+    # Haiku 5.5 by default: made for rating and extracting, which is what is
+    # asked of it here, at a fortieth of Opus 5.5's price per token.
     "claude": Provider(
         name="claude",
         label="Claude",
         base_url="https://api.anthropic.com",
         key_env="ANTHROPIC_API_KEY",
         model_env="CLAUDE_MODEL",
-        default_model="claude-opus-5-5",
+        default_model="claude-haiku-5-5",
     ),
 }
 
-# Claude Opus 5.5 always thinks; effort sets how much. Ranking is judgement
-# over a short list, and every thinking token is billed as output - "low"
-# unless CLAUDE_EFFORT says otherwise.
+# Claude thinks as much as effort allows. Ranking is judgement over a short
+# list, and every thinking token is billed as output - "low" unless
+# CLAUDE_EFFORT says otherwise.
 CLAUDE_EFFORT = "low"
 # Thinking shares max_tokens with the answer. Room on top of what the caller
 # asked for the answer, so a long think doesn't cut the JSON off.
@@ -332,10 +334,12 @@ class LLM:
             if meter:
                 est_in = estimate_tokens(system, cached_prefix, user)
                 usd = 0.0
+                why = ""
                 if p.name == "claude":
                     caps = load_limits(meter.root).get(p.name) or {}
-                    usd = cost_usd(caps, {"input": est_in, "output": min(max_tokens, 2000)})
-                why = meter.check(p.name, est_in + max_tokens, self.purpose, usd=usd)
+                    why = unpriced(caps, p.model)
+                    usd = cost_usd(caps, {"input": est_in, "output": min(max_tokens, 2000)}, p.model)
+                why = why or meter.check(p.name, est_in + max_tokens, self.purpose, usd=usd)
                 if why:
                     ans.failures.append({"provider": p.name, "error": why})
                     ans.limited = ans.limited or f"{p.label}: {why}"
@@ -401,8 +405,8 @@ class LLM:
                     cached_prefix: str, ans: Answer) -> bool:
         """One request through the Anthropic SDK. Fills `ans`; True on a JSON answer.
 
-        Claude Opus 5.5 takes no temperature and always thinks - `effort`
-        decides how much. The stable prefix (system prompt, then the profile)
+        Current Claude models take no temperature and think as much as
+        `effort` allows. The stable prefix (system prompt, then the profile)
         is cached: in a run of batches only the first pays for it in full."""
         import anthropic
         client = anthropic.Anthropic(api_key=p.key, timeout=self.timeout, max_retries=2)
@@ -442,7 +446,7 @@ class LLM:
             self._claude_spent(p, None)
             ans.failures.append({"provider": p.name, "error": type(exc).__name__})
             return False
-        self._claude_spent(p, resp.usage)
+        self._claude_spent(p, resp.usage, getattr(resp, "model", None))
         if resp.stop_reason == "refusal":
             cat = getattr(resp.stop_details, "category", None) if resp.stop_details else None
             ans.failures.append({"provider": p.name, "error": f"declined by a safety classifier ({cat})"})
@@ -459,7 +463,9 @@ class LLM:
         ans.provider, ans.model = p.name, resp.model or p.model
         return True
 
-    def _claude_spent(self, p: Provider, usage: Any) -> None:
+    def _claude_spent(self, p: Provider, usage: Any, model: str | None = None) -> None:
+        """Count a request at the price of the model that answered - which a
+        server-side fallback can make a different one from the model asked."""
         meter = getattr(self, "meter", None)
         if not meter:
             return
@@ -470,7 +476,7 @@ class LLM:
                   "cache_write": usage.cache_creation_input_tokens or 0,
                   "cache_read": usage.cache_read_input_tokens or 0}
         caps = load_limits(meter.root).get(p.name) or {}
-        meter.record(p.name, sum(counts.values()), self.purpose, usd=cost_usd(caps, counts))
+        meter.record(p.name, sum(counts.values()), self.purpose, usd=cost_usd(caps, counts, model or p.model))
 
 
 def _claude_key_check(p: Provider, timeout: float) -> tuple[bool, str]:
