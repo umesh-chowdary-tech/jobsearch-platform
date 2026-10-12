@@ -43,6 +43,11 @@ def auth(tok):
 
 @pytest.fixture
 def env(tmp_path, monkeypatch):
+    return make_env(tmp_path, monkeypatch)
+
+
+def make_env(tmp_path, monkeypatch):
+    """A service on a fresh root, with boss@example.com its admin."""
     shutil.copytree(ROOT / "data", tmp_path / "data")
     monkeypatch.setenv("JOBSEARCH_PROFILES", str(tmp_path / "var" / "_profiles"))
     monkeypatch.setenv("JOBSEARCH_ADMINS", "boss@example.com")
@@ -109,8 +114,8 @@ def test_an_asymmetric_token_is_checked_against_the_published_key():
 def test_signed_in_without_an_invite_reaches_only_me_and_invite(env):
     client, _ = env
     me = client.get("/api/me", headers=auth(token())).json()
-    assert me == {"email": "alice@example.com", "member": False, "profile_ready": False, "admin": False,
-                  "consent": None, "consent_current": False}
+    assert me == {"email": "alice@example.com", "member": False, "suspended": False, "profile_ready": False,
+                  "admin": False, "consent": None, "consent_current": False}
     r = client.get("/api/today", headers=auth(token()))
     assert r.status_code == 403 and r.json()["join"] is True
 

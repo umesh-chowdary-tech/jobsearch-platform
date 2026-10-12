@@ -15,6 +15,7 @@ import threading
 from pathlib import Path
 
 from .. import statestore
+from ..models import utcnow
 
 log = logging.getLogger("jobsearch.mirror")
 
@@ -29,9 +30,14 @@ class Mirror:
         self._stop = threading.Event()
         self._lock = threading.Lock()          # one push at a time
         self._thread: threading.Thread | None = None
+        # For the admin page: when var/ last reached the database, and the
+        # last failure's kind (never its text, which may hold the URL).
+        self.last_ok: str | None = None
+        self.last_error: dict[str, str] | None = None
 
     def start(self) -> statestore.SyncReport:
         rep = statestore.pull(self.var, self.remote)
+        self.last_ok = utcnow()
         log.info("pulled var/ from the database: %s", rep.summary())
         self._thread = threading.Thread(target=self._loop, name="mirror", daemon=True)
         self._thread.start()
@@ -44,10 +50,13 @@ class Mirror:
     def push(self) -> statestore.SyncReport | None:
         with self._lock:
             try:
-                return statestore.push(self.var, self.remote)
-            except Exception:  # noqa: BLE001 - the next touch or sweep tries again
+                rep = statestore.push(self.var, self.remote)
+            except Exception as exc:  # noqa: BLE001 - the next touch or sweep tries again
+                self.last_error = {"at": utcnow(), "kind": type(exc).__name__}
                 log.exception("push to the database failed")
                 return None
+            self.last_ok = utcnow()
+            return rep
 
     def forget(self, prefixes: list[str]) -> list[str]:
         """A person's rows, deleted from the database. Raises if it can't -

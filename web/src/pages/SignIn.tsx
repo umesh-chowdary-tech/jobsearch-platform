@@ -61,6 +61,25 @@ export function SignIn({ config, onDone }: { config: Config | null; onDone: () =
   );
 }
 
+/** An account an admin paused: nothing is done for it, but its data is still
+ * its owner's to download or delete. */
+export function Paused({ me, onSignOut, settings }: { me: Me; onSignOut: () => void; settings: React.ReactNode }) {
+  const [leaving, setLeaving] = useState(false);
+  if (leaving) return <div className="legal-page">{settings}</div>;
+  return (
+    <div className="gate">
+      <div className="card stack">
+        <Brand />
+        <h1>Your account is paused</h1>
+        <p className="sub">Signed in as {me.email}. The people running this service paused it, so nothing is done with
+          your data for now. You can still download or delete everything kept for you.</p>
+        <button onClick={() => setLeaving(true)}>Download or delete my data</button>
+        <button className="quiet" onClick={onSignOut}>Sign out</button>
+      </div>
+    </div>
+  );
+}
+
 export function Reconsent({ me, onAgreed, onSignOut, settings }: {
   me: Me; onAgreed: (m: Me) => void; onSignOut: () => void; settings: React.ReactNode;
 }) {
@@ -100,7 +119,7 @@ export function Join({ me, onJoined, onSignOut }: { me: Me; onJoined: (m: Me) =>
   const [err, setErr] = useState("");
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!code.trim()) { setErr("Enter your invite code"); return; }
+    if (!code.trim() && !me.admin) { setErr("Enter your invite code"); return; }
     if (!agree) { setErr("Tick the box to agree to the privacy notice and terms"); return; }
     try { onJoined(await post<Me>("/api/invite", { code, consent: LEGAL_VERSION })); }
     catch (x) { setErr((x as Error).message); }
@@ -110,7 +129,9 @@ export function Join({ me, onJoined, onSignOut }: { me: Me; onJoined: (m: Me) =>
       <form className="card stack" onSubmit={submit}>
         <Brand />
         <h1>Your invite code</h1>
-        <p className="sub">Signed in as {me.email}. The beta is invite only - enter the code you were given.</p>
+        <p className="sub">Signed in as {me.email}. {me.admin
+          ? "You run this service, so you can join without a code."
+          : "The beta is invite only - enter the code you were given."}</p>
         <label htmlFor="code">Invite code</label>
         <input id="code" placeholder="ABCD-EFGH" autoComplete="off" value={code}
                onChange={e => { setCode(e.target.value); setErr(""); }} />

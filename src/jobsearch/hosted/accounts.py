@@ -2,7 +2,8 @@
 
 var/_shared/accounts.json - mirrored to Postgres with the rest of var/:
 
-  users:   {sign-in id: {"email", "profile", "invite", "joined", "consent"}}
+  users:   {sign-in id: {"email", "profile", "invite", "joined", "consent",
+                         "last_seen" (a day), "suspended" (when, if paused)}}
   invites: {code: {"created", "note", "used_by", "used_at"}}
 
 A person signs in; their first request finds no user row, so they give an
@@ -69,11 +70,13 @@ def _norm(code: str) -> str:
     return f"{c[:4]}-{c[4:]}" if len(c) == 8 else c
 
 
-def join(shared: Path, sub: str, email: str, code: str, consent: str) -> dict[str, Any]:
+def join(shared: Path, sub: str, email: str, code: str, consent: str, admin: bool = False) -> dict[str, Any]:
     """Use an invite, agreeing to the privacy notice and terms of
     CONSENT_VERSION - which version, and when, is kept with the account (the
     DPDP Act asks for consent that can be shown). Giving the same code again
-    is harmless; a code someone else used is refused."""
+    is harmless; a code someone else used is refused. An admin may join
+    without one: invites are made on the admin page, so a new service's first
+    admin would otherwise have no way in."""
     if consent != CONSENT_VERSION:
         raise AccountError("agree to the privacy notice and terms to join")
     code = _norm(code)
@@ -81,13 +84,14 @@ def join(shared: Path, sub: str, email: str, code: str, consent: str) -> dict[st
         data = load(shared)
         if sub in data["users"]:
             return data["users"][sub]
-        inv = data["invites"].get(code)
-        if inv is None:
-            raise AccountError("that invite code isn't right - check it and try again")
-        if inv.get("used_by") and inv["used_by"] != sub:
-            raise AccountError("that invite code has already been used")
-        inv.update(used_by=sub, used_at=utcnow())
-        row = {"email": email, "profile": profile_id(sub), "invite": code, "joined": utcnow(),
+        if not (admin and not code):
+            inv = data["invites"].get(code)
+            if inv is None:
+                raise AccountError("that invite code isn't right - check it and try again")
+            if inv.get("used_by") and inv["used_by"] != sub:
+                raise AccountError("that invite code has already been used")
+            inv.update(used_by=sub, used_at=utcnow())
+        row = {"email": email, "profile": profile_id(sub), "invite": code or None, "joined": utcnow(),
                "consent": {"version": consent, "at": utcnow()}}
         data["users"][sub] = row
         _save(shared, data)
@@ -127,6 +131,58 @@ def create_invites(shared: Path, n: int, note: str = "") -> list[str]:
             made.append(code)
         _save(shared, data)
         return made
+
+
+def seen(shared: Path, sub: str) -> None:
+    """The day a person last used the service - the day only, for the admin
+    page's count of active people. Written at most once a day each."""
+    today = utcnow()[:10]
+    with _lock:
+        data = load(shared)
+        row = data["users"].get(sub)
+        if row is None or row.get("last_seen") == today:
+            return
+        row["last_seen"] = today
+        _save(shared, data)
+
+
+def by_profile(shared: Path, pid: str) -> tuple[str, dict[str, Any]]:
+    """(sign-in id, row) of the person whose profile this is. The admin page
+    names people by profile id; the sign-in id never leaves the service."""
+    for sub, row in load(shared)["users"].items():
+        if row.get("profile") == pid:
+            return sub, row
+    raise AccountError("no such person")
+
+
+def suspend(shared: Path, pid: str, on: bool) -> dict[str, Any]:
+    """Pause an account, or let it back in. A paused person can still
+    download or delete their data; nothing else is done for them."""
+    with _lock:
+        data = load(shared)
+        for row in data["users"].values():
+            if row.get("profile") == pid:
+                if on:
+                    row["suspended"] = utcnow()
+                else:
+                    row.pop("suspended", None)
+                _save(shared, data)
+                return row
+    raise AccountError("no such person")
+
+
+def revoke(shared: Path, code: str) -> None:
+    """Cancel an invite nobody has used."""
+    code = _norm(code)
+    with _lock:
+        data = load(shared)
+        inv = data["invites"].get(code)
+        if inv is None:
+            raise AccountError("no such invite code")
+        if inv.get("used_by"):
+            raise AccountError("that code has been used - it can't be cancelled")
+        del data["invites"][code]
+        _save(shared, data)
 
 
 def remove(shared: Path, sub: str) -> None:

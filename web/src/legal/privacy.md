@@ -18,6 +18,7 @@ Version 2026-10-12-draft. This notice explains what this service keeps about you
 | The jobs ranked for you, your decisions on them, and the resumes built | To show you your search and where each application stands |
 | Your "good match?" answers | To check and improve how well jobs are ranked |
 | How many AI requests were made for you, and what they cost | To keep each person within their limit |
+| The day you last used the service (the day only) | To count how many people use it each week |
 
 We keep nothing else. We do not read your email inbox, we do not use your data for advertising, and we never sell it.
 

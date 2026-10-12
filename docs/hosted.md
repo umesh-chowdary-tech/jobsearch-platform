@@ -56,8 +56,24 @@ passes `/api` to the service.
   used stays spent, with no link back.
 - **"Good match?"** on a posting is kept in `var/<id>/feedback.jsonl`, the
   start of the ranking evaluation set.
-- **Admin** (emails in `JOBSEARCH_ADMINS`): who joined, each person's AI
-  requests and cost this month, invite codes.
+- **Admin** (emails in `JOBSEARCH_ADMINS`, `hosted/admin.py`):
+  - *Overview:* people joined and active, how far they get (joined, set up,
+    ranked jobs, a resume, applied), AI spend per day against the cap,
+    joins per week, "good match?" answers.
+  - *People:* search; pause an account (its owner can still download or
+    delete their data), give one person their own daily AI limit, delete an
+    account; invite codes - make, cancel unused, see who used which.
+  - *AI & budget:* which model does each job, the Claude spending limits,
+    one switch to pause all AI; cost this month by job, model and person.
+  - *Jobs & health:* run a job update now, pause the schedule; updates and
+    new postings per day, keys set or not, the database's last save, boards
+    not read for two days, recent errors.
+  - *Log:* every change an admin made, and who made it.
+
+  Admins see counts and emails, never anyone's resume, profile or jobs. The
+  only thing kept for the page is the day each person last used the service.
+  The page's changes live in `var/_shared/` (`llm-limits.json`,
+  `models.json`, `admin-log.jsonl`), so the database keeps them too.
 
 ## Security
 
@@ -110,12 +126,15 @@ What needs the maintainer's accounts, in order:
    The mirror's table locks itself down either way: row-level security with
    no policies, and no grants to Supabase's `anon` and `authenticated` roles
    (statestore.py, `SCHEMA`).
-2. **Render**: New > Blueprint on this repository, keep `jobsearch-hosted`,
-   fill in the values it asks for (`render.yaml`), including who runs the service for the
-   privacy notice.
+2. **Render**: New > Blueprint on this repository (`render.yaml`: the one
+   service, `jobsearch-hosted`), and fill in the values it asks for, including
+   who runs the service for the privacy notice.
 3. **GitHub**: repository secrets `HOSTED_URL` (the Render URL) and
    `CRON_SECRET` (copied from Render), for `.github/workflows/cycle.yml`.
-4. Sign in, open Admin, make invite codes.
+4. Sign in with an email in `JOBSEARCH_ADMINS`, then on the admin page:
+   *Jobs & health > Check job boards* once - a new copy knows no boards until
+   then - and *People > Make codes* for the people you invite. To join
+   yourself, use one of your own codes.
 
 ## Not yet
 

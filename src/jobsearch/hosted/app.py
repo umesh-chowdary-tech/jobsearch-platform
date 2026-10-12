@@ -32,12 +32,12 @@ from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
 from .. import onboard, statestore
-from ..limits import Meter
+from ..models import utcnow
 from ..profile import Profile, shared_var, var_dir
 from ..web import routes
 from ..web.routes import HOSTED, ApiError
 from ..web.runner import Runner
-from . import accounts
+from . import accounts, admin
 from .auth import AuthError, Verifier, Who
 from .mirror import Mirror
 
@@ -170,9 +170,17 @@ class Service:
         row = accounts.user(self.shared, who.sub)
         if row is None:
             raise ApiError(403, "join with an invite code first", join=True)
+        self._seen(who, row)
+        if consented and row.get("suspended"):
+            raise ApiError(403, "This account is paused. You can still download or delete your data in Settings.",
+                           suspended=True)
         if consented and not accounts.consent_current(row):
             raise ApiError(403, "agree to the updated privacy notice and terms to continue", consent=True)
         return who, Profile(self.root, row["profile"])
+
+    def _seen(self, who: Who, row: dict[str, Any]) -> None:
+        if row.get("last_seen") != utcnow()[:10]:
+            accounts.seen(self.shared, who.sub)
 
     def admin(self, request: Request) -> Who:
         who = self.who(request)
@@ -183,9 +191,85 @@ class Service:
     def me(self, who: Who) -> dict[str, Any]:
         row = accounts.user(self.shared, who.sub)
         prof = Profile(self.root, row["profile"]) if row else None
-        return {"email": who.email, "member": row is not None,
+        if row:
+            self._seen(who, row)
+        return {"email": who.email, "member": row is not None, "suspended": bool((row or {}).get("suspended")),
                 "profile_ready": bool(prof and prof.exists()), "admin": bool(who.email and who.email in accounts.admins()),
                 "consent": (row or {}).get("consent"), "consent_current": accounts.consent_current(row)}
+
+
+    def delete_account(self, sub: str, prof: Profile) -> None:
+        """Everything kept for a person, and their account. The database's
+        copy first: if that fails, nothing is gone here either, and deleting
+        again later finishes the job."""
+        if self.mirror:
+            var = var_dir(self.root).resolve()
+            prefixes = [d.resolve().relative_to(var).as_posix() for d in (prof.var, prof.dir)
+                        if d.resolve().is_relative_to(var)]
+            try:
+                self.mirror.forget(prefixes)
+            except Exception:  # noqa: BLE001
+                log.exception("forgetting %s in the database failed", prof.id)
+                raise ApiError(503, "Couldn't delete that account right now - try again in a few minutes.") from None
+        for d in (prof.dir, prof.var):
+            shutil.rmtree(d, ignore_errors=True)
+        accounts.remove(self.shared, sub)
+        with self._lock:
+            self._runners.pop(prof.id, None)
+        log.info("deleted account %s", prof.id)
+
+    def start_boards_check(self) -> tuple[int, dict[str, Any]]:
+        """Check every board in data/ats-registry.yaml, in the background, and
+        keep the ones that answer for the job updates to watch. A new copy of
+        the service knows no boards until this has run once."""
+        with self._lock:
+            if self.cycle and self.cycle.is_alive():
+                return 409, {"error": "a job update or a board check is already running"}
+
+            def run() -> None:
+                from .. import discovery
+                from ..busy import busy
+                from ..http import default_fetcher
+                from ..registry import known_boards, load_registry, write_run
+                try:
+                    with busy(self.shared, "checking job boards") as got:
+                        if got:
+                            reg = load_registry(self.root / "data" / "ats-registry.yaml")
+                            found = discovery.verify_known(default_fetcher(self.shared), known_boards(reg))
+                            write_run(self.shared, found.probes, found.escalations, found.summary())
+                except Exception:  # noqa: BLE001 - logged; the admin page shows it
+                    log.exception("checking job boards failed")
+                if self.mirror:
+                    self.mirror.touch()
+            self.cycle = threading.Thread(target=run, name="boards", daemon=True)
+            self.cycle.start()
+        return 202, {"started": True}
+
+    def start_cycle(self, forced: bool = False) -> tuple[int, dict[str, Any]]:
+        """The scheduled cycle, in the background. The cron job's tick skips
+        while the schedule is paused; `forced` - "Run now" on the admin page -
+        is someone asking, so it runs anyway."""
+        with self._lock:
+            if self.cycle and self.cycle.is_alive():
+                return 409, {"error": "a job update is already running"}
+
+            def run() -> None:
+                from ..busy import busy
+                from ..cycle import run_cycle
+                try:
+                    if forced:
+                        with busy(self.shared, "job update started on the admin page") as got:
+                            if got:
+                                run_cycle(self.root, quiet=True, lock=False)
+                    else:
+                        run_cycle(self.root, quiet=True, lock=True)
+                except Exception:  # noqa: BLE001 - logged; the next tick tries again
+                    log.exception("cycle failed")
+                if self.mirror:
+                    self.mirror.touch()
+            self.cycle = threading.Thread(target=run, name="cycle", daemon=True)
+            self.cycle.start()
+        return 202, {"started": True}
 
 
 def _export(prof: Profile) -> Response:
@@ -203,20 +287,8 @@ def _export(prof: Profile) -> Response:
 
 
 def _admin_overview(svc: Service) -> dict[str, Any]:
-    data = accounts.load(svc.shared)
-    usage = Meter(svc.root).month_by_profile()
-    people = []
-    for row in sorted(data["users"].values(), key=lambda r: r.get("joined") or ""):
-        prof = Profile(svc.root, row["profile"])
-        people.append({"email": row.get("email"), "profile": row["profile"], "joined": row.get("joined"),
-                       "profile_ready": prof.exists(),
-                       "month": usage.get(row["profile"], {"requests": 0, "tokens": 0, "usd": 0.0})})
-    unused = [{"code": c, **v} for c, v in data["invites"].items() if not v.get("used_by")]
     op = operator()
-    return {"people": people, "invites_unused": unused,
-            "missing_settings": [env for key, env in OPERATOR_SETTINGS.items() if not op[key]],
-            "invites_used": sum(1 for v in data["invites"].values() if v.get("used_by")),
-            "month_usd": round(sum(p["month"]["usd"] for p in people), 4)}
+    return admin.overview(svc, [env for key, env in OPERATOR_SETTINGS.items() if not op[key]])
 
 
 def create_app(root: Path | None = None, verifier: Verifier | None = None, static_dir: Path | None = None,
@@ -228,6 +300,7 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
         verifier = Verifier(os.environ.get("SUPABASE_URL", ""), os.environ.get("SUPABASE_JWT_SECRET", ""))
     mirror = Mirror(var_dir(root), remote, delay=mirror_delay) if remote is not None else None
     svc = Service(root, verifier, cron_secret, mirror)
+    admin.watch_errors()
     supabase_url = "" if verifier.dev else os.environ.get("SUPABASE_URL", "")
     csp = _csp(supabase_url)
 
@@ -299,7 +372,8 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
             who = svc.who(request)
             try:
                 accounts.join(svc.shared, who.sub, who.email, str(body.get("code") or ""),
-                              str(body.get("consent") or ""))
+                              str(body.get("consent") or ""),
+                              admin=bool(who.email and who.email in accounts.admins()))
             except accounts.AccountError as exc:
                 raise ApiError(400, str(exc)) from exc
             return svc.me(who)
@@ -360,23 +434,7 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
             who, prof = svc.member(request, consented=False)
             if str(body.get("confirm") or "").strip().lower() != DELETE_WORDS:
                 raise ApiError(400, f'type "{DELETE_WORDS}" to confirm')
-            if mirror:
-                # The database's copy first: if that fails, nothing is gone
-                # here either, and deleting again later finishes the job.
-                var = var_dir(svc.root).resolve()
-                prefixes = [d.resolve().relative_to(var).as_posix() for d in (prof.var, prof.dir)
-                            if d.resolve().is_relative_to(var)]
-                try:
-                    mirror.forget(prefixes)
-                except Exception:  # noqa: BLE001
-                    log.exception("forgetting %s in the database failed", prof.id)
-                    raise ApiError(503, "Couldn't delete your account right now - try again in a few minutes.") from None
-            for d in (prof.dir, prof.var):
-                shutil.rmtree(d, ignore_errors=True)
-            accounts.remove(svc.shared, who.sub)
-            with svc._lock:
-                svc._runners.pop(prof.id, None)
-            log.info("deleted account %s", prof.id)
+            svc.delete_account(who.sub, prof)
             return {"deleted": True}
         return await run_in_threadpool(_respond, go)
 
@@ -386,6 +444,22 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
         def go() -> Any:
             svc.admin(request)
             return _admin_overview(svc)
+        return await run_in_threadpool(_respond, go)
+
+    @app.post("/api/admin/do")
+    async def admin_do(request: Request) -> Response:
+        try:
+            body = await _json_body(request)
+        except ApiError as exc:
+            return _json_response(*routes.as_error(exc, HOSTED))
+
+        def go() -> Any:
+            who = svc.admin(request)
+            try:
+                done = admin.act(svc, who.email, body)
+            except (admin.AdminError, accounts.AccountError) as exc:
+                raise ApiError(400, str(exc)) from exc
+            return {**done, "overview": _admin_overview(svc)}
         return await run_in_threadpool(_respond, go)
 
     @app.post("/api/admin/invites")
@@ -412,20 +486,7 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
         given = request.headers.get("x-cron-secret", "")
         if not svc.cron_secret or not hmac.compare_digest(given.encode(), svc.cron_secret.encode()):
             return _json_response(404, {"error": "not found"})
-        if svc.cycle and svc.cycle.is_alive():
-            return _json_response(409, {"error": "a cycle is already running"})
-
-        def run() -> None:
-            from ..cycle import run_cycle
-            try:
-                run_cycle(svc.root, quiet=True, lock=True)
-            except Exception:  # noqa: BLE001 - logged; the next tick tries again
-                log.exception("cycle failed")
-            if mirror:
-                mirror.touch()
-        svc.cycle = threading.Thread(target=run, name="cycle", daemon=True)
-        svc.cycle.start()
-        return _json_response(202, {"started": True})
+        return _json_response(*svc.start_cycle())
 
     # ── everything else: the shared routes, for this person ─────────────────
     @app.api_route("/api/{rest:path}", methods=["GET", "POST"])

@@ -23,7 +23,7 @@ import requests
 import yaml
 
 from .limits import Meter, cost_usd, estimate_tokens, load_limits, unpriced
-from .profile import Profile
+from .profile import Profile, shared_var
 
 
 def load_dotenv(path: Path) -> None:
@@ -101,15 +101,29 @@ KNOWN: dict[str, Provider] = {
     ),
 }
 
+# The admin page's choice of model for a job, over data/models.yaml - in
+# var/_shared, so the hosted service's database keeps it.
+ROUTES_OVERRIDE = "models.json"
+
+
+def _routes(doc: Any) -> dict[str, dict[str, str]]:
+    return {str(job): {str(k).strip().lower(): str(v or "").strip() for k, v in route.items()}
+            for job, route in (doc or {}).items() if isinstance(route, dict) and route}
+
+
 def load_routes(root: Path) -> dict[str, dict[str, str]]:
     """Which providers, and which of their models, each job uses - in order -
-    from data/models.yaml: {"rank": {"claude": "claude-haiku-5-5"}, ...}."""
+    from data/models.yaml, with the admin page's choices over it:
+    {"rank": {"claude": "claude-haiku-5-5"}, ...}."""
     p = Path(root) / "data" / "models.yaml"
-    if not p.exists():
-        return {}
-    doc = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
-    return {str(job): {str(k).strip().lower(): str(v or "").strip() for k, v in route.items()}
-            for job, route in doc.items() if isinstance(route, dict)}
+    routes = _routes(yaml.safe_load(p.read_text(encoding="utf-8"))) if p.exists() else {}
+    try:
+        over = json.loads((shared_var(Path(root)) / ROUTES_OVERRIDE).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        over = {}
+    if isinstance(over, dict):
+        routes.update(_routes(over))
+    return routes
 
 
 # Claude thinks as much as effort allows. Ranking is judgement over a short
@@ -300,7 +314,7 @@ class LLM:
             )
         except requests.RequestException:
             if getattr(self, "meter", None):
-                self.meter.record(p.name, 0, self.purpose)
+                self.meter.record(p.name, 0, self.purpose, model=p.model)
             raise
         if getattr(self, "meter", None):
             tokens = 0
@@ -310,7 +324,7 @@ class LLM:
                 except (ValueError, AttributeError, TypeError):
                     tokens = 0
                 tokens = tokens or estimate_tokens(system, user) + max_tokens
-            self.meter.record(p.name, tokens, self.purpose)
+            self.meter.record(p.name, tokens, self.purpose, model=p.model)
         return r
 
     def _post_patient(self, p: Provider, system: str, user: str, max_tokens: int,
@@ -487,13 +501,14 @@ class LLM:
         if not meter:
             return
         if usage is None:
-            meter.record(p.name, 0, self.purpose)
+            meter.record(p.name, 0, self.purpose, model=model or p.model)
             return
         counts = {"input": usage.input_tokens or 0, "output": usage.output_tokens or 0,
                   "cache_write": usage.cache_creation_input_tokens or 0,
                   "cache_read": usage.cache_read_input_tokens or 0}
         caps = load_limits(meter.root).get(p.name) or {}
-        meter.record(p.name, sum(counts.values()), self.purpose, usd=cost_usd(caps, counts, model or p.model))
+        meter.record(p.name, sum(counts.values()), self.purpose, usd=cost_usd(caps, counts, model or p.model),
+                     model=model or p.model)
 
 
 def _claude_key_check(p: Provider, timeout: float) -> tuple[bool, str]:

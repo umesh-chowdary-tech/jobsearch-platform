@@ -6,7 +6,7 @@ import { ApiError, get } from "./api";
 import { appName, loadConfig, onChange, signOut, token, type Config } from "./auth";
 import type { Me, Overview } from "./types";
 import { ago, applyTheme, Icon, useDark, useRoute, type IconName } from "./ui";
-import { SignIn, Join, Reconsent } from "./pages/SignIn";
+import { SignIn, Join, Paused, Reconsent } from "./pages/SignIn";
 import { Today } from "./pages/Today";
 import { Tracker } from "./pages/Tracker";
 import { Posting } from "./pages/Posting";
@@ -61,6 +61,10 @@ export function App() {
   }
   if (phase === "signed-out" || !me || !config) return <SignIn config={config} onDone={refresh} />;
   if (!me.member) return <Join me={me} onJoined={setMe} onSignOut={async () => { await signOut(); refresh(); }} />;
+  if (me.suspended) {
+    const out = async () => { await signOut(); refresh(); };
+    return <Paused me={me} onSignOut={out} settings={<Settings me={me} onSignOut={out} />} />;
+  }
   if (me.consent_current === false) {
     const out = async () => { await signOut(); refresh(); };
     return <Reconsent me={me} onAgreed={setMe} onSignOut={out} settings={<Settings me={me} onSignOut={out} />} />;

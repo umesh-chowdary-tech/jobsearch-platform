@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 import traceback
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -111,6 +112,7 @@ class _Run:
     def __init__(self, var: Path, quiet: bool) -> None:
         self.var, self.parts, self.failed = var, [], False
         self.say = (lambda s: None) if quiet else print
+        self.t0 = time.monotonic()
 
     def failure(self, step: str, exc: Exception) -> None:
         self.failed = True
@@ -127,7 +129,7 @@ class _Run:
         return True
 
     def end(self) -> int:
-        _log(self.var, " | ".join(self.parts))
+        _log(self.var, " | ".join([*self.parts, f"took {round(time.monotonic() - self.t0)}s"]))
         # Non-zero only on a real failure, so a scheduler's "last result"
         # column means something. A quiet cycle with nothing new is a success.
         return 1 if self.failed else 0
