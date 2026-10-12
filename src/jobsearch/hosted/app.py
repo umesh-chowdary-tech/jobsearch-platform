@@ -58,6 +58,29 @@ def plausible_email(email: str) -> bool:
             and "." in domain.strip(".") and not any(c.isspace() for c in email))
 
 
+def _plain(name: str, limit: int) -> str:
+    """A setting shown on the pages, as plain words: the privacy notice is
+    Markdown, and a setting mustn't add a link or bold to it."""
+    text = " ".join(os.environ.get(name, "").split())
+    return "".join(c for c in text if c not in "*[]()|<>`_\\#")[:limit].strip()
+
+
+# The privacy notice's blanks, each filled from a setting of the same meaning.
+OPERATOR_SETTINGS = {"name": "JOBSEARCH_OPERATOR", "city": "JOBSEARCH_CITY", "email": "JOBSEARCH_PRIVACY_EMAIL"}
+
+
+def operator() -> dict[str, str]:
+    """Who runs this copy of the service, where, and the address people write
+    to about their data - from its settings, never from this repository, which
+    is public and anyone's to deploy. A blank one stays [in brackets] on the
+    page, and the admin page says which."""
+    email = os.environ.get(OPERATOR_SETTINGS["email"], "").strip()
+    if not plausible_email(email) or any(c in email for c in "*[]()|<>`\\"):
+        email = ""
+    return {"name": _plain(OPERATOR_SETTINGS["name"], 80), "city": _plain(OPERATOR_SETTINGS["city"], 60),
+            "email": email}
+
+
 def _csp(supabase_url: str) -> str:
     origin = ""
     if supabase_url:
@@ -139,11 +162,16 @@ class Service:
         except AuthError as exc:
             raise ApiError(401, str(exc)) from exc
 
-    def member(self, request: Request) -> tuple[Who, Profile]:
+    def member(self, request: Request, consented: bool = True) -> tuple[Who, Profile]:
+        """The signed-in person and their profile. Nothing is worked on for
+        someone who hasn't agreed to the current notice; downloading and
+        deleting their data (`consented=False`) stay open to them regardless."""
         who = self.who(request)
         row = accounts.user(self.shared, who.sub)
         if row is None:
             raise ApiError(403, "join with an invite code first", join=True)
+        if consented and not accounts.consent_current(row):
+            raise ApiError(403, "agree to the updated privacy notice and terms to continue", consent=True)
         return who, Profile(self.root, row["profile"])
 
     def admin(self, request: Request) -> Who:
@@ -156,7 +184,8 @@ class Service:
         row = accounts.user(self.shared, who.sub)
         prof = Profile(self.root, row["profile"]) if row else None
         return {"email": who.email, "member": row is not None,
-                "profile_ready": bool(prof and prof.exists()), "admin": bool(who.email and who.email in accounts.admins())}
+                "profile_ready": bool(prof and prof.exists()), "admin": bool(who.email and who.email in accounts.admins()),
+                "consent": (row or {}).get("consent"), "consent_current": accounts.consent_current(row)}
 
 
 def _export(prof: Profile) -> Response:
@@ -183,7 +212,9 @@ def _admin_overview(svc: Service) -> dict[str, Any]:
                        "profile_ready": prof.exists(),
                        "month": usage.get(row["profile"], {"requests": 0, "tokens": 0, "usd": 0.0})})
     unused = [{"code": c, **v} for c, v in data["invites"].items() if not v.get("used_by")]
+    op = operator()
     return {"people": people, "invites_unused": unused,
+            "missing_settings": [env for key, env in OPERATOR_SETTINGS.items() if not op[key]],
             "invites_used": sum(1 for v in data["invites"].values() if v.get("used_by")),
             "month_usd": round(sum(p["month"]["usd"] for p in people), 4)}
 
@@ -236,6 +267,8 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
         # The anon key is public by design: it lets the page start a sign-in,
         # nothing more. Every request here is checked by its token.
         return {"auth": "dev" if verifier.dev else "supabase", "supabase_url": supabase_url,
+                "consent_version": accounts.CONSENT_VERSION,
+                "name": _plain("JOBSEARCH_APP_NAME", 40), "operator": operator(),
                 "supabase_anon_key": "" if verifier.dev else os.environ.get("SUPABASE_ANON_KEY", "")}
 
     if verifier.dev:
@@ -265,7 +298,24 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
         def go() -> Any:
             who = svc.who(request)
             try:
-                accounts.join(svc.shared, who.sub, who.email, str(body.get("code") or ""))
+                accounts.join(svc.shared, who.sub, who.email, str(body.get("code") or ""),
+                              str(body.get("consent") or ""))
+            except accounts.AccountError as exc:
+                raise ApiError(400, str(exc)) from exc
+            return svc.me(who)
+        return await run_in_threadpool(_respond, go)
+
+    @app.post("/api/consent")
+    async def consent(request: Request) -> Response:
+        try:
+            body = await _json_body(request)
+        except ApiError as exc:
+            return _json_response(*routes.as_error(exc, HOSTED))
+
+        def go() -> Any:
+            who = svc.who(request)
+            try:
+                accounts.agree(svc.shared, who.sub, str(body.get("consent") or ""))
             except accounts.AccountError as exc:
                 raise ApiError(400, str(exc)) from exc
             return svc.me(who)
@@ -297,7 +347,7 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
 
     @app.get("/api/account/export")
     async def export(request: Request) -> Response:
-        return await run_in_threadpool(_respond, lambda: _export(svc.member(request)[1]))
+        return await run_in_threadpool(_respond, lambda: _export(svc.member(request, consented=False)[1]))
 
     @app.post("/api/account/delete")
     async def delete(request: Request) -> Response:
@@ -307,7 +357,7 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
             return _json_response(*routes.as_error(exc, HOSTED))
 
         def go() -> Any:
-            who, prof = svc.member(request)
+            who, prof = svc.member(request, consented=False)
             if str(body.get("confirm") or "").strip().lower() != DELETE_WORDS:
                 raise ApiError(400, f'type "{DELETE_WORDS}" to confirm')
             if mirror:

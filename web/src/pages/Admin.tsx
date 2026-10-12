@@ -27,6 +27,14 @@ export function Admin() {
       <h1>Admin</h1>
       <p className="sub">{o.people.length} {o.people.length === 1 ? "person" : "people"} · ${o.month_usd.toFixed(2)} of AI this month · {o.invites_used} invites used</p>
 
+      {!!o.missing_settings?.length && (
+        <div className="card stack">
+          <h3>The privacy notice has blanks</h3>
+          <p className="small">Everyone sees <a href="#/privacy">the privacy notice</a> before joining. Set these in the
+            service's settings (on Render: Environment), then restart it: <b>{o.missing_settings.join(", ")}</b>.</p>
+        </div>
+      )}
+
       <div className="card stack">
         <h3>Invite codes</h3>
         <div className="row">

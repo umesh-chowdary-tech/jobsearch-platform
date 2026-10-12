@@ -152,7 +152,8 @@ def remote_with_alice(tmp_path, monkeypatch):
     remote = FakeRemote()
     pid = accounts.profile_id(ALICE)
     remote.seed("_shared/accounts.json", json.dumps(
-        {"users": {ALICE: {"email": "alice@example.com", "profile": pid, "invite": "AAAA-BBBB", "joined": "x"}},
+        {"users": {ALICE: {"email": "alice@example.com", "profile": pid, "invite": "AAAA-BBBB", "joined": "x",
+                           "consent": {"version": accounts.CONSENT_VERSION, "at": "x"}}},
          "invites": {"AAAA-BBBB": {"used_by": ALICE}}}))
     for f in (ROOT / "profiles" / "sample-backend").glob("*.yaml"):
         remote.seed(f"_profiles/{pid}/{f.name}", f.read_text(encoding="utf-8"))

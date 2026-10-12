@@ -2,7 +2,7 @@
 
 var/_shared/accounts.json - mirrored to Postgres with the rest of var/:
 
-  users:   {sign-in id: {"email", "profile", "invite", "joined"}}
+  users:   {sign-in id: {"email", "profile", "invite", "joined", "consent"}}
   invites: {code: {"created", "note", "used_by", "used_at"}}
 
 A person signs in; their first request finds no user row, so they give an
@@ -25,6 +25,9 @@ from typing import Any
 from ..models import utcnow
 
 FILE = "accounts.json"
+# The privacy notice and terms a person agrees to when they join
+# (web/src/legal/). Change it whenever their text changes in a way that matters.
+CONSENT_VERSION = "2026-10-12-draft"
 # No 0/O, 1/I/L: a code read out loud or off a phone is typed right first time.
 ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 _lock = threading.Lock()
@@ -66,9 +69,13 @@ def _norm(code: str) -> str:
     return f"{c[:4]}-{c[4:]}" if len(c) == 8 else c
 
 
-def join(shared: Path, sub: str, email: str, code: str) -> dict[str, Any]:
-    """Use an invite. Giving the same code again is harmless; a code someone
-    else used is refused."""
+def join(shared: Path, sub: str, email: str, code: str, consent: str) -> dict[str, Any]:
+    """Use an invite, agreeing to the privacy notice and terms of
+    CONSENT_VERSION - which version, and when, is kept with the account (the
+    DPDP Act asks for consent that can be shown). Giving the same code again
+    is harmless; a code someone else used is refused."""
+    if consent != CONSENT_VERSION:
+        raise AccountError("agree to the privacy notice and terms to join")
     code = _norm(code)
     with _lock:
         data = load(shared)
@@ -80,8 +87,27 @@ def join(shared: Path, sub: str, email: str, code: str) -> dict[str, Any]:
         if inv.get("used_by") and inv["used_by"] != sub:
             raise AccountError("that invite code has already been used")
         inv.update(used_by=sub, used_at=utcnow())
-        row = {"email": email, "profile": profile_id(sub), "invite": code, "joined": utcnow()}
+        row = {"email": email, "profile": profile_id(sub), "invite": code, "joined": utcnow(),
+               "consent": {"version": consent, "at": utcnow()}}
         data["users"][sub] = row
+        _save(shared, data)
+        return row
+
+
+def consent_current(row: dict[str, Any] | None) -> bool:
+    return ((row or {}).get("consent") or {}).get("version") == CONSENT_VERSION
+
+
+def agree(shared: Path, sub: str, consent: str) -> dict[str, Any]:
+    """Agree to a changed notice: the new version and time replace the old."""
+    if consent != CONSENT_VERSION:
+        raise AccountError("agree to the privacy notice and terms to continue")
+    with _lock:
+        data = load(shared)
+        row = data["users"].get(sub)
+        if row is None:
+            raise AccountError("join with an invite code first")
+        row["consent"] = {"version": consent, "at": utcnow()}
         _save(shared, data)
         return row
 

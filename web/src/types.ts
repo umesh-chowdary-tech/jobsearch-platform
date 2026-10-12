@@ -65,6 +65,8 @@ export interface Me {
   member: boolean;
   profile_ready: boolean;
   admin: boolean;
+  consent?: { version: string; at: string } | null;
+  consent_current?: boolean;
 }
 
 export interface Overview {
@@ -148,4 +150,5 @@ export interface AdminOverview {
   invites_unused: { code: string; created: string; note: string }[];
   invites_used: number;
   month_usd: number;
+  missing_settings?: string[];
 }

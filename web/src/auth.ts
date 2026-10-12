@@ -4,10 +4,15 @@
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
+/** Who runs this copy of the service - its settings, never the repository's. */
+export interface Operator { name: string; city: string; email: string }
+
 export interface Config {
   auth: "supabase" | "dev";
   supabase_url: string;
   supabase_anon_key: string;
+  name?: string;
+  operator?: Operator;
 }
 
 const DEV_KEY = "jobsearch-dev-token";
@@ -27,6 +32,7 @@ export async function loadConfig(): Promise<Config> {
   const r = await fetch("/api/config");
   if (!r.ok) throw new Error("The service isn't answering. Try again in a moment.");
   config = (await r.json()) as Config;
+  document.title = appName();
   if (config.auth === "supabase") {
     // PKCE: the emailed link comes back with ?code=..., which leaves the
     // #/route part of the address to the app.
@@ -35,6 +41,15 @@ export async function loadConfig(): Promise<Config> {
     });
   }
   return config;
+}
+
+/** The service's name (JOBSEARCH_APP_NAME), once the config is in. */
+export function appName(): string {
+  return config?.name || "Job search";
+}
+
+export function operator(): Operator | undefined {
+  return config?.operator;
 }
 
 /** The current sign-in token, refreshed when it has expired. */

@@ -43,6 +43,16 @@ services:
         sync: false
       - key: JOBSEARCH_CONTACT    # how job boards can reach whoever runs this
         sync: false
+      # Shown on the pages, and the blanks of the privacy notice and terms:
+      # who runs this copy, their city, and where people write about their data.
+      - key: JOBSEARCH_APP_NAME
+        sync: false
+      - key: JOBSEARCH_OPERATOR
+        sync: false
+      - key: JOBSEARCH_CITY
+        sync: false
+      - key: JOBSEARCH_PRIVACY_EMAIL
+        sync: false
 
   - type: web
     name: jobsearch-connector

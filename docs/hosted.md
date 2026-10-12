@@ -80,6 +80,8 @@ passes `/api` to the service.
 | `SUPABASE_ANON_KEY` | public by design: lets the page start a sign-in |
 | `SUPABASE_JWT_SECRET` | only for projects still signing with the legacy shared secret |
 | `JOBSEARCH_ADMINS` | emails that see the admin page |
+| `JOBSEARCH_APP_NAME` | the name on the pages (default "Job search") |
+| `JOBSEARCH_OPERATOR`, `JOBSEARCH_CITY`, `JOBSEARCH_PRIVACY_EMAIL` | who runs this copy, their city, and where people write about their data: the blanks in the privacy notice and terms |
 | `CRON_SECRET` | what the cron job sends to start a cycle |
 | `ANTHROPIC_API_KEY`, `GROQ_API_KEY` | the models, capped in `data/llm-limits.yaml` |
 
@@ -109,16 +111,22 @@ What needs the maintainer's accounts, in order:
    no policies, and no grants to Supabase's `anon` and `authenticated` roles
    (statestore.py, `SCHEMA`).
 2. **Render**: New > Blueprint on this repository, keep `jobsearch-hosted`,
-   fill in the values it asks for (`render.yaml`).
+   fill in the values it asks for (`render.yaml`), including who runs the service for the
+   privacy notice.
 3. **GitHub**: repository secrets `HOSTED_URL` (the Render URL) and
    `CRON_SECRET` (copied from Render), for `.github/workflows/cycle.yml`.
 4. Sign in, open Admin, make invite codes.
 
 ## Not yet
 
-- **Privacy policy and terms** (India's DPDP Act: consent, purpose, export,
-  deletion, breach handling) before anyone outside the maintainer's circle
-  joins.
+- **Privacy notice and terms: drafted, not final.** They are in `web/src/legal/`, shown at
+  `#/privacy` and `#/terms` before sign-in, and agreed to with a tick when a person joins;
+  the version and time are kept with the account. Its blanks - who runs the service, their
+  city, a contact email - are filled from `JOBSEARCH_OPERATOR`, `JOBSEARCH_CITY` and
+  `JOBSEARCH_PRIVACY_EMAIL`, so no operator's details enter this repository; one left unset
+  shows in [brackets], and the admin page names it. A lawyer's review is still needed. Changing the
+  text means changing `CONSENT_VERSION` (hosted/accounts.py), `LEGAL_VERSION`
+  (web/src/pages/Legal.tsx) and the version line in both files - a test holds them together.
 - **The Claude connector for every account** (OAuth), replacing today's
   one-person connector.
 - **Frontend tests** once the build machine runs Node 22 (vitest needs it).

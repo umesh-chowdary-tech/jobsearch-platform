@@ -3,20 +3,24 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, get } from "./api";
-import { loadConfig, onChange, signOut, token, type Config } from "./auth";
+import { appName, loadConfig, onChange, signOut, token, type Config } from "./auth";
 import type { Me, Overview } from "./types";
 import { ago, applyTheme, Icon, useDark, useRoute, type IconName } from "./ui";
-import { SignIn, Join } from "./pages/SignIn";
+import { SignIn, Join, Reconsent } from "./pages/SignIn";
 import { Today } from "./pages/Today";
 import { Tracker } from "./pages/Tracker";
 import { Posting } from "./pages/Posting";
 import { Setup } from "./pages/Setup";
 import { Settings } from "./pages/Settings";
 import { Admin } from "./pages/Admin";
+import { Legal } from "./pages/Legal";
 
 type Phase = "loading" | "signed-out" | "ready" | "error";
 
+const LEGAL = ["privacy", "terms"];
+
 export function App() {
+  const route = useRoute();
   const [config, setConfig] = useState<Config | null>(null);
   const [me, setMe] = useState<Me | null>(null);
   const [phase, setPhase] = useState<Phase>("loading");
@@ -42,6 +46,10 @@ export function App() {
     return () => off();
   }, [refresh]);
 
+  // The privacy notice and terms are readable by anyone, signed in or not.
+  if (LEGAL.includes(route.path[0]) && !(phase === "ready" && me?.member)) {
+    return <Legal doc={route.path[0]} standalone />;
+  }
   if (phase === "loading") return <div className="gate"><div className="card muted">Loading…</div></div>;
   if (phase === "error") {
     return (
@@ -53,6 +61,10 @@ export function App() {
   }
   if (phase === "signed-out" || !me || !config) return <SignIn config={config} onDone={refresh} />;
   if (!me.member) return <Join me={me} onJoined={setMe} onSignOut={async () => { await signOut(); refresh(); }} />;
+  if (me.consent_current === false) {
+    const out = async () => { await signOut(); refresh(); };
+    return <Reconsent me={me} onAgreed={setMe} onSignOut={out} settings={<Settings me={me} onSignOut={out} />} />;
+  }
   return <Shell me={me} onMe={setMe} onSignOut={async () => { await signOut(); refresh(); }} />;
 }
 
@@ -82,7 +94,7 @@ function Shell({ me, onMe, onSignOut }: { me: Me; onMe: (m: Me) => void; onSignO
 
   // Before a profile exists, setup (and settings) is all there is.
   let key = route.path[0] || "today";
-  if (!ready && !["setup", "settings", "admin"].includes(key)) key = "setup";
+  if (!ready && !["setup", "settings", "admin", ...LEGAL].includes(key)) key = "setup";
   const view = key === "p" ? "applied" : key;
 
   const page = (() => {
@@ -92,6 +104,7 @@ function Shell({ me, onMe, onSignOut }: { me: Me; onMe: (m: Me) => void; onSignO
       case "setup": return <Setup onSaved={() => get<Me>("/api/me").then(onMe)} />;
       case "settings": return <Settings me={me} onSignOut={onSignOut} />;
       case "admin": return me.admin ? <Admin /> : null;
+      case "privacy": case "terms": return <Legal doc={key} />;
       default: return <Today onCount={setCount} />;
     }
   })();
@@ -101,7 +114,7 @@ function Shell({ me, onMe, onSignOut }: { me: Me; onMe: (m: Me) => void; onSignO
   return (
     <div className="shell">
       <nav className="side" aria-label="Sections">
-        <div className="brand"><span className="mark"><Icon name="brief" /></span><span>Job search</span></div>
+        <div className="brand"><span className="mark"><Icon name="brief" /></span><span>{appName()}</span></div>
         {nav.map(n => (
           <a key={n.view} href={n.hash} className={view === n.view ? "on" : ""} aria-current={view === n.view ? "page" : undefined}>
             <Icon name={n.icon} /><span>{n.label}</span>
