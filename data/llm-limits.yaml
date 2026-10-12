@@ -38,7 +38,8 @@ openrouter:
 claude:
   # Anthropic API - job ratings (rank.py), resume summaries, outreach openers,
   # and drafting a profile from a resume (onboard.py: one request - about
-  # $0.10-0.25 on Opus 5.5, so a fortieth of that on Haiku 5.5, the default).
+  # $0.10-0.25 on Opus 5.5, so half that on Sonnet 5.5, which drafts it; see
+  # data/models.yaml for which model does which job).
   # Prepaid credit. When a cap is reached, the work waits for the next day.
   # The monthly line is the budget; the daily ones pace it.
   requests_per_day: 200

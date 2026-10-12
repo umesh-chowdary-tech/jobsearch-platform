@@ -30,9 +30,20 @@ against it.
 
 ## Providers
 
-Claude, Groq and OpenRouter, in the order `LLM_PROVIDERS` gives, read from
-`.env` (gitignored; see `.env.example`). Every one is capped in
-`data/llm-limits.yaml`, for everyone and for each person (docs/limits.md).
+Claude, Groq and OpenRouter, with their keys in `.env` (gitignored; see
+`.env.example`). `data/models.yaml` says which provider and model does each
+job:
+
+| Job | Model |
+|---|---|
+| Ranking postings (`rank`) | Groq's free tier reads new ones first; Claude Haiku 5.5 re-reads what it calls strong or possible |
+| A resume's summary line (`resume`) | Claude Sonnet 5.5 |
+| Drafting a profile from a resume (`setup`) | Claude Sonnet 5.5 |
+| A message's first line (`outreach`) | Groq (free) |
+| Sorting the inbox (`mail`) | Groq only, always |
+
+A job not listed there uses `LLM_PROVIDERS`, in order. Every provider is capped
+in `data/llm-limits.yaml`, for everyone and for each person (docs/limits.md).
 
 **The pipeline works without any of it.** Discovery, watching and passes 1–2
 never call a model. A missing key degrades the system rather than breaking it,
@@ -157,7 +168,8 @@ Opus 5.5 on the same prompt:
 
 Claude through the API agreed with the blind in-session ratings on 7 of 8.
 
-So Claude (`LLM_PROVIDERS=claude`) judges, and its judgement replaces Groq's.
+So Claude (the `rank` route in `data/models.yaml`) judges, and its judgement
+replaces Groq's.
 On a small prepaid budget Claude reads about eight postings a person a day,
 and many more new ones are kept. So ranking runs in two passes:
 

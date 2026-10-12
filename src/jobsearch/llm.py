@@ -15,11 +15,12 @@ import json
 import os
 import re
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
 import requests
+import yaml
 
 from .limits import Meter, cost_usd, estimate_tokens, load_limits, unpriced
 from .profile import Profile
@@ -47,6 +48,7 @@ class Provider:
     key_env: str
     model_env: str
     default_model: str
+    pinned: str = ""        # the model a job's route names (data/models.yaml)
 
     @property
     def key(self) -> str | None:
@@ -54,7 +56,7 @@ class Provider:
 
     @property
     def model(self) -> str:
-        return os.environ.get(self.model_env) or self.default_model
+        return self.pinned or os.environ.get(self.model_env) or self.default_model
 
     @property
     def configured(self) -> bool:
@@ -98,6 +100,17 @@ KNOWN: dict[str, Provider] = {
         default_model="claude-haiku-5-5",
     ),
 }
+
+def load_routes(root: Path) -> dict[str, dict[str, str]]:
+    """Which providers, and which of their models, each job uses - in order -
+    from data/models.yaml: {"rank": {"claude": "claude-haiku-5-5"}, ...}."""
+    p = Path(root) / "data" / "models.yaml"
+    if not p.exists():
+        return {}
+    doc = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    return {str(job): {str(k).strip().lower(): str(v or "").strip() for k, v in route.items()}
+            for job, route in doc.items() if isinstance(route, dict)}
+
 
 # Claude thinks as much as effort allows. Ranking is judgement over a short
 # list, and every thinking token is billed as output - "low" unless
@@ -198,24 +211,28 @@ def _extract_json(text: str) -> dict[str, Any] | None:
 class LLM:
     def __init__(self, prof: Profile | None = None, timeout: float = 60.0,
                  providers: list[str] | None = None, purpose: str = "") -> None:
-        """`providers` pins the chain, ignoring LLM_PROVIDERS: the inbox sends
-        email text to Groq only, and must never fall back to anything else.
+        """`providers` pins the chain: the inbox sends email text to Groq
+        only, and must never fall back to anything else. Otherwise the job's
+        route in data/models.yaml picks the providers and their models, and a
+        job with no route uses LLM_PROVIDERS.
 
         With a profile, every request is held to data/llm-limits.yaml and
         counted against that person (see limits.py); `purpose` ("rank",
-        "mail", ...) is what the day's tokens are counted under, and "mail"
-        may use the share kept for it."""
+        "mail", ...) is the job, what the day's tokens are counted under, and
+        "mail" may use the share kept for it."""
         self.meter = Meter(prof.root, prof.id) if prof else None
         self.purpose = purpose
         if prof:
             load_dotenv(prof.env)
-        order = [
-            p.strip().lower()
-            for p in (providers if providers is not None
-                      else os.environ.get("LLM_PROVIDERS", "groq,openrouter").split(","))
-            if p.strip()
-        ]
-        self.chain = [KNOWN[n] for n in order if n in KNOWN]
+        route = (load_routes(prof.root).get(purpose) or {}) if prof and purpose else {}
+        if providers is not None:
+            names = list(providers)
+        elif route:
+            names = list(route)
+        else:
+            names = os.environ.get("LLM_PROVIDERS", "groq,openrouter").split(",")
+        order = [n.strip().lower() for n in names if n.strip()]
+        self.chain = [replace(KNOWN[n], pinned=route.get(n, "")) for n in order if n in KNOWN]
         self.timeout = timeout
 
     @property
