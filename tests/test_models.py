@@ -30,7 +30,7 @@ def test_each_job_gets_its_own_model(prof, monkeypatch):
     monkeypatch.delenv("CLAUDE_MODEL", raising=False)
     assert _chain(LLM(prof, purpose="rank")) == [("claude", "claude-haiku-5-5")]
     assert _chain(LLM(prof, purpose="resume")) == [("claude", "claude-sonnet-5-5")]
-    assert _chain(LLM(prof, purpose="setup")) == [("claude", "claude-sonnet-5-5")]
+    assert _chain(LLM(prof, purpose="setup")) == [("claude", "claude-opus-5-5")]
     assert _chain(LLM(prof, purpose="outreach")) == [("groq", "openai/gpt-oss-120b")]
     # A job with no route, and a request with no job, follow LLM_PROVIDERS.
     assert [p.name for p in LLM(prof, purpose="other").chain] == ["openrouter"]

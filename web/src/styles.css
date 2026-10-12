@@ -258,6 +258,19 @@ label.consent input { margin-top: 2px; flex-shrink: 0; width: auto; }
 .toast { position: fixed; right: 20px; bottom: 20px; z-index: 9; background: var(--navy); color: #fff;
          padding: 10px 16px; border-radius: 10px; font-size: 13px; box-shadow: 0 8px 24px rgba(10,22,40,.25); max-width: calc(100vw - 40px); }
 
+/* ── setup: sources, and where files disagree ──────────────────────────── */
+.sources { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.source { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--border);
+          border-radius: 10px; background: var(--card); }
+.source > .i { width: 18px; height: 18px; color: var(--accent); flex-shrink: 0; margin-top: 2px; }
+.grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.setup-item.disputed { border-left-color: var(--warn); }
+.choices { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: grid; gap: 8px; }
+.choices.conflict { border-color: var(--warn); background: var(--warn-soft); color: var(--warn-ink); }
+.choices.conflict .src { color: inherit; opacity: .8; }
+.choice { display: flex; gap: 10px; align-items: center; }
+.chip.listed { border-style: dashed; opacity: .8; }
+
 /* ── admin ─────────────────────────────────────────────────────────────── */
 .notice { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap;
           background: var(--warn-soft); color: var(--warn-ink); border-radius: 10px; padding: 10px 14px; margin: 0 0 12px; font-size: 13.5px; }

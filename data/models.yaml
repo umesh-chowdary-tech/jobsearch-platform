@@ -18,10 +18,11 @@ rank:
 resume:
   claude: claude-sonnet-5-5
 
-# Drafting profile facts from an uploaded resume, for the person to confirm.
-# Once per person, and every resume after is built from what it finds.
+# Drafting profile facts from a person's resumes, portfolio and GitHub, for
+# them to confirm. Once per person, and every resume after is built from what
+# it finds - so the strongest model, thinking hard (onboard.py asks for it).
 setup:
-  claude: claude-sonnet-5-5
+  claude: claude-opus-5-5
 
 # A first line for a message to someone you know - short, and free.
 outreach:

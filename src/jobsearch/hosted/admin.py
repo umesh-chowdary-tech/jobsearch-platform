@@ -40,7 +40,7 @@ JOBS = {
 CLAUDE_MODELS = {"claude-haiku-5-5": "Claude Haiku 5.5", "claude-sonnet-5-5": "Claude Sonnet 5.5",
                  "claude-opus-5-5": "Claude Opus 5.5"}
 # The most the page may set, so a slip of the keyboard can't spend much.
-CEILING = {"usd_per_month": 200.0, "usd_per_day": 20.0, "person_usd_per_day": 5.0}
+CEILING = {"usd_per_month": 200.0, "usd_per_day": 20.0, "person_usd_per_day": 5.0, "person_usd_per_month": 50.0}
 
 
 class AdminError(Exception):
@@ -341,7 +341,8 @@ def overview(svc: Service, missing_settings: list[str]) -> dict[str, Any]:
         "settings": {
             "ai_paused": bool(over.get("paused")),
             "caps": {"usd_per_month": claude.get("usd_per_month"), "usd_per_day": claude.get("usd_per_day"),
-                     "person_usd_per_day": (claude.get("per_profile") or {}).get("usd_per_day")},
+                     "person_usd_per_day": (claude.get("per_profile") or {}).get("usd_per_day"),
+                     "person_usd_per_month": (claude.get("per_profile") or {}).get("usd_per_month")},
             "ceiling": CEILING,
             "routes": [{"job": job, "label": spec["label"],
                         "current": _route_id(routes.get(job) or {}), "choices": opts[job]}
@@ -419,10 +420,11 @@ def act(svc: Service, by: str, body: dict[str, Any]) -> dict[str, Any]:
             if key in body:
                 caps[key] = _money(body[key], CEILING[key])
                 changed.append(f"{key} ${caps[key]:.2f}")
-        if "person_usd_per_day" in body:
-            v = _money(body["person_usd_per_day"], CEILING["person_usd_per_day"])
-            caps.setdefault("per_profile", {})["usd_per_day"] = v
-            changed.append(f"person_usd_per_day ${v:.2f}")
+        for key, cap in (("person_usd_per_day", "usd_per_day"), ("person_usd_per_month", "usd_per_month")):
+            if key in body:
+                v = _money(body[key], CEILING[key])
+                caps.setdefault("per_profile", {})[cap] = v
+                changed.append(f"{key} ${v:.2f}")
         if not changed:
             raise AdminError("nothing to change")
         save_overrides(root, over)

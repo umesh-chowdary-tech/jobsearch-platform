@@ -2,7 +2,7 @@
 
 **Draft for the invite-only beta, not yet reviewed by a lawyer.**
 
-Version 2026-10-12-draft. This notice explains what this service keeps about you, why, who it is shared with, and how you control it. It is written for India's Digital Personal Data Protection Act, 2023 and its Rules.
+Version 2026-10-12.2-draft. This notice explains what this service keeps about you, why, who it is shared with, and how you control it. It is written for India's Digital Personal Data Protection Act, 2023 and its Rules.
 
 ## Who runs this service
 
@@ -13,20 +13,21 @@ Version 2026-10-12-draft. This notice explains what this service keeps about you
 | What | Why |
 |---|---|
 | Your email address, from signing in | To sign you in and to contact you about your account |
-| The resume you upload, and the text read from it | To draft your profile facts for you to confirm |
+| The text of the resumes you add (not the files themselves), of your portfolio page and public GitHub repositories if you add them, and any note you write | To draft your profile facts for you to confirm |
+| Your LinkedIn, GitHub and portfolio links, if you give them | To put them on the resumes built for you |
 | The facts, skills and preferences you confirm | To find and rank jobs for you and to build your resumes |
 | The jobs ranked for you, your decisions on them, and the resumes built | To show you your search and where each application stands |
 | Your "good match?" answers | To check and improve how well jobs are ranked |
 | How many AI requests were made for you, and what they cost | To keep each person within their limit |
 | The day you last used the service (the day only) | To count how many people use it each week |
 
-We keep nothing else. We do not read your email inbox, we do not use your data for advertising, and we never sell it.
+We keep nothing else. Details a resume often carries that we don't need - date of birth, Aadhaar, PAN or passport numbers, family members' names, marital status, religion, home address and references - are removed as the file is read: we never keep them or send them anywhere. We never read your LinkedIn page; we only keep its address. We do not read your email inbox, we do not use your data for advertising, and we never sell it.
 
 ## AI providers
 
 Some steps send text to an AI model run by another company:
 
-- **Drafting your profile:** the text of your resume, with your email, phone number and links removed, goes to Anthropic (Claude).
+- **Drafting your profile:** the text of your resumes, portfolio page, GitHub repositories and note, with your email, phone number, links and the personal details above removed, goes to Anthropic (Claude).
 - **Ranking jobs and writing a resume's summary line:** your job history (titles, employers, dates), education, confirmed facts and skills go to Anthropic (Claude) and Groq, without your name or contact details.
 
 These providers process the text only to answer the request; their terms for this kind of use say they do not train their models on it.

@@ -40,7 +40,9 @@ export async function upload<T>(path: string, file: File): Promise<T> {
   const ext = (file.name.match(/\.[^.]+$/) || [""])[0].toLowerCase();
   const type = UPLOAD_TYPES[ext];
   if (!type) throw new ApiError(415, "Upload a PDF, a Word file (.docx) or a plain text file");
-  return parse<T>(await fetch(path, { method: "POST", headers: await headers({ "Content-Type": type }), body: file }));
+  return parse<T>(await fetch(path, {
+    method: "POST", headers: await headers({ "Content-Type": type, "X-Filename": encodeURIComponent(file.name) }), body: file,
+  }));
 }
 
 /** A signed-in file (a resume, an export) as a blob - links can't carry the token. */

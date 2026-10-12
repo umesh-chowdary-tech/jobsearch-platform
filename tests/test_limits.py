@@ -337,3 +337,69 @@ def test_the_reply_is_counted_at_the_price_of_the_model_that_answered(claude, mo
     _FakeAnthropic.reply = reply
     assert LLM(P(claude), providers=["claude"], purpose="rank").ask_json("sys", "postings", max_tokens=500).ok
     assert Meter(claude).used("claude")["usd"] == 0.0684
+
+
+# ── setup's room, and each person's month ────────────────────────────────────
+
+def _person_root(root):
+    (root / "data" / "llm-limits.yaml").write_text(
+        "claude: {requests_per_day: 100, tokens_per_day: 10000000, usd_per_day: 10.0, usd_per_month: 50.0,\n"
+        "         per_profile: {requests_per_day: 40, usd_per_day: 0.30, setup_usd_per_day: 3.00, usd_per_month: 10.0}}\n")
+    return root
+
+
+def test_setup_may_spend_more_on_its_day_than_everyday_work(root):
+    m = Meter(_person_root(root), "neha")
+    m.record("claude", 1000, "setup", usd=0.25)
+    assert "daily spend limit" in m.check("claude", 100, "rank", usd=0.10)
+    assert m.check("claude", 100, "setup", usd=1.50) == ""
+    assert "daily spend limit" in m.check("claude", 100, "setup", usd=3.00)
+
+
+def test_each_person_has_a_month_whatever_the_day(root, monkeypatch):
+    import datetime as dt
+
+    class Day(dt.date):
+        @classmethod
+        def today(cls):
+            return cls(2026, 10, 20)
+    monkeypatch.setattr("jobsearch.limits.date", Day)
+    usage_file(root).parent.mkdir(parents=True, exist_ok=True)
+    usage_file(root).write_text(json.dumps({"days": {
+        f"2026-10-{d:02d}": {"claude": {"requests": 2, "tokens": 9000, "usd": 0.5,
+                                        "by_profile": {"neha": {"requests": 2, "tokens": 9000, "usd": 0.5}}}}
+        for d in range(1, 20)}}))
+    m = Meter(_person_root(root), "neha")
+    assert "neha's monthly spend limit reached ($9.50 of $10.00" in m.check("claude", 100, "setup", usd=0.60)
+    assert Meter(root, "someone-else").check("claude", 100, "setup", usd=0.60) == ""
+
+
+def test_setup_thinks_hard_and_streams_a_long_answer(claude):
+    class Stream:
+        def __init__(self, reply):
+            self.reply = reply
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def get_final_message(self):
+            return self.reply
+
+    def stream(**kw):
+        _FakeAnthropic.sent.append(kw)
+        return Stream(_Msg('{"name": null}'))
+    _FakeAnthropic.stream = staticmethod(stream)
+    try:
+        ans = LLM(P(claude), providers=["claude"], purpose="setup").ask_json("sys", "resume", max_tokens=16000,
+                                                                            effort="high")
+    finally:
+        del _FakeAnthropic.stream
+    kw = _FakeAnthropic.sent[0]
+    assert ans.ok and kw["output_config"] == {"effort": "high"} and kw["max_tokens"] == 48000
+    # Everyday requests stay as they were: not streamed, low effort.
+    _FakeAnthropic.reply = _Msg('{"rankings": []}')
+    LLM(P(claude), providers=["claude"], purpose="rank").ask_json("sys", "x", max_tokens=4000)
+    assert _FakeAnthropic.sent[1]["output_config"] == {"effort": "low"} and _FakeAnthropic.sent[1]["max_tokens"] == 10000

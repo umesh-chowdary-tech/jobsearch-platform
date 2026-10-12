@@ -27,7 +27,7 @@ def _free_port() -> int:
 @pytest.fixture
 def live(tmp_path, monkeypatch):
     shutil.copytree(ROOT / "data", tmp_path / "data")
-    monkeypatch.setattr(onboard, "LLM", lambda prof, purpose="": FakeLLM(ANSWER))
+    monkeypatch.setattr(onboard, "LLM", lambda prof, **kw: FakeLLM(ANSWER))
     port = _free_port()
     app = srv.App(Profile(tmp_path, "neha"), port)          # no profile yet: setup mode
     httpd = ThreadingHTTPServer(("127.0.0.1", port), srv.make_handler(app))

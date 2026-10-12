@@ -113,7 +113,23 @@ export interface SetupItem {
   entry?: string;
   text?: string;
   name?: string;
+  sources?: { src: string; quote: string }[];
+  alternatives?: ({ sources: { src: string; quote: string }[] } & Record<string, unknown>)[];
+  conflict?: string;
+  listed_only?: boolean;
   [key: string]: unknown;
+}
+
+export interface SetupSource {
+  id: string;
+  kind: "resume" | "portfolio" | "github" | "note";
+  name: string;
+  lines: number;
+  notes: string[];
+  drafted: boolean;
+  drafted_by?: string | null;
+  url?: string | null;
+  will_send?: string;
 }
 
 export interface Prefs {
@@ -133,13 +149,17 @@ export interface SetupState {
   status: "new" | "uploaded" | "drafted" | "saved";
   lines: number;
   file: string | null;
+  sources: SetupSource[];
+  links: { linkedin?: string; github?: string; portfolio?: string };
   items: SetupItem[];
-  dropped: { what: string; why: string; source?: string; entry?: string }[];
-  progress: { confirmed: number; pending: number; removed: number };
+  dropped: { what: string; why: string; source?: string; entry?: string; src?: string }[];
+  progress: { confirmed: number; pending: number; removed: number; conflicts: number };
   skills: { name: string; tier: string; backed_by: number }[];
   prefs: Prefs;
   drafted_by: string | null;
+  merge_notes: string[];
   skip_options: string[];
+  limits: { files: number; pages: number };
   will_send: string;
   levels: Record<string, string>;
   result?: { entries: number; skills: number };
@@ -192,8 +212,9 @@ export interface AdminOverview {
   };
   settings: {
     ai_paused: boolean;
-    caps: { usd_per_month: number | null; usd_per_day: number | null; person_usd_per_day: number | null };
-    ceiling: { usd_per_month: number; usd_per_day: number; person_usd_per_day: number };
+    caps: { usd_per_month: number | null; usd_per_day: number | null; person_usd_per_day: number | null;
+            person_usd_per_month: number | null };
+    ceiling: { usd_per_month: number; usd_per_day: number; person_usd_per_day: number; person_usd_per_month: number };
     routes: { job: string; label: string; current: string; choices: { id: string; label: string }[] }[];
   };
   log: { at: string; by: string; action: string; target: string; detail: string }[];

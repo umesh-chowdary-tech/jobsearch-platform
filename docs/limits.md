@@ -20,7 +20,7 @@ The shipped values are starting points for a small beta:
 |---|---|---|---|
 | Groq | 950 requests, 190,000 tokens; 25,000 kept for the inbox | 200 requests, 40,000 tokens | Just under the free tier (1,000 and 200,000). Ranking can't use up the share kept for unclear emails |
 | OpenRouter | off (0) | - | Paid. A rate-limit fallback once spent its credits before it answered 402 |
-| Claude | $0.50 ($0.03 of it kept for drafts), $4.00 a month | 40 requests, $0.30 | Prepaid credit; the monthly line is the budget. Ranking on Haiku 5.5, resumes and setup on Sonnet 5.5 (`data/models.yaml`). Set for Opus 5.5, where a person's daily share fitted one setup draft; Sonnet 5.5 costs half as much per token, Haiku 5.5 a fortieth |
+| Claude | $10.00 ($0.03 of it kept for drafts), $50.00 a month | 40 requests, $0.30; $3.00 on the day setup runs; $10.00 a month | Prepaid credit; the monthly lines are the budget - everyone's and each person's. Ranking on Haiku 5.5, resumes on Sonnet 5.5, setup on Opus 5.5 thinking hard (`data/models.yaml`); setup reads a person's whole history once, so its day has more room |
 | Jev (TypeSafe) | 1,000 requests, 1,000,000 input tokens; 10,000,000 a month | 300 requests | $0.042 per million input tokens: at most about $0.04 a day |
 
 - **A provider not in the file is not used.** A new provider gets a limit
