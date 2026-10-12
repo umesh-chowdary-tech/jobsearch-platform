@@ -3,6 +3,11 @@ import { post } from "../api";
 import { devSignIn, emailLink, google, type Config } from "../auth";
 import type { Me } from "../types";
 import { Icon } from "../ui";
+import { LEGAL_VERSION } from "./Legal";
+
+function LegalLinks() {
+  return <p className="muted small"><a href="#/privacy">Privacy notice</a> · <a href="#/terms">Terms of use</a></p>;
+}
 
 function Brand() {
   return <div className="brand"><span className="mark"><Icon name="brief" /></span><span>Job search</span></div>;
@@ -50,6 +55,7 @@ export function SignIn({ config, onDone }: { config: Config | null; onDone: () =
         )}
         {dev && <p className="muted small">Dev sign-in: any email works, on this machine only.</p>}
         <p className="muted small">Invite only for now. You can export or delete everything kept for you at any time.</p>
+        <LegalLinks />
       </form>
     </div>
   );
@@ -57,11 +63,13 @@ export function SignIn({ config, onDone }: { config: Config | null; onDone: () =
 
 export function Join({ me, onJoined, onSignOut }: { me: Me; onJoined: (m: Me) => void; onSignOut: () => void }) {
   const [code, setCode] = useState("");
+  const [agree, setAgree] = useState(false);
   const [err, setErr] = useState("");
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!code.trim()) { setErr("Enter your invite code"); return; }
-    try { onJoined(await post<Me>("/api/invite", { code })); }
+    if (!agree) { setErr("Tick the box to agree to the privacy notice and terms"); return; }
+    try { onJoined(await post<Me>("/api/invite", { code, consent: LEGAL_VERSION })); }
     catch (x) { setErr((x as Error).message); }
   };
   return (
@@ -73,6 +81,11 @@ export function Join({ me, onJoined, onSignOut }: { me: Me; onJoined: (m: Me) =>
         <label htmlFor="code">Invite code</label>
         <input id="code" placeholder="ABCD-EFGH" autoComplete="off" value={code}
                onChange={e => { setCode(e.target.value); setErr(""); }} />
+        <label className="inline consent">
+          <input type="checkbox" checked={agree} onChange={e => { setAgree(e.target.checked); setErr(""); }} />
+          <span>I'm 18 or older, and I agree to the <a href="#/privacy" target="_blank" rel="noopener">privacy
+            notice</a> and the <a href="#/terms" target="_blank" rel="noopener">terms of use</a>.</span>
+        </label>
         {err && <p className="fail small">{err}</p>}
         <button className="primary" type="submit">Join</button>
         <button type="button" className="quiet" onClick={onSignOut}>Sign out</button>

@@ -65,6 +65,7 @@ export interface Me {
   member: boolean;
   profile_ready: boolean;
   admin: boolean;
+  consent?: { version: string; at: string } | null;
 }
 
 export interface Overview {

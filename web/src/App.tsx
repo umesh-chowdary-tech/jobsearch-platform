@@ -13,10 +13,14 @@ import { Posting } from "./pages/Posting";
 import { Setup } from "./pages/Setup";
 import { Settings } from "./pages/Settings";
 import { Admin } from "./pages/Admin";
+import { Legal } from "./pages/Legal";
 
 type Phase = "loading" | "signed-out" | "ready" | "error";
 
+const LEGAL = ["privacy", "terms"];
+
 export function App() {
+  const route = useRoute();
   const [config, setConfig] = useState<Config | null>(null);
   const [me, setMe] = useState<Me | null>(null);
   const [phase, setPhase] = useState<Phase>("loading");
@@ -42,6 +46,10 @@ export function App() {
     return () => off();
   }, [refresh]);
 
+  // The privacy notice and terms are readable by anyone, signed in or not.
+  if (LEGAL.includes(route.path[0]) && !(phase === "ready" && me?.member)) {
+    return <Legal doc={route.path[0]} standalone />;
+  }
   if (phase === "loading") return <div className="gate"><div className="card muted">Loading…</div></div>;
   if (phase === "error") {
     return (
@@ -82,7 +90,7 @@ function Shell({ me, onMe, onSignOut }: { me: Me; onMe: (m: Me) => void; onSignO
 
   // Before a profile exists, setup (and settings) is all there is.
   let key = route.path[0] || "today";
-  if (!ready && !["setup", "settings", "admin"].includes(key)) key = "setup";
+  if (!ready && !["setup", "settings", "admin", ...LEGAL].includes(key)) key = "setup";
   const view = key === "p" ? "applied" : key;
 
   const page = (() => {
@@ -92,6 +100,7 @@ function Shell({ me, onMe, onSignOut }: { me: Me; onMe: (m: Me) => void; onSignO
       case "setup": return <Setup onSaved={() => get<Me>("/api/me").then(onMe)} />;
       case "settings": return <Settings me={me} onSignOut={onSignOut} />;
       case "admin": return me.admin ? <Admin /> : null;
+      case "privacy": case "terms": return <Legal doc={key} />;
       default: return <Today onCount={setCount} />;
     }
   })();

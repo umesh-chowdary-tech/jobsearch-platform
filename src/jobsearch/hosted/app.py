@@ -156,7 +156,8 @@ class Service:
         row = accounts.user(self.shared, who.sub)
         prof = Profile(self.root, row["profile"]) if row else None
         return {"email": who.email, "member": row is not None,
-                "profile_ready": bool(prof and prof.exists()), "admin": bool(who.email and who.email in accounts.admins())}
+                "profile_ready": bool(prof and prof.exists()), "admin": bool(who.email and who.email in accounts.admins()),
+                "consent": (row or {}).get("consent")}
 
 
 def _export(prof: Profile) -> Response:
@@ -236,6 +237,7 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
         # The anon key is public by design: it lets the page start a sign-in,
         # nothing more. Every request here is checked by its token.
         return {"auth": "dev" if verifier.dev else "supabase", "supabase_url": supabase_url,
+                "consent_version": accounts.CONSENT_VERSION,
                 "supabase_anon_key": "" if verifier.dev else os.environ.get("SUPABASE_ANON_KEY", "")}
 
     if verifier.dev:
@@ -265,7 +267,8 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
         def go() -> Any:
             who = svc.who(request)
             try:
-                accounts.join(svc.shared, who.sub, who.email, str(body.get("code") or ""))
+                accounts.join(svc.shared, who.sub, who.email, str(body.get("code") or ""),
+                              str(body.get("consent") or ""))
             except accounts.AccountError as exc:
                 raise ApiError(400, str(exc)) from exc
             return svc.me(who)

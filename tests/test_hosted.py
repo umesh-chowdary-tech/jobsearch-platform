@@ -18,6 +18,7 @@ jwt = pytest.importorskip("jwt")
 from fastapi.testclient import TestClient  # noqa: E402
 
 from jobsearch.hosted import accounts  # noqa: E402
+from jobsearch.hosted.accounts import CONSENT_VERSION  # noqa: E402
 from jobsearch.hosted.app import FILE_CSP, create_app  # noqa: E402
 from jobsearch.hosted.auth import AuthError, Verifier  # noqa: E402
 from jobsearch.profile import Profile, shared_var  # noqa: E402
@@ -53,7 +54,7 @@ def env(tmp_path, monkeypatch):
 
 def joined(client, root, sub=ALICE, email="alice@example.com"):
     code = accounts.create_invites(shared_var(root), 1)[0]
-    r = client.post("/api/invite", json={"code": code}, headers=auth(token(sub, email)))
+    r = client.post("/api/invite", json={"code": code, "consent": CONSENT_VERSION}, headers=auth(token(sub, email)))
     assert r.status_code == 200 and r.json()["member"], r.text
     return Profile(root, accounts.profile_id(sub))
 
@@ -108,7 +109,8 @@ def test_an_asymmetric_token_is_checked_against_the_published_key():
 def test_signed_in_without_an_invite_reaches_only_me_and_invite(env):
     client, _ = env
     me = client.get("/api/me", headers=auth(token())).json()
-    assert me == {"email": "alice@example.com", "member": False, "profile_ready": False, "admin": False}
+    assert me == {"email": "alice@example.com", "member": False, "profile_ready": False, "admin": False,
+                  "consent": None}
     r = client.get("/api/today", headers=auth(token()))
     assert r.status_code == 403 and r.json()["join"] is True
 
@@ -116,11 +118,12 @@ def test_signed_in_without_an_invite_reaches_only_me_and_invite(env):
 def test_an_invite_is_used_once(env):
     client, root = env
     code = accounts.create_invites(shared_var(root), 1)[0]
-    assert client.post("/api/invite", json={"code": "WRNG-CODE"}, headers=auth(token())).status_code == 400
-    assert client.post("/api/invite", json={"code": code.lower().replace("-", " ")},
+    yes = {"consent": CONSENT_VERSION}
+    assert client.post("/api/invite", json={"code": "WRNG-CODE", **yes}, headers=auth(token())).status_code == 400
+    assert client.post("/api/invite", json={"code": code.lower().replace("-", " "), **yes},
                        headers=auth(token())).json()["member"]                       # typed loosely is fine
-    assert client.post("/api/invite", json={"code": code}, headers=auth(token())).status_code == 200
-    r = client.post("/api/invite", json={"code": code}, headers=auth(token(BOB, "bob@example.com")))
+    assert client.post("/api/invite", json={"code": code, **yes}, headers=auth(token())).status_code == 200
+    r = client.post("/api/invite", json={"code": code, **yes}, headers=auth(token(BOB, "bob@example.com")))
     assert r.status_code == 400 and "already been used" in r.json()["error"]
 
 
@@ -292,3 +295,35 @@ def test_the_dev_email_check_takes_no_time_on_a_long_input():
     started = time.time()
     assert not plausible_email("a@" + "b" * 60_000)          # CodeQL: a backtracking regex was here
     assert time.time() - started < 0.1
+
+
+# ── consent ──────────────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("consent", [None, "", "2020-01-01", True])
+def test_joining_needs_agreement_to_the_current_notice(env, consent):
+    client, root = env
+    code = accounts.create_invites(shared_var(root), 1)[0]
+    body = {"code": code} if consent is None else {"code": code, "consent": consent}
+    r = client.post("/api/invite", json=body, headers=auth(token()))
+    assert r.status_code == 400 and "agree" in r.json()["error"]
+    assert accounts.load(shared_var(root))["invites"][code]["used_by"] is None      # the code isn't spent
+
+
+def test_which_notice_was_agreed_to_and_when_is_kept(env):
+    client, root = env
+    joined(client, root)
+    consent = client.get("/api/me", headers=auth(token())).json()["consent"]
+    assert consent["version"] == CONSENT_VERSION and consent["at"]
+    assert client.get("/api/config").json()["consent_version"] == CONSENT_VERSION
+
+
+def test_the_notice_the_page_and_the_server_name_one_version():
+    """Change the privacy notice, and all three must move together - or a
+    person would be recorded as agreeing to text they never saw."""
+    import re
+    web = ROOT / "web" / "src"
+    page = re.search(r'LEGAL_VERSION = "([^"]+)"', (web / "pages" / "Legal.tsx").read_text(encoding="utf-8")).group(1)
+    for doc in ("privacy.md", "terms.md"):
+        text = (web / "legal" / doc).read_text(encoding="utf-8")
+        assert f"Version {CONSENT_VERSION}." in text, doc
+    assert page == CONSENT_VERSION

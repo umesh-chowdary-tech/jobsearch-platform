@@ -111,9 +111,12 @@ What needs the maintainer's accounts, in order:
 
 ## Not yet
 
-- **Privacy policy and terms** (India's DPDP Act: consent, purpose, export,
-  deletion, breach handling) before anyone outside the maintainer's circle
-  joins.
+- **Privacy notice and terms: drafted, not final.** They are in `web/src/legal/`, shown at
+  `#/privacy` and `#/terms` before sign-in, and agreed to with a tick when a person joins;
+  the version and time are kept with the account. Placeholders in [brackets] (who runs the
+  service, a contact email, a city) and a lawyer's review are still needed. Changing the
+  text means changing `CONSENT_VERSION` (hosted/accounts.py), `LEGAL_VERSION`
+  (web/src/pages/Legal.tsx) and the version line in both files - a test holds them together.
 - **The Claude connector for every account** (OAuth), replacing today's
   one-person connector.
 - **Frontend tests** once the build machine runs Node 22 (vitest needs it).

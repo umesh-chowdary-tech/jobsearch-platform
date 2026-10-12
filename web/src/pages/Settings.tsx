@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { download, post } from "../api";
 import type { Me } from "../types";
-import { applyTheme, getTheme, useToast, type Theme } from "../ui";
+import { applyTheme, day, getTheme, useToast, type Theme } from "../ui";
 
 const DELETE_WORDS = "delete my account";
 
@@ -41,6 +41,14 @@ export function Settings({ me, onSignOut }: { me: Me; onSignOut: () => void }) {
         <div><button onClick={() => download("/api/account/export", "jobsearch-export.zip").catch(e => toast((e as Error).message))}>
           Download everything (zip)
         </button></div>
+      </div>
+
+      <div className="card stack" style={{ marginTop: 12 }}>
+        <h3>Privacy</h3>
+        <p className="small">
+          <a href="#/privacy">Privacy notice</a> · <a href="#/terms">Terms of use</a>
+          {me.consent && <span className="muted"> · you agreed to version {me.consent.version} on {day(me.consent.at)}</span>}
+        </p>
       </div>
 
       <div className="card stack" style={{ marginTop: 12 }}>
