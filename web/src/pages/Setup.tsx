@@ -6,10 +6,10 @@
 
 import { useCallback, useEffect, useState, type DragEvent } from "react";
 import { get, post, upload } from "../api";
-import type { SetupItem, SetupSource, SetupState } from "../types";
+import type { SetupItem, SetupQuestion, SetupSource, SetupState } from "../types";
 import { go, Icon, useToast, type IconName } from "../ui";
 
-const STEPS = ["Your files", "Read", "Check facts", "Skills", "Preferences"];
+const STEPS = ["Your files", "Read", "Questions", "Check facts", "Skills", "Preferences"];
 const TIERS: [string, string][] = [["core", "Strong - lead with it"], ["working", "Used it"],
   ["incidental", "Touched it - never listed"], ["remove", "Not a skill of mine"]];
 const KINDS: [string, string][] = [["work", "Work"], ["project", "Projects"], ["education", "Education"],
@@ -24,8 +24,10 @@ type Names = Record<string, string>;
 
 function Stepper({ s }: { s: SetupState }) {
   const waiting = s.sources.some(x => !x.drafted);
+  const qs = s.interview.questions;
+  const asking = !qs.length || qs.some(q => (!q.answer && !q.skipped) || (q.answer && !q.applied));
   const now = s.status === "saved" && !waiting ? STEPS.length : !s.sources.length ? 0 : waiting ? 1
-    : s.progress.pending ? 2 : 3;
+    : asking ? 2 : s.progress.pending ? 3 : 4;
   return (
     <ol className="stepper" aria-label="Setup steps">
       {STEPS.map((label, i) => (
@@ -246,9 +248,46 @@ function Item({ it, fields, step, names }: { it: SetupItem; fields: [string, str
   );
 }
 
-function Entry({ e, items, step, names }: { e: SetupItem; items: SetupItem[]; step: Step; names: Names }) {
+function Labels({ e, step, angles }: { e: SetupItem; step: Step; angles: string[] }) {
+  const mine = e.angles || [];
+  return (
+    <div className="row small">
+      <span className="muted">What it shows:</span>
+      {mine.map(a => (
+        <span key={a} className="chip confirmed">{a}
+          <button aria-label={`Remove ${a}`} onClick={() => step("labels", { entry: e.id, angles: mine.filter(x => x !== a) })}>✕</button>
+        </span>
+      ))}
+      <select aria-label="Add what this work shows" value="" style={{ width: "auto" }}
+              onChange={ev => ev.target.value && step("labels", { entry: e.id, angles: [...mine, ev.target.value] })}>
+        <option value="">+ add</option>
+        {angles.filter(a => !mine.includes(a)).map(a => <option key={a} value={a}>{a}</option>)}
+      </select>
+      <label className="inline"><input type="checkbox" checked={e.priority === "low"}
+             onChange={ev => step("labels", { entry: e.id, cut_first: ev.target.checked })} /> Cut first when a resume runs long</label>
+    </div>
+  );
+}
+
+function Result({ m, step, names }: { m: SetupItem; step: Step; names: Names }) {
+  const label = m.measured === true ? "Result - measured" : m.measured === false
+    ? "Result - an estimate (never printed as a number)" : "Result - was this measured, or an estimate?";
+  return (
+    <div className="stack">
+      <Item key={`${m.id}-${m.state}-${m.measured}`} it={m} step={step} names={names} fields={[["claim", label, true]]} />
+      <div className="row small" style={{ marginLeft: 17 }}>
+        <button className={m.measured === true ? "primary" : ""} onClick={() => step("item", { id: m.id, fields: { measured: true } })}>Measured</button>
+        <button className={m.measured === false ? "primary" : ""} onClick={() => step("item", { id: m.id, fields: { measured: false } })}>An estimate</button>
+      </div>
+    </div>
+  );
+}
+
+function Entry({ e, items, step, names, angles }: { e: SetupItem; items: SetupItem[]; step: Step; names: Names; angles: string[] }) {
   const [fact, setFact] = useState("");
   const facts = items.filter(i => i.kind === "fact" && i.entry === e.id);
+  const results = items.filter(i => i.kind === "metric" && i.entry === e.id);
+  const notes = items.filter(i => i.kind === "note" && i.entry === e.id);
   const tech = items.filter(i => i.kind === "tech" && i.entry === e.id);
   const pending = tech.filter(t => t.state === "pending" && !t.listed_only);
   return (
@@ -257,7 +296,11 @@ function Entry({ e, items, step, names }: { e: SetupItem; items: SetupItem[]; st
             fields={[["title", "Name"], ["where", "Where"], ["period", "When"], ["headline", "What it was", true]]} />
       {e.state !== "removed" && (
         <div className="stack">
+          <Labels e={e} step={step} angles={angles} />
           {facts.map(f => <Item key={`${f.id}-${f.state}-${f.conflict}`} it={f} step={step} names={names} fields={[["text", "", true]]} />)}
+          {results.map(m => <Result key={m.id} m={m} step={step} names={names} />)}
+          {notes.map(n => <Item key={`${n.id}-${n.state}`} it={n} step={step} names={names}
+                                fields={[["text", "Note for whoever words your resume - not printed", true]]} />)}
           <div className="row">
             <input type="text" style={{ flex: 1, minWidth: 200 }} value={fact} onChange={x => setFact(x.target.value)}
                    placeholder="Add a fact in your own words (numbers only if they are true)" />
@@ -293,6 +336,65 @@ function Entry({ e, items, step, names }: { e: SetupItem; items: SetupItem[]; st
   );
 }
 
+function QuestionRow({ q, step }: { q: SetupQuestion; step: Step }) {
+  const [text, setText] = useState(q.answer || "");
+  if (q.applied) {
+    return (
+      <div className="question done">
+        <div><b>{q.text}</b></div>
+        <div className="small">Your answer: {q.answer}</div>
+        <div className="muted small">Used - what it added is below, for you to confirm.</div>
+      </div>
+    );
+  }
+  return (
+    <div className={`question${q.answer ? " answered" : ""}${q.skipped ? " skipped" : ""}`}>
+      <div><b>{q.text}</b></div>
+      {q.why && <div className="muted small">{q.why}</div>}
+      {q.options.length > 0 && (
+        <div className="row">{q.options.map(o => (
+          <button key={o} className={text === o ? "primary" : ""} onClick={() => setText(o)}>{o}</button>
+        ))}</div>
+      )}
+      <textarea rows={2} value={text} onChange={e => setText(e.target.value)}
+                placeholder="In your own words - 'I don't know' is a fine answer" />
+      <div className="row">
+        <button disabled={!text.trim() || text === q.answer} onClick={() => step("answer", { id: q.id, text })}>
+          {q.answer ? "Update my answer" : "Save my answer"}</button>
+        {!q.skipped ? <button className="quiet" onClick={() => step("answer", { id: q.id, skip: true })}>Skip</button>
+          : <span className="muted small">skipped</span>}
+        {q.answer && <span className="state confirmed">answered</span>}
+      </div>
+    </div>
+  );
+}
+
+function Questions({ s, step }: { s: SetupState; step: Step }) {
+  const [busy, setBusy] = useState("");
+  const iv = s.interview;
+  const open = iv.questions.filter(q => !q.answer && !q.skipped);
+  const ready = iv.questions.filter(q => q.answer && !q.applied);
+  const run = async (name: string, label: string) => { setBusy(label); await step(name); setBusy(""); };
+  return (
+    <div className="card stack" style={{ marginTop: 12 }}>
+      <h3>3 · A few questions about your work</h3>
+      <p className="small">Claude reads what you added and asks only what would help a recruiter see your real work -
+        your own part in team projects, results, where you used a skill. Skip any you like. Your answers are kept with your
+        profile, and anything taken from them is shown below for you to confirm.</p>
+      {iv.questions.map(q => <QuestionRow key={`${q.id}-${q.answer ?? ""}-${q.skipped ?? ""}`} q={q} step={step} />)}
+      <div className="row">
+        {!iv.rounds && <button className="primary" disabled={!!busy} onClick={() => run("ask", "Thinking of questions…")}>
+          {busy || "Ask me"}</button>}
+        {ready.length > 0 && <button className="primary" disabled={!!busy} onClick={() => run("apply", "Using your answers…")}>
+          {busy || `Use my ${ready.length === 1 ? "answer" : `${ready.length} answers`}`}</button>}
+        {iv.done && <span className="muted small">Nothing more worth asking - what you've added covers it.</span>}
+        {iv.rounds > 0 && !iv.done && !open.length && !ready.length && iv.rounds < iv.max_rounds &&
+          <button disabled={!!busy} onClick={() => run("ask", "Thinking of more…")}>{busy || "Ask me more"}</button>}
+      </div>
+    </div>
+  );
+}
+
 function Review({ s, step, names }: { s: SetupState; step: Step; names: Names }) {
   const of = (kind: string) => s.items.filter(i => i.kind === kind);
   const p = s.progress;
@@ -301,7 +403,7 @@ function Review({ s, step, names }: { s: SetupState; step: Step; names: Names })
   const disputed = s.items.filter(i => i.conflict && i.kind !== "entry" && i.kind !== "fact");
   return (
     <>
-      <h3 style={{ marginTop: 24 }}>3 · Check every item</h3>
+      <h3 style={{ marginTop: 24 }}>4 · Check every item</h3>
       <p className="small">{p.confirmed} confirmed · {p.pending} still to check · {p.removed} removed
         {p.conflicts ? <> · <b>{p.conflicts} where your files differ</b></> : null}. Only confirmed items go into your profile.
         Your own edits stand as you write them.</p>
@@ -323,12 +425,12 @@ function Review({ s, step, names }: { s: SetupState; step: Step; names: Names })
       )}
       {of("job").filter(i => !i.conflict).length > 0 && (
         <><h2>Jobs</h2><div className="card stack">
-          {of("job").filter(i => !i.conflict).map(j => <Item key={`${j.id}-${j.state}`} it={j} step={step} names={names} fields={[["title", "Title"], ["employer", "Employer"], ["location", "Location"], ["start", "From (YYYY-MM)"], ["end", "To (YYYY-MM or present)"]]} />)}
+          {of("job").filter(i => !i.conflict).map(j => <Item key={`${j.id}-${j.state}`} it={j} step={step} names={names} fields={[["title", "Title"], ["employer", "Employer"], ["client", "Client, if you worked for one through your employer"], ["location", "Location"], ["start", "From (YYYY-MM)"], ["end", "To (YYYY-MM or present)"]]} />)}
         </div></>
       )}
       {KINDS.map(([kind, label]) => {
         const entries = of("entry").filter(e => e.type === kind);
-        return entries.length ? <div key={kind}><h2>{label}</h2>{entries.map(e => <Entry key={e.id} e={e} items={s.items} step={step} names={names} />)}</div> : null;
+        return entries.length ? <div key={kind}><h2>{label}</h2>{entries.map(e => <Entry key={e.id} e={e} items={s.items} step={step} names={names} angles={s.interview.angles} />)}</div> : null;
       })}
       {of("language").length > 0 && (
         <><h2>Languages</h2><div className="card stack">
@@ -361,7 +463,7 @@ function Skills({ s, step }: { s: SetupState; step: Step }) {
   useEffect(() => setTiers(Object.fromEntries(s.skills.map(k => [k.name, k.tier]))), [s.skills]);
   return (
     <div className="card stack" style={{ marginTop: 24 }}>
-      <h3>4 · Skills</h3>
+      <h3>5 · Skills</h3>
       {!s.skills.length ? <p className="muted small">Confirm some work and the skills its lines name, and they appear here.</p> : (
         <>
           <p className="small">Only skills your confirmed work names. “Touched it” is never listed on a resume.</p>
@@ -404,7 +506,7 @@ function Prefs({ s, onSaved }: { s: SetupState; onSaved: () => void }) {
   };
   return (
     <div className="card stack" style={{ marginTop: 24 }}>
-      <h3>5 · What you're looking for</h3>
+      <h3>6 · What you're looking for</h3>
       <label className="field">Cities you'd most like (comma-separated)
         <input value={v.preferred} onChange={e => setV({ ...v, preferred: e.target.value })} /></label>
       <label className="field">Also fine - cities or a country
@@ -450,7 +552,8 @@ export function Setup({ onSaved }: { onSaved: () => void }) {
 
   if (err) return <p className="fail">{err}</p>;
   if (!s) return <p className="muted">Loading…</p>;
-  const names: Names = Object.fromEntries(s.sources.map(x => [x.id, x.name]));
+  const names: Names = { ...Object.fromEntries(s.sources.map(x => [x.id, x.name])),
+    ...Object.fromEntries(s.interview.questions.map(q => [q.id, "your answer"])) };
   const read = s.sources.some(x => x.drafted);
   return (
     <>
@@ -463,6 +566,7 @@ export function Setup({ onSaved }: { onSaved: () => void }) {
       {s.sources.some(x => !x.drafted) && <div style={{ marginTop: 12 }}><Read s={s} step={step} /></div>}
       {read && (
         <>
+          <Questions s={s} step={step} />
           <Review s={s} step={step} names={names} />
           <Skills s={s} step={step} />
           <Prefs key={JSON.stringify(s.prefs)} s={s} onSaved={onSaved} />

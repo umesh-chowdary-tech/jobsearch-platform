@@ -59,7 +59,8 @@ HOSTED_GET = tuple(re.compile(p) for p in (
     r"/api/(overview|today|postings|resumes|profile|setup|market|actions|job)",
     rf"/api/postings/{_ID}", rf"/api/postings/{_ID}/kit"))
 HOSTED_POST = tuple(re.compile(p) for p in (
-    r"/api/setup/(upload|draft|item|fact|restore|skills|save|link|note|remove|reset)", r"/api/run",
+    r"/api/setup/(upload|draft|item|fact|restore|skills|save|link|note|remove|reset|ask|answer|apply|labels)",
+    r"/api/run",
     rf"/api/postings/{_ID}/(status|favorite|later|feedback)"))
 
 # What a resume upload may be, by the type the page sends.
@@ -175,6 +176,18 @@ def _setup(prof: Profile, step: str, body: dict[str, Any]) -> Any:
         onboard.remove_source(prof, str(body.get("id") or ""))
     elif step == "reset":
         onboard.reset(prof)
+    elif step == "ask":
+        onboard.ask(prof)
+    elif step == "answer":
+        onboard.answer(prof, str(body.get("id") or ""), str(body.get("text") or ""), body.get("skip") is True)
+    elif step == "apply":
+        onboard.apply_answers(prof)
+    elif step == "labels":
+        angles = body.get("angles")
+        if angles is not None and not (isinstance(angles, list) and all(isinstance(a, str) for a in angles)):
+            raise ApiError(400, "angles must be a list of words")
+        cut = body.get("cut_first")
+        onboard.set_labels(prof, str(body.get("entry") or ""), angles, cut if isinstance(cut, bool) else None)
     elif step == "fact":
         onboard.add_fact(prof, str(body.get("entry") or ""), str(body.get("text") or ""))
     elif step == "restore":

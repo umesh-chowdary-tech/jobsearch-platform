@@ -94,7 +94,7 @@ export interface JobSnapshot {
 
 export interface SetupItem {
   id: string;
-  kind: "identity" | "job" | "entry" | "fact" | "tech" | "language";
+  kind: "identity" | "job" | "entry" | "fact" | "tech" | "language" | "metric" | "note";
   state: "pending" | "confirmed" | "removed";
   by?: string;
   edited?: boolean;
@@ -117,7 +117,25 @@ export interface SetupItem {
   alternatives?: ({ sources: { src: string; quote: string }[] } & Record<string, unknown>)[];
   conflict?: string;
   listed_only?: boolean;
+  measured?: boolean | null;
+  claim?: string;
+  client?: string;
+  angles?: string[];
+  priority?: string;
+  question?: string;
   [key: string]: unknown;
+}
+
+export interface SetupQuestion {
+  id: string;
+  text: string;
+  why: string;
+  about: string[];
+  kind: string;
+  options: string[];
+  answer?: string;
+  skipped?: boolean;
+  applied?: boolean;
 }
 
 export interface SetupSource {
@@ -158,6 +176,7 @@ export interface SetupState {
   prefs: Prefs;
   drafted_by: string | null;
   merge_notes: string[];
+  interview: { questions: SetupQuestion[]; rounds: number; max_rounds: number; angles: string[]; done: boolean };
   skip_options: string[];
   limits: { files: number; pages: number };
   will_send: string;

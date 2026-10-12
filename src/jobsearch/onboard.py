@@ -39,6 +39,7 @@ from typing import Any
 
 import yaml
 
+from . import setup_interview as Q
 from . import setup_merge
 from . import setup_sources as S
 from .busy import editing, write_atomic
@@ -684,9 +685,9 @@ def draft(prof: Profile, llm: LLM | None = None, source: str | None = None) -> d
 
 # ── review ───────────────────────────────────────────────────────────────────
 
-EDITABLE = {"identity": ("value",), "job": ("employer", "title", "location", "start", "end"),
+EDITABLE = {"identity": ("value",), "job": ("employer", "title", "client", "location", "start", "end"),
             "entry": ("type", "where", "title", "period", "headline"), "fact": ("text",),
-            "tech": ("name",), "language": ("value",)}
+            "tech": ("name",), "language": ("value",), "metric": ("claim", "measured"), "note": ("text",)}
 
 
 def _find(d: dict[str, Any], item_id: str) -> dict[str, Any]:
@@ -722,6 +723,11 @@ def update_item(prof: Profile, item_id: str, state: str | None = None,
                 raise SetupError(f"{k} can't be edited on a {it['kind']}")
             if k == "type" and v not in ENTRY_TYPES:
                 raise SetupError(f"type must be one of {', '.join(ENTRY_TYPES)}")
+            if k == "measured":                      # the person says: measured, or an estimate
+                if not isinstance(v, bool):
+                    raise SetupError("measured is yes or no")
+                it["measured"] = v
+                continue
             v = " ".join(str(v).split())
             if v != it.get(k):
                 it[k], it["edited"] = v, True
@@ -774,6 +780,142 @@ def restore(prof: Profile, index: int) -> dict[str, Any]:
         d["dropped"].pop(index)
         _save(prof, d)
     return it
+
+
+# ── questions: written by the model for this person (setup_interview.py) ─────
+
+def ask(prof: Profile, llm: LLM | None = None) -> dict[str, Any]:
+    """A few questions whose answers would most help this person's real
+    experience get them shortlisted - and, alongside, suggested angles and
+    what a resume can cut first. Nothing already asked is asked again."""
+    d = load_draft(prof)
+    if not any(s.get("drafted") for s in d.get("sources") or []):
+        raise SetupError("let the AI read your files first")
+    rounds = (d.get("interview") or {}).get("rounds") or []
+    if len(rounds) >= Q.MAX_ROUNDS:
+        raise SetupError("that's all the questions for now - edit or add facts directly")
+    if any(not q.get("answer") and not q.get("skipped") for q in Q.questions(d)):
+        raise SetupError("answer or skip the questions you have first")
+    llm = llm or LLM(prof, purpose="setup", timeout=SETUP_TIMEOUT)
+    if not llm.available:
+        raise SetupError("no model is configured - add a key to .env (see .env.example)")
+    limit = Q.LATER_ROUND if rounds else Q.FIRST_ROUND
+    ans = llm.ask_json(Q.QUESTION_SYSTEM, "PROFILE:\n" + Q.profile_view(d, d.get("prefs")) + "\n\nALREADY ASKED:\n"
+                       + Q.asked_view(d) + f"\n\nAsk at most {limit}. Return the JSON.", max_tokens=6000, effort="high")
+    if not ans.ok:
+        why = ans.limited or "; ".join(f"{f['provider']}: {f['error'][:80]}" for f in ans.failures[:2])
+        raise SetupError(f"the model didn't answer ({why or 'no reason given'}) - nothing was changed")
+    with editing(prof.var):
+        d = load_draft(prof)
+        qs = Q.check_questions(ans.data, d, limit)
+        angles, low = Q.check_labels(ans.data, d)
+        for it in d["items"]:
+            if it["kind"] != "entry" or it.get("labels_by") == "you":
+                continue
+            if it["id"] in angles:
+                it["angles"] = angles[it["id"]]
+            if it["id"] in low:
+                it["priority"] = "low"
+            it["labels_by"] = "ai"
+        d.setdefault("interview", {"rounds": []})["rounds"].append(
+            {"at": utcnow(), "by": ans.attribution, "questions": qs})
+        _save(prof, d)
+    return d
+
+
+def _question(d: dict[str, Any], qid: str) -> dict[str, Any]:
+    for q in Q.questions(d):
+        if q["id"] == qid:
+            return q
+    raise SetupError("no such question")
+
+
+def answer(prof: Profile, qid: str, text: str = "", skip: bool = False) -> dict[str, Any]:
+    """The person's answer, in their words - kept with the draft."""
+    with editing(prof.var):
+        d = load_draft(prof)
+        q = _question(d, qid)
+        if q.get("applied"):
+            raise SetupError("that answer is already in your profile - edit what it added instead")
+        if skip:
+            q.pop("answer", None)
+            q["skipped"] = True
+        else:
+            text = str(text or "").strip()[:Q.ANSWER_MAX]
+            if not text:
+                raise SetupError("write an answer, or skip the question")
+            q.update(answer=text, answered_at=utcnow())
+            q.pop("skipped", None)
+        _save(prof, d)
+        return q
+
+
+def apply_answers(prof: Profile, llm: LLM | None = None) -> dict[str, Any]:
+    """Turn answers into facts, results, notes and fixes - each quoting the
+    answer it came from - for the person to confirm."""
+    d = load_draft(prof)
+    used = {q["id"]: q for q in Q.questions(d) if q.get("answer") and not q.get("applied")}
+    if not used:
+        raise SetupError("answer a question first")
+    llm = llm or LLM(prof, purpose="setup", timeout=SETUP_TIMEOUT)
+    if not llm.available:
+        raise SetupError("no model is configured - add a key to .env (see .env.example)")
+    payload = [{"id": q["id"], "question": q["text"], "about": q.get("about"), "answer": q["answer"]}
+               for q in used.values()]
+    ans = llm.ask_json(Q.APPLY_SYSTEM, "PROFILE:\n" + Q.profile_view(d) + "\n\nANSWERS:\n"
+                       + json.dumps(payload, ensure_ascii=False) + "\n\nReturn the JSON.", max_tokens=6000,
+                       effort="medium")
+    if not ans.ok:
+        why = ans.limited or "; ".join(f"{f['provider']}: {f['error'][:80]}" for f in ans.failures[:2])
+        raise SetupError(f"the model didn't answer ({why or 'no reason given'}) - your answers are kept")
+    with editing(prof.var):
+        d = load_draft(prof)
+        used = {q["id"]: q for q in Q.questions(d) if q.get("answer") and not q.get("applied")}
+        new, changes, dropped = Q.check_updates(ans.data, d, used, _Checker, ENTRY_TYPES, EDITABLE)
+        by_id = {it["id"]: it for it in d["items"]}
+        for iid, field, value in changes:
+            it = by_id[iid]
+            if field in ("listed_only", "answered"):
+                it[field] = value
+                continue
+            v, quote, qid = value["value"], value["quote"], value["question"]
+            if not str(it.get(field) or "").strip():
+                it[field] = v
+                it["state"] = "pending"
+                it.setdefault("sources", []).append({"src": qid, "quote": quote})
+            elif _norm(it.get(field)) != _norm(v):
+                setup_merge._disagree(it, (field,), {field: v, "sources": [{"src": qid, "quote": quote}]},
+                                      "your answer differs from your files")
+        d["items"] += new
+        d["dropped"] = (d.get("dropped") or []) + dropped
+        for q in used.values():
+            q["applied"] = True
+        _save(prof, d)
+    return d
+
+
+def set_labels(prof: Profile, entry: str, angles: list[str] | None = None, cut_first: bool | None = None
+               ) -> dict[str, Any]:
+    """The person's own say on a piece of work's angles, and whether a resume
+    cuts it first."""
+    with editing(prof.var):
+        d = load_draft(prof)
+        it = _find(d, entry)
+        if it["kind"] != "entry":
+            raise SetupError(f"{entry!r} is not a piece of work")
+        if angles is not None:
+            bad = [a for a in angles if a not in Q.ANGLES]
+            if bad:
+                raise SetupError(f"angles must be from: {', '.join(Q.ANGLES)}")
+            it["angles"] = list(dict.fromkeys(angles))[:4]
+        if cut_first is not None:
+            if cut_first:
+                it["priority"] = "low"
+            else:
+                it.pop("priority", None)
+        it["labels_by"] = "you"
+        _save(prof, d)
+        return it
 
 
 def _confirmed(d: dict[str, Any], kind: str) -> list[dict[str, Any]]:
@@ -933,15 +1075,26 @@ def build(d: dict[str, Any], prefs: dict[str, Any]) -> tuple[dict, dict, dict]:
         live[e["id"]] = e
     facts = [f for f in _confirmed(d, "fact") if f["entry"] in live]
     tech = [t for t in _confirmed(d, "tech") if t["entry"] in live]
+    metrics = [m for m in _confirmed(d, "metric") if m["entry"] in live]
+    notes = [n for n in _confirmed(d, "note") if n["entry"] in live]
+    names.update({q["id"]: {"name": f"your answer to \"{q['text']}\"", "kind": "answer"} for q in Q.questions(d)})
     for eid, e in live.items():
         mine = [f for f in facts if f["entry"] == eid]
+        results = [m for m in metrics if m["entry"] == eid]
+        said = [n["text"] for n in notes if n["entry"] == eid]
         entries.append({
             "id": eid, "title": e.get("title") or "", "type": e["type"], "where": e.get("where") or "",
             "period": e.get("period") or None, "headline": e["headline"],
-            "facts": [f["text"] for f in mine], "metrics": [],
+            "facts": [f["text"] for f in mine],
+            # Only a measured result may be printed as a number (render.py);
+            # an estimate stays here for the person, marked as one.
+            "metrics": [{"measured": m.get("measured") is True, "claim": m["claim"],
+                         **({"estimate": True} if m.get("measured") is False else {})} for m in results],
             "tech": [t["name"] for t in tech if t["entry"] == eid],
-            "angles": [], "evidence": _evidence([e, *mine], names), "confidence": "high",
-            "sources": [s for x in [e, *mine] for s in _provenance(x, names)],
+            "angles": list(e.get("angles") or []), "evidence": _evidence([e, *mine], names), "confidence": "high",
+            **({"priority": "low"} if e.get("priority") == "low" else {}),
+            **({"notes": " ".join(said)} if said else {}),
+            "sources": [s for x in [e, *mine, *results] for s in _provenance(x, names)],
         })
     if not entries and not jobs:
         raise SetupError("confirm at least one job or entry")
@@ -953,7 +1106,8 @@ def build(d: dict[str, Any], prefs: dict[str, Any]) -> tuple[dict, dict, dict]:
         "title": {"official": title, "descriptor_flexes": False, "approved_descriptors": [],
                   "rule": "Lead with the official title."},
         "employment": [{"employer": j["employer"], "location": j.get("location", ""), "start": j.get("start", ""),
-                        "end": j.get("end") or "present", "title": j.get("title", "")} for j in jobs],
+                        "end": j.get("end") or "present", "title": j.get("title", ""),
+                        **({"client": j["client"]} if j.get("client") else {})} for j in jobs],
         "languages": [it["value"] for it in _confirmed(d, "language")],
     }, "entries": entries}
 
@@ -990,8 +1144,8 @@ def build(d: dict[str, Any], prefs: dict[str, Any]) -> tuple[dict, dict, dict]:
 
 # What a person (or anyone, by hand) may have added to a saved profile that
 # setup doesn't write: saving again keeps it.
-KEEP_ON_ENTRY = ("notes", "priority", "status", "pins", "scope")
-KEEP_IF_EMPTY = ("metrics", "angles")
+KEEP_ON_ENTRY = ("status", "pins", "scope")
+KEEP_IF_EMPTY = ("metrics", "angles", "notes", "priority")
 
 
 def _keep_hand_work(prof: Profile, store: dict, skills: dict) -> tuple[dict, dict]:
@@ -1096,5 +1250,10 @@ def state(prof: Profile) -> dict[str, Any]:
             "progress": progress(d), "skills": skill_suggestions(d) if d else [],
             "prefs": _listed(d["prefs"]) if d.get("prefs") else (suggested_prefs(d) if d else {}),
             "drafted_by": d.get("drafted_by"), "merge_notes": d.get("merge_notes") or [],
+            "interview": {"questions": Q.questions(d), "rounds": len((d.get("interview") or {}).get("rounds") or []),
+                          "max_rounds": Q.MAX_ROUNDS, "angles": list(Q.ANGLES),
+                          # The model found nothing more worth asking last time.
+                          "done": bool(((d.get("interview") or {}).get("rounds") or [{"questions": [1]}])[-1]
+                                       .get("questions") == [])},
             "skip_options": sorted(SKIP), "limits": {"files": MAX_FILES, "pages": MAX_PAGES_LINKED},
             "will_send": (waiting or {}).get("will_send", ""), "levels": {k: v[0] for k, v in LEVELS.items()}}

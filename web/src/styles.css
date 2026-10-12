@@ -334,3 +334,8 @@ tr.manage .row + .row { margin-top: 10px; }
 :root[data-theme="dark"] .avatar.a3 { background: #712b13; color: #faece7; }
 :root[data-theme="dark"] .avatar.a4 { background: #633806; color: #faeeda; }
 :root[data-theme="dark"] .avatar.a5 { background: #72243e; color: #fbeaf0; }
+.question { border-left: 3px solid var(--accent); padding: 8px 0 8px 14px; display: grid; gap: 8px; }
+.question.answered { border-left-color: var(--good); }
+.question.skipped { opacity: .65; }
+.question.done { border-left-color: var(--border); opacity: .8; }
+.question textarea { width: 100%; }
