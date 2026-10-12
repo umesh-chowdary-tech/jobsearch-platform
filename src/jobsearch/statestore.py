@@ -206,13 +206,30 @@ def status(var: Path, remote: Remote) -> dict[str, list[str]]:
 
 # ── Postgres ─────────────────────────────────────────────────────────────────
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS var_files (
+# Run in order, each on its own, whenever a process first connects.
+SCHEMA = (
+    """CREATE TABLE IF NOT EXISTS var_files (
     path        text PRIMARY KEY,
     content     bytea NOT NULL,
     sha256      text NOT NULL,
     updated_at  timestamptz NOT NULL DEFAULT now()
-)"""
+)""",
+    # var/ holds everyone's data. Row-level security with no policies leaves
+    # the table to its owner - this code's own connection - and refuses every
+    # other role. On Supabase that shuts out "anon" and "authenticated", the
+    # roles its public key and its signed-in users act as, even if the
+    # project's Data API is ever switched on. Nothing changes for the owner.
+    "ALTER TABLE var_files ENABLE ROW LEVEL SECURITY",
+    """DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+        REVOKE ALL ON var_files FROM anon;
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+        REVOKE ALL ON var_files FROM authenticated;
+    END IF;
+END $$""",
+)
 
 
 class Postgres:
@@ -239,7 +256,8 @@ class Postgres:
         import psycopg                       # only the server and `state` need it
         conn = psycopg.connect(self.url, autocommit=True, connect_timeout=20)
         if not self._ready:
-            conn.execute(SCHEMA)
+            for statement in SCHEMA:
+                conn.execute(statement)
             self._ready = True
         return conn
 

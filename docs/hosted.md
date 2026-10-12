@@ -99,10 +99,15 @@ Use Supabase's **session** pooler URL (port 5432). The transaction pooler
 
 What needs the maintainer's accounts, in order:
 
-1. **Supabase**: a project in the Mumbai region. Authentication > Providers:
-   email (magic link) and Google. Authentication > URL configuration: the
-   Render URL as the Site URL and a redirect URL. From Project settings: the
-   URL, the anon key, and Database > the session pooler's connection string.
+1. **Supabase**: a project in the Mumbai region, with **Data API off** (the
+   service uses Supabase only for sign-in and its own database connection)
+   and automatic row-level security on. Authentication > Providers: email
+   (magic link) and Google. Authentication > URL configuration: the Render
+   URL as the Site URL and a redirect URL. From Project settings: the URL,
+   the anon key, and Database > the session pooler's connection string.
+   The mirror's table locks itself down either way: row-level security with
+   no policies, and no grants to Supabase's `anon` and `authenticated` roles
+   (statestore.py, `SCHEMA`).
 2. **Render**: New > Blueprint on this repository, keep `jobsearch-hosted`,
    fill in the values it asks for (`render.yaml`).
 3. **GitHub**: repository secrets `HOSTED_URL` (the Render URL) and
