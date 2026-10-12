@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import React, { useState, type FormEvent } from "react";
 import { post } from "../api";
 import { devSignIn, emailLink, google, type Config } from "../auth";
 import type { Me } from "../types";
@@ -56,6 +56,39 @@ export function SignIn({ config, onDone }: { config: Config | null; onDone: () =
         {dev && <p className="muted small">Dev sign-in: any email works, on this machine only.</p>}
         <p className="muted small">Invite only for now. You can export or delete everything kept for you at any time.</p>
         <LegalLinks />
+      </form>
+    </div>
+  );
+}
+
+export function Reconsent({ me, onAgreed, onSignOut, settings }: {
+  me: Me; onAgreed: (m: Me) => void; onSignOut: () => void; settings: React.ReactNode;
+}) {
+  const [agree, setAgree] = useState(false);
+  const [err, setErr] = useState("");
+  const [leaving, setLeaving] = useState(false);
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!agree) { setErr("Tick the box to agree, or take your data instead"); return; }
+    try { onAgreed(await post<Me>("/api/consent", { consent: LEGAL_VERSION })); }
+    catch (x) { setErr((x as Error).message); }
+  };
+  if (leaving) return <div className="legal-page">{settings}</div>;
+  return (
+    <div className="gate">
+      <form className="card stack" onSubmit={submit}>
+        <Brand />
+        <h1>The privacy notice changed</h1>
+        <p className="sub">Signed in as {me.email}. Nothing more is done with your data until you agree to the new version.</p>
+        <label className="inline consent">
+          <input type="checkbox" checked={agree} onChange={e => { setAgree(e.target.checked); setErr(""); }} />
+          <span>I've read the new <a href="#/privacy" target="_blank" rel="noopener">privacy notice</a> and <a
+            href="#/terms" target="_blank" rel="noopener">terms of use</a>, and I agree.</span>
+        </label>
+        {err && <p className="fail small">{err}</p>}
+        <button className="primary" type="submit">Agree and continue</button>
+        <button type="button" onClick={() => setLeaving(true)}>I don't agree - download or delete my data</button>
+        <button type="button" className="quiet" onClick={onSignOut}>Sign out</button>
       </form>
     </div>
   );

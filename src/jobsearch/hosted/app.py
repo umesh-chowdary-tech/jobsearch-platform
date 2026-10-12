@@ -139,11 +139,16 @@ class Service:
         except AuthError as exc:
             raise ApiError(401, str(exc)) from exc
 
-    def member(self, request: Request) -> tuple[Who, Profile]:
+    def member(self, request: Request, consented: bool = True) -> tuple[Who, Profile]:
+        """The signed-in person and their profile. Nothing is worked on for
+        someone who hasn't agreed to the current notice; downloading and
+        deleting their data (`consented=False`) stay open to them regardless."""
         who = self.who(request)
         row = accounts.user(self.shared, who.sub)
         if row is None:
             raise ApiError(403, "join with an invite code first", join=True)
+        if consented and not accounts.consent_current(row):
+            raise ApiError(403, "agree to the updated privacy notice and terms to continue", consent=True)
         return who, Profile(self.root, row["profile"])
 
     def admin(self, request: Request) -> Who:
@@ -157,7 +162,7 @@ class Service:
         prof = Profile(self.root, row["profile"]) if row else None
         return {"email": who.email, "member": row is not None,
                 "profile_ready": bool(prof and prof.exists()), "admin": bool(who.email and who.email in accounts.admins()),
-                "consent": (row or {}).get("consent")}
+                "consent": (row or {}).get("consent"), "consent_current": accounts.consent_current(row)}
 
 
 def _export(prof: Profile) -> Response:
@@ -274,6 +279,22 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
             return svc.me(who)
         return await run_in_threadpool(_respond, go)
 
+    @app.post("/api/consent")
+    async def consent(request: Request) -> Response:
+        try:
+            body = await _json_body(request)
+        except ApiError as exc:
+            return _json_response(*routes.as_error(exc, HOSTED))
+
+        def go() -> Any:
+            who = svc.who(request)
+            try:
+                accounts.agree(svc.shared, who.sub, str(body.get("consent") or ""))
+            except accounts.AccountError as exc:
+                raise ApiError(400, str(exc)) from exc
+            return svc.me(who)
+        return await run_in_threadpool(_respond, go)
+
     @app.post("/api/setup/upload")
     async def upload(request: Request) -> Response:
         try:
@@ -300,7 +321,7 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
 
     @app.get("/api/account/export")
     async def export(request: Request) -> Response:
-        return await run_in_threadpool(_respond, lambda: _export(svc.member(request)[1]))
+        return await run_in_threadpool(_respond, lambda: _export(svc.member(request, consented=False)[1]))
 
     @app.post("/api/account/delete")
     async def delete(request: Request) -> Response:
@@ -310,7 +331,7 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
             return _json_response(*routes.as_error(exc, HOSTED))
 
         def go() -> Any:
-            who, prof = svc.member(request)
+            who, prof = svc.member(request, consented=False)
             if str(body.get("confirm") or "").strip().lower() != DELETE_WORDS:
                 raise ApiError(400, f'type "{DELETE_WORDS}" to confirm')
             if mirror:

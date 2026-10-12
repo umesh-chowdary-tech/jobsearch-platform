@@ -94,6 +94,24 @@ def join(shared: Path, sub: str, email: str, code: str, consent: str) -> dict[st
         return row
 
 
+def consent_current(row: dict[str, Any] | None) -> bool:
+    return ((row or {}).get("consent") or {}).get("version") == CONSENT_VERSION
+
+
+def agree(shared: Path, sub: str, consent: str) -> dict[str, Any]:
+    """Agree to a changed notice: the new version and time replace the old."""
+    if consent != CONSENT_VERSION:
+        raise AccountError("agree to the privacy notice and terms to continue")
+    with _lock:
+        data = load(shared)
+        row = data["users"].get(sub)
+        if row is None:
+            raise AccountError("join with an invite code first")
+        row["consent"] = {"version": consent, "at": utcnow()}
+        _save(shared, data)
+        return row
+
+
 def create_invites(shared: Path, n: int, note: str = "") -> list[str]:
     if not 1 <= n <= 100:
         raise AccountError("make between 1 and 100 codes at a time")

@@ -110,7 +110,7 @@ def test_signed_in_without_an_invite_reaches_only_me_and_invite(env):
     client, _ = env
     me = client.get("/api/me", headers=auth(token())).json()
     assert me == {"email": "alice@example.com", "member": False, "profile_ready": False, "admin": False,
-                  "consent": None}
+                  "consent": None, "consent_current": False}
     r = client.get("/api/today", headers=auth(token()))
     assert r.status_code == 403 and r.json()["join"] is True
 
@@ -327,3 +327,21 @@ def test_the_notice_the_page_and_the_server_name_one_version():
         text = (web / "legal" / doc).read_text(encoding="utf-8")
         assert f"Version {CONSENT_VERSION}." in text, doc
     assert page == CONSENT_VERSION
+
+
+def test_a_changed_notice_is_agreed_to_before_anything_else_happens(env, monkeypatch):
+    """The notice promises to ask again when it changes. Until the person
+    agrees, nothing is worked on for them - but their data stays theirs to
+    download or delete."""
+    client, root = env
+    joined(client, root)
+    a = auth(token())
+    monkeypatch.setattr(accounts, "CONSENT_VERSION", "2027-01-01")        # the notice changed
+    assert client.get("/api/me", headers=a).json()["consent_current"] is False
+    r = client.get("/api/setup", headers=a)
+    assert r.status_code == 403 and r.json()["consent"] is True
+    assert client.get("/api/account/export", headers=a).status_code == 200
+    assert client.post("/api/consent", json={"consent": "2026-10-12-draft"}, headers=a).status_code == 400
+    me = client.post("/api/consent", json={"consent": "2027-01-01"}, headers=a).json()
+    assert me["consent_current"] is True and me["consent"]["version"] == "2027-01-01"
+    assert client.get("/api/setup", headers=a).status_code == 200
