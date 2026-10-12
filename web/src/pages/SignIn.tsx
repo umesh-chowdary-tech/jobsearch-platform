@@ -1,6 +1,6 @@
 import React, { useState, type FormEvent } from "react";
 import { post } from "../api";
-import { appName, devSignIn, emailLink, google, type Config } from "../auth";
+import { appName, devSignIn, emailLink, google, linkProblem, type Config } from "../auth";
 import type { Me } from "../types";
 import { Icon } from "../ui";
 import { LEGAL_VERSION } from "./Legal";
@@ -42,9 +42,10 @@ export function SignIn({ config, onDone }: { config: Config | null; onDone: () =
         <h1>Sign in</h1>
         <p className="sub">Jobs ranked against your own confirmed experience, and a resume tailored for each.</p>
         {sent ? (
-          <p>Check your email - the sign-in link is on its way to <b>{email}</b>.</p>
+          <p>Check your email - the sign-in link is on its way to <b>{email}</b>. Open it in this same browser.</p>
         ) : (
           <>
+            {linkProblem() && <p className="fail small">{linkProblem()}</p>}
             <label htmlFor="email">Email</label>
             <input id="email" type="email" autoComplete="email" placeholder="name@example.com"
                    value={email} onChange={e => { setEmail(e.target.value); setErr(""); }} />
