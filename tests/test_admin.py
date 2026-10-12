@@ -132,7 +132,8 @@ def test_caps_change_within_a_ceiling(env):
     client, root = env
     joined(client, root)
     o = do(client, action="caps", usd_per_month=8, usd_per_day=1.25, person_usd_per_day=0.5).json()["overview"]
-    assert o["settings"]["caps"] == {"usd_per_month": 8.0, "usd_per_day": 1.25, "person_usd_per_day": 0.5}
+    assert o["settings"]["caps"] == {"usd_per_month": 8.0, "usd_per_day": 1.25, "person_usd_per_day": 0.5,
+                                     "person_usd_per_month": 10.0}
     claude = load_limits(root)["claude"]
     assert claude["usd_per_month"] == 8.0 and claude["per_profile"]["usd_per_day"] == 0.5
     assert claude["per_profile"]["requests_per_day"] == 40                 # the file's other caps stand

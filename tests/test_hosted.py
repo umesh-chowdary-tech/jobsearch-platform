@@ -186,7 +186,7 @@ def test_setup_runs_on_the_service_for_the_signed_in_person(env):
     r = client.post("/api/setup/upload", content=b"Alice Example\nPune, India\nSoftware Engineer, Globex, 2021 - present\n",
                     headers={**a, "Content-Type": "text/plain"})
     assert r.status_code == 200, r.text
-    assert r.json()["status"] == "uploaded" and (prof.var / "setup" / "resume.txt").exists()
+    assert r.json()["status"] == "uploaded" and (prof.var / "setup" / "sources" / "s1.txt").exists()
     assert client.post("/api/setup/upload", content=b"x", headers={**a, "Content-Type": "image/png"}).status_code == 415
 
 

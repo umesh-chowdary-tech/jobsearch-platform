@@ -134,6 +134,11 @@ CLAUDE_EFFORT = "low"
 # asked for the answer, so a long think doesn't cut the JSON off.
 CLAUDE_THINKING_ROOM = 6000
 CLAUDE_MAX_TOKENS = 16000          # non-streaming requests stay under this
+# A request that asks for more effort - setup reading someone's resumes - gets
+# far more room to think, and is streamed, so a long answer isn't cut off or
+# timed out. Still bounded: thinking is billed as output.
+CLAUDE_THINKING_ROOM_HARD = 32000
+CLAUDE_STREAM_MAX_TOKENS = 64000
 # A request declined by a safety classifier is re-run on Anthropic's
 # recommended model for that category, server side. Job postings shouldn't
 # trip one; if one does, the answer still comes back.
@@ -345,7 +350,7 @@ class LLM:
 
     def ask_json(
         self, system: str, user: str, max_tokens: int = 900, temperature: float = 0.2,
-        cached_prefix: str = "",
+        cached_prefix: str = "", effort: str = "",
     ) -> Answer:
         """One JSON answer from the first provider that manages it.
 
@@ -376,7 +381,7 @@ class LLM:
                     ans.limited = ans.limited or f"{p.label}: {why}"
                     continue
             if p.name == "claude":
-                if self._ask_claude(p, system, user, max_tokens, cached_prefix, ans):
+                if self._ask_claude(p, system, user, max_tokens, cached_prefix, ans, effort):
                     return ans
                 if ans.limited:
                     break
@@ -433,12 +438,13 @@ class LLM:
         return ans
 
     def _ask_claude(self, p: Provider, system: str, user: str, max_tokens: int,
-                    cached_prefix: str, ans: Answer) -> bool:
+                    cached_prefix: str, ans: Answer, effort: str = "") -> bool:
         """One request through the Anthropic SDK. Fills `ans`; True on a JSON answer.
 
         Current Claude models take no temperature and think as much as
-        `effort` allows. The stable prefix (system prompt, then the profile)
-        is cached: in a run of batches only the first pays for it in full."""
+        `effort` allows - CLAUDE_EFFORT, unless the caller asks for more. The
+        stable prefix (system prompt, then the profile) is cached: in a run of
+        batches only the first pays for it in full."""
         import anthropic
         client = anthropic.Anthropic(api_key=p.key, timeout=self.timeout, max_retries=2)
         first = [{"type": "text", "text": cached_prefix, "cache_control": {"type": "ephemeral"}}] \
@@ -446,16 +452,24 @@ class LLM:
         system_block = {"type": "text", "text": f"{system}\n{self.STRICT}"}
         if not cached_prefix:
             system_block["cache_control"] = {"type": "ephemeral"}
+        hard = bool(effort) and effort != "low"
+        limit = max_tokens + (CLAUDE_THINKING_ROOM_HARD if hard else CLAUDE_THINKING_ROOM)
+        stream = hard and limit > CLAUDE_MAX_TOKENS
+        kw: dict[str, Any] = dict(
+            model=p.model,
+            max_tokens=min(limit, CLAUDE_STREAM_MAX_TOKENS if stream else CLAUDE_MAX_TOKENS),
+            system=[system_block],
+            messages=[{"role": "user", "content": [*first, {"type": "text", "text": user}]}],
+            output_config={"effort": effort or os.environ.get("CLAUDE_EFFORT") or CLAUDE_EFFORT},
+            betas=[CLAUDE_FALLBACK_BETA],
+            fallbacks="default",
+        )
         try:
-            resp = client.beta.messages.create(
-                model=p.model,
-                max_tokens=min(max_tokens + CLAUDE_THINKING_ROOM, CLAUDE_MAX_TOKENS),
-                system=[system_block],
-                messages=[{"role": "user", "content": [*first, {"type": "text", "text": user}]}],
-                output_config={"effort": os.environ.get("CLAUDE_EFFORT") or CLAUDE_EFFORT},
-                betas=[CLAUDE_FALLBACK_BETA],
-                fallbacks="default",
-            )
+            if stream:
+                with client.beta.messages.stream(**kw) as s:
+                    resp = s.get_final_message()
+            else:
+                resp = client.beta.messages.create(**kw)
         except anthropic.AuthenticationError:
             self._claude_spent(p, None)
             ans.failures.append({"provider": p.name, "error": "HTTP 401: Claude rejected the API key"})

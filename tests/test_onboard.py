@@ -9,6 +9,7 @@ import pytest
 import yaml
 
 from jobsearch import onboard as O
+from jobsearch import setup_sources as S
 from jobsearch.assemble import build, load_store
 from jobsearch.grounding import untraced_bullets
 from jobsearch.llm import Answer
@@ -141,7 +142,7 @@ def _pdf(text: str) -> bytes:
 
 def test_a_word_file_that_unzips_too_large_is_refused(monkeypatch):
     """A .docx is a zip: 5 MB of it can unpack to gigabytes on the server."""
-    monkeypatch.setattr(O, "MAX_DOCX_XML", 200)
+    monkeypatch.setattr(S, "MAX_DOCX_XML", 200)
     with pytest.raises(O.SetupError, match="too large once unzipped"):
         O.extract_text(_docx(RESUME), "resume.docx")
 
@@ -159,7 +160,7 @@ def test_a_word_file_with_a_dtd_is_refused_not_parsed():
 
 
 def test_a_pdf_with_more_pages_than_a_resume_is_refused(monkeypatch):
-    monkeypatch.setattr(O, "MAX_PAGES", 0)
+    monkeypatch.setattr(S, "MAX_PAGES", 0)
     with pytest.raises(O.SetupError, match="has 1 pages"):
         O.extract_text(_pdf(RESUME), "resume.pdf")
 

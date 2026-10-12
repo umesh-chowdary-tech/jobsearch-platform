@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import re
+import urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -58,7 +59,7 @@ HOSTED_GET = tuple(re.compile(p) for p in (
     r"/api/(overview|today|postings|resumes|profile|setup|market|actions|job)",
     rf"/api/postings/{_ID}", rf"/api/postings/{_ID}/kit"))
 HOSTED_POST = tuple(re.compile(p) for p in (
-    r"/api/setup/(upload|draft|item|fact|restore|skills|save)", r"/api/run",
+    r"/api/setup/(upload|draft|item|fact|restore|skills|save|link|note|remove|reset)", r"/api/run",
     rf"/api/postings/{_ID}/(status|favorite|later|feedback)"))
 
 # What a resume upload may be, by the type the page sends.
@@ -139,9 +140,10 @@ def get(prof: Profile, path: str, query: dict[str, list[str]], runner: Runner, s
 
 # ── POST ─────────────────────────────────────────────────────────────────────
 
-def upload(prof: Profile, ctype: str, data: bytes) -> dict[str, Any]:
-    """A resume, as the raw request body. The host has already refused a body
-    over onboard.MAX_BYTES before reading it."""
+def upload(prof: Profile, ctype: str, data: bytes, filename: str = "") -> dict[str, Any]:
+    """A resume, as the raw request body; its name (X-Filename) only labels
+    it on the screen - the type decides how it is read. The host has already
+    refused a body over onboard.MAX_BYTES before reading it."""
     ctype = ctype.split(";")[0].strip().lower()
     if ctype not in UPLOAD_TYPES:
         raise ApiError(415, "upload a PDF, a Word file (.docx) or a plain text file")
@@ -149,17 +151,30 @@ def upload(prof: Profile, ctype: str, data: bytes) -> dict[str, Any]:
         raise ApiError(400, "the file is empty")
     if len(data) > onboard.MAX_BYTES:
         raise ApiError(413, "that file is larger than 5 MB")
-    onboard.upload(prof, data, f"resume{UPLOAD_TYPES[ctype]}")
+    ext = UPLOAD_TYPES[ctype]
+    stem = Path(urllib.parse.unquote(filename or "")).stem[:70] or "resume"
+    onboard.upload(prof, data, f"{stem}{ext}")
     return onboard.state(prof) | {"will_send": onboard.to_send(prof)}
 
 
 def _setup(prof: Profile, step: str, body: dict[str, Any]) -> Any:
     """Each step returns the whole setup state."""
     if step == "draft":
-        onboard.draft(prof)
+        onboard.draft(prof, source=str(body["source"]) if body.get("source") else None)
     elif step == "item":
+        choose = body.get("choose")
+        if choose is not None and (isinstance(choose, bool) or not isinstance(choose, int)):
+            raise ApiError(400, "choose must be a number")
         onboard.update_item(prof, str(body.get("id") or ""), body.get("state"),
-                            body.get("fields") if isinstance(body.get("fields"), dict) else None)
+                            body.get("fields") if isinstance(body.get("fields"), dict) else None, choose)
+    elif step == "link":
+        onboard.add_link(prof, str(body.get("kind") or ""), str(body.get("url") or ""))
+    elif step == "note":
+        onboard.set_note(prof, str(body.get("text") or ""))
+    elif step == "remove":
+        onboard.remove_source(prof, str(body.get("id") or ""))
+    elif step == "reset":
+        onboard.reset(prof)
     elif step == "fact":
         onboard.add_fact(prof, str(body.get("entry") or ""), str(body.get("text") or ""))
     elif step == "restore":

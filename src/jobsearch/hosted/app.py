@@ -404,7 +404,8 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
 
         def go() -> Any:
             _, prof = svc.member(request)
-            return routes.upload(prof, request.headers.get("content-type", ""), data)
+            return routes.upload(prof, request.headers.get("content-type", ""), data,
+                                 request.headers.get("x-filename", ""))
         return await run_in_threadpool(_respond, go)
 
     @app.get("/files/resumes/{name}")

@@ -117,7 +117,8 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
             n = int(self.headers.get("Content-Length") or 0)
             if n > onboard.MAX_BYTES:
                 raise ApiError(413, "that file is larger than 5 MB")
-            return routes.upload(app.prof, self.headers.get("Content-Type", ""), self.rfile.read(n) if n > 0 else b"")
+            return routes.upload(app.prof, self.headers.get("Content-Type", ""), self.rfile.read(n) if n > 0 else b"",
+                                 self.headers.get("X-Filename", ""))
 
         def _guard(self, fn: Callable[[], None]) -> None:
             if not self._host_ok():

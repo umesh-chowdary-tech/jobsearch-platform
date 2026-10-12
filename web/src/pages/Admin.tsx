@@ -298,11 +298,12 @@ function AiTab({ o, act }: { o: AdminOverview; act: Act }) {
   const [caps, setCaps] = useState({
     usd_per_month: String(s.caps.usd_per_month ?? ""), usd_per_day: String(s.caps.usd_per_day ?? ""),
     person_usd_per_day: String(s.caps.person_usd_per_day ?? ""),
+    person_usd_per_month: String(s.caps.person_usd_per_month ?? ""),
   });
   const g = o.ai.groq_today;
   const saveCaps = () => act({
     action: "caps", usd_per_month: Number(caps.usd_per_month), usd_per_day: Number(caps.usd_per_day),
-    person_usd_per_day: Number(caps.person_usd_per_day),
+    person_usd_per_day: Number(caps.person_usd_per_day), person_usd_per_month: Number(caps.person_usd_per_month),
   }, "Limits saved");
   const field = (key: keyof typeof caps, label: string, max: number) => (
     <label className="field">{label} (max {max})
@@ -339,6 +340,7 @@ function AiTab({ o, act }: { o: AdminOverview; act: Act }) {
           {field("usd_per_month", "Everyone, a month (USD)", s.ceiling.usd_per_month)}
           {field("usd_per_day", "Everyone, a day (USD)", s.ceiling.usd_per_day)}
           {field("person_usd_per_day", "Each person, a day (USD)", s.ceiling.person_usd_per_day)}
+          {field("person_usd_per_month", "Each person, a month (USD)", s.ceiling.person_usd_per_month)}
         </div>
         <div className="row">
           <button className="primary" onClick={saveCaps}>Save limits</button>

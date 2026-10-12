@@ -36,6 +36,8 @@ from .profile import shared_var
 KEEP_DAYS = 40
 # The purpose that `keep_for_mail` is kept for.
 MAIL = "mail"
+# The purpose `setup_usd_per_day` is for: drafting a profile from someone's resumes.
+SETUP = "setup"
 
 
 # The admin page's changes over data/llm-limits.yaml, in var/_shared (so the
@@ -234,12 +236,14 @@ class Meter:
         if upm is not None and self.month_usd(provider) + usd > float(upm):
             return (f"monthly spend limit reached (${self.month_usd(provider):.2f} of ${float(upm):.2f},"
                     f" data/llm-limits.yaml)")
-        return self._check_share(provider, caps, tokens, usd, over)
+        return self._check_share(provider, caps, tokens, usd, over, purpose)
 
     def _check_share(self, provider: str, caps: dict[str, Any], tokens: int, usd: float,
-                     over: dict[str, Any]) -> str:
-        """The profile's own cap for the day: `per_profile`, or the one the
-        admin page set for this person."""
+                     over: dict[str, Any], purpose: str = "") -> str:
+        """The profile's own caps: `per_profile`, or the ones the admin page
+        set for this person. Setup reads several resumes with the strongest
+        model once, so on the day it runs it may spend `setup_usd_per_day`
+        instead of the everyday `usd_per_day`; the month's line holds either way."""
         own = ((over.get("people") or {}).get(self.who) or {}).get(provider) or {}
         pp = {**(caps.get("per_profile") or {}), **own}
         if not (self.who and pp):
@@ -251,9 +255,15 @@ class Meter:
         if "tokens_per_day" in pp and u["tokens"] + tokens > int(pp["tokens_per_day"]):
             return (f"{self.who}'s daily token limit reached ({u['tokens']:,} of {int(pp['tokens_per_day']):,},"
                     f" {where})")
-        if "usd_per_day" in pp and u["usd"] + usd > float(pp["usd_per_day"]):
-            return (f"{self.who}'s daily spend limit reached (${u['usd']:.2f} of ${float(pp['usd_per_day']):.2f},"
+        day_key = "setup_usd_per_day" if purpose == SETUP and "setup_usd_per_day" in pp else "usd_per_day"
+        if day_key in pp and u["usd"] + usd > float(pp[day_key]):
+            return (f"{self.who}'s daily spend limit reached (${u['usd']:.2f} of ${float(pp[day_key]):.2f},"
                     f" {where})")
+        if "usd_per_month" in pp:
+            month = self.month_by_profile().get(self.who, {}).get("usd", 0.0)
+            if month + usd > float(pp["usd_per_month"]):
+                return (f"{self.who}'s monthly spend limit reached (${month:.2f} of ${float(pp['usd_per_month']):.2f},"
+                        f" {where})")
         return ""
 
     def record(self, provider: str, tokens: int, purpose: str = "", usd: float = 0.0, model: str = "") -> None:
