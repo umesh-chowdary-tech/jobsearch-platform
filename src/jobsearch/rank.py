@@ -296,10 +296,14 @@ REREAD = ("strong", "possible")
 
 
 def ranking_lead(prof: Profile | None = None) -> str:
-    """The provider that judges postings now: the first in LLM_PROVIDERS."""
+    """The provider that judges postings now: the first in the "rank" route of
+    data/models.yaml, else the first in LLM_PROVIDERS."""
     if prof:
-        from .llm import load_dotenv
+        from .llm import load_dotenv, load_routes
         load_dotenv(prof.env)
+        route = load_routes(prof.root).get("rank")
+        if route:
+            return next(iter(route))
     import os
     order = [x.strip().lower() for x in os.environ.get("LLM_PROVIDERS", "groq,openrouter").split(",")]
     return next((x for x in order if x), "")

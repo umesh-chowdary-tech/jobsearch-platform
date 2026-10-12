@@ -1,0 +1,28 @@
+# models.yaml - which model does each job, tried in the order listed.
+#
+#   provider: model    a provider from llm.py (claude, groq, openrouter) and
+#                      its model; blank for the provider's default
+#
+# Every provider here also needs its limits in llm-limits.yaml, and every
+# Claude model its price there - one without is never sent a request. A job
+# not listed here uses LLM_PROVIDERS, in that order. The inbox's emails go to
+# Groq only, whatever this says (mail_ai.py).
+
+# Rating postings against a profile. Groq's free tier reads new postings
+# first (RANK_FIRST_PASS); Claude re-reads the ones Groq calls strong or
+# possible (rank.py), so Claude decides what is shown.
+rank:
+  claude: claude-haiku-5-5
+
+# What a resume says: its summary line, written from confirmed facts only.
+resume:
+  claude: claude-sonnet-5-5
+
+# Drafting profile facts from an uploaded resume, for the person to confirm.
+# Once per person, and every resume after is built from what it finds.
+setup:
+  claude: claude-sonnet-5-5
+
+# A first line for a message to someone you know - short, and free.
+outreach:
+  groq: openai/gpt-oss-120b
