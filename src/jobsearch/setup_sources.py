@@ -82,13 +82,13 @@ HEADINGS = {
               "positions of responsibility", "leadership"),
 }
 _HEADING = {name: key for key, names in HEADINGS.items() for name in names}
+_EDGE = " \t:|-–—_*#•"           # decoration around a heading: "— SKILLS —", "Skills:"
 
 
 def heading_of(line: str) -> str | None:
     """The section a heading line starts, or None. "Skills: Python, Go" is a
     skills line, not a heading - the caller sees it as both."""
-    t = re.sub(r"[\s:|\-–—_*#•]+$", "", line.strip().lower())
-    t = re.sub(r"^[\s:|\-–—_*#•]+", "", t)
+    t = line.strip().lower().strip(_EDGE)          # str.strip: linear, whatever the line holds
     if len(t) > 40:
         return None
     return _HEADING.get(" ".join(t.split()))
@@ -465,6 +465,34 @@ def github_user(url: str) -> str:
     return user
 
 
+def _plain(line: str, images: bool) -> str:
+    """One pass over a Markdown line: images and badges gone (`images`), or
+    links as their text and HTML tags gone. Character by character - no
+    pattern that a crafted README could make slow."""
+    out: list[str] = []
+    i, n = 0, len(line)
+    while i < n:
+        c = line[i]
+        if not images and c == "<":
+            j = line.find(">", i + 1)
+            if j != -1:
+                i = j + 1
+                continue
+        if (images and c == "!" and line.startswith("[", i + 1)) or (not images and c == "["):
+            start = i + (2 if images else 1)
+            close = line.find("]", start)
+            if close != -1 and line.startswith("(", close + 1):
+                end = line.find(")", close + 2)
+                if end != -1:
+                    if not images:
+                        out.append(line[start:close])
+                    i = end + 1
+                    continue
+        out.append(c)
+        i += 1
+    return "".join(out)
+
+
 def markdown_lines(md: str) -> list[str]:
     """A README's prose: no code blocks, images, badges or HTML."""
     out, fenced = [], False
@@ -474,12 +502,10 @@ def markdown_lines(md: str) -> list[str]:
             continue
         if fenced:
             continue
-        line = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", line)                 # images and badges
-        line = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", line)             # links keep their text
-        line = re.sub(r"<[^>]+>", "", line)
-        line = re.sub(r"^\s{0,3}#{1,6}\s*", "", line)
-        line = re.sub(r"[*_`]{1,3}", "", line)
-        out.append(line)
+        # Images first, so a badge inside a link ("[![ci](badge)](link)") goes whole.
+        line = _plain(_plain(line[:1000], images=True), images=False).lstrip()
+        line = line.lstrip("#").lstrip() if line.startswith("#") else line
+        out.append("".join(ch for ch in line if ch not in "*`"))
     return lines_of("\n".join(out))
 
 
