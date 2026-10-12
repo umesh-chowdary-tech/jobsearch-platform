@@ -34,13 +34,34 @@ export async function loadConfig(): Promise<Config> {
   config = (await r.json()) as Config;
   document.title = appName();
   if (config.auth === "supabase") {
+    // What the emailed link brought back, read before supabase-js uses it.
+    const query = new URLSearchParams(window.location.search);
+    const hash = new URLSearchParams(window.location.hash.replace(/^#\/?/, ""));
+    const failed = query.get("error_description") || hash.get("error_description");
+    const code = query.has("code");
     // PKCE: the emailed link comes back with ?code=..., which leaves the
     // #/route part of the address to the app.
     supabase = createClient(config.supabase_url, config.supabase_anon_key, {
       auth: { flowType: "pkce", persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
     });
+    if (failed) {
+      linkNote = `That sign-in link didn't work: ${failed}. Ask for a new one below.`;
+    } else if (code && !(await supabase.auth.getSession()).data.session) {
+      // The code is exchanged with a secret this browser kept when the link
+      // was asked for - opened anywhere else, it can't sign anyone in.
+      linkNote = "That sign-in link only works in the browser where you asked for it. Ask for a new link here, "
+        + "then open the email in this same browser.";
+    }
+    if (failed || code) window.history.replaceState(null, "", window.location.pathname + "#/");
   }
   return config;
+}
+
+let linkNote = "";
+
+/** Why the sign-in link that opened this page signed nobody in, if it didn't. */
+export function linkProblem(): string {
+  return linkNote;
 }
 
 /** The service's name (JOBSEARCH_APP_NAME), once the config is in. */

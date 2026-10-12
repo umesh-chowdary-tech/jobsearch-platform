@@ -121,8 +121,16 @@ What needs the maintainer's accounts, in order:
    service uses Supabase only for sign-in and its own database connection)
    and automatic row-level security on. Authentication > Providers: email
    (magic link) and Google. Authentication > URL configuration: the Render
-   URL as the Site URL and a redirect URL. From Project settings: the URL,
-   the anon key, and Database > the session pooler's connection string.
+   URL as the Site URL, and `<Render URL>/**` as a redirect URL - left at its
+   default (`http://localhost:3000`), every emailed link leads there. From
+   Project settings: the URL, the publishable (anon) key, and Database > the
+   session pooler's connection string.
+
+   Supabase's own email sender delivers only to the project team's addresses,
+   two messages an hour. For anyone else to sign in by email, set up your own
+   sender (Authentication > Emails > SMTP Settings); or turn on Google
+   sign-in, which needs no email. An emailed link signs in only in the browser
+   that asked for it (PKCE) - the sign-in page says so when one doesn't.
    The mirror's table locks itself down either way: row-level security with
    no policies, and no grants to Supabase's `anon` and `authenticated` roles
    (statestore.py, `SCHEMA`).
