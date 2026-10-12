@@ -65,18 +65,43 @@ code is `src/jobsearch/onboard.py`, with `setup_sources.py` (reading) and
    - a new title at the same employer after the old one ended is the next row
      of their title history, not a disagreement;
    - a confirmed item a new source contradicts goes back to "to check".
-5. **Review.** Each item shows the line it came from and which file. The
+5. **Questions** (`setup_interview.py`). No question is written in the code:
+   the model reads what was drafted, works out who this person is - a
+   fresher, an experienced engineer, a manager, someone switching careers or
+   returning after a break - and asks the few (8 at first, 5 after, 4 rounds
+   at most) whose answers would most help their real experience get them
+   shortlisted: their own part in team work, results and whether they were
+   measured, where a skill from a list was used, unclear dates or the employer
+   behind a client, missing work, a certification's status. The code holds
+   the rules around it:
+   - only what the documents and earlier answers don't say; nothing asked
+     twice; neutral wording, never suggesting a stronger claim; any skippable;
+   - never age, family, religion, caste, gender, health, salary, notice
+     period, address or IDs - such a question is dropped even if the model
+     writes it;
+   - answers are kept with the draft. "Use my answers" turns them into facts,
+     results (measured or an estimate - only a measured one is ever printed as
+     a number), notes for whoever words the resume, skills used, a client, a
+     missing piece of work - each quoting the answer, every number from it, no
+     claim stronger than it. An answer that contradicts a file becomes a choice.
+     All of it arrives "to check".
+
+   With the questions, the model suggests each piece of work's angles (from a
+   fixed list: backend, data, ml, ...) and which a resume should cut first.
+   They're labels, not claims; the person changes them, and the model doesn't
+   overrule them after.
+6. **Review.** Each item shows the line it came from and which file. The
    person confirms, edits or removes it; an edit is their own words, and they
    can add facts in their own words, numbers included. A skill only in a
    skills list is confirmed only if they used it in that work. Nothing is
    confirmed for them.
-6. **Skills.** Only skills that confirmed lines of confirmed entries name:
+7. **Skills.** Only skills that confirmed lines of confirmed entries name:
    strong (core), used it (working), touched it (never listed on a resume), or
    not a skill of theirs.
-7. **Preferences.** Cities, remote or not, years of experience (suggested
+8. **Preferences.** Cities, remote or not, years of experience (suggested
    from the earliest confirmed job), the most years a posting may ask, level,
    roles to skip, companies to watch.
-8. **Save.** Only confirmed items are written, as `master-store.yaml`,
+9. **Save.** Only confirmed items are written, as `master-store.yaml`,
    `skills.yaml` and `search-profile.yaml`. Each entry records where it came
    from (`sources`: "file: line", or "typed by you") and, for public work, a
    link to open (`evidence`). Saving over an existing profile keeps what was
@@ -127,6 +152,5 @@ POST under the same rules as the rest of the app (docs/app.md, "Security").
 - Two-column PDFs can come out with the columns interleaved; the person sees
   the text before it is sent.
 - Hidden text in a PDF (white or invisible) isn't detected yet - Word's is.
-- Questions after the draft - what *you* did in team work, whether a number
-  was measured, the employer behind a client - and filling in angles, metrics
-  and priorities: the next step (setup plan, PR B).
+- A job-title descriptor ("Software Engineer II (Backend)") suggested from the
+  person's own titles.
