@@ -21,15 +21,16 @@ import os
 import shutil
 import threading
 import zipfile
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, nullcontext
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import parse_qs, urlparse
 
 from fastapi import FastAPI, Request
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
+from starlette.routing import Route
 
 from .. import onboard, statestore
 from ..models import utcnow
@@ -37,7 +38,7 @@ from ..profile import Profile, shared_var, var_dir
 from ..web import routes
 from ..web.routes import HOSTED, ApiError
 from ..web.runner import Runner
-from . import accounts, admin
+from . import accounts, admin, mcp
 from .auth import AuthError, Verifier, Who
 from .mirror import Mirror
 
@@ -245,6 +246,44 @@ class Service:
             self.cycle.start()
         return 202, {"started": True}
 
+    def start_company_search(self, rids: list[str]) -> tuple[int, dict[str, Any]]:
+        """Look for the job boards of companies people asked for, in the
+        background: discovery's few polite requests each. A board that answers
+        is watched from the next job update."""
+        from .. import company_requests as cr
+        with self._lock:
+            if self.cycle and self.cycle.is_alive():
+                return 409, {"error": "a job update or a board check is already running"}
+            reqs = cr.load(self.shared)
+            rids = [r for r in rids if r in reqs]
+            if not rids:
+                return 400, {"error": "no request to look for"}
+            cr.mark_checking(self.shared, rids)
+
+            def run() -> None:
+                from .. import discovery
+                from ..busy import busy
+                from ..http import default_fetcher
+                from ..registry import write_run
+                try:
+                    with busy(self.shared, "looking for companies' job boards") as got:
+                        if got:
+                            fetcher = default_fetcher(self.shared)
+                            for rid in rids:
+                                found = discovery.search_company(fetcher, reqs[rid]["company"])
+                                write_run(self.shared, found.probes, found.escalations, found.summary())
+                                cr.record_search(self.shared, rid, found)
+                except Exception:  # noqa: BLE001 - logged; the admin page shows it
+                    log.exception("looking for job boards failed")
+                finally:
+                    # Whatever wasn't reached goes back in the queue.
+                    cr.release(self.shared, rids, "not looked at yet - try again")
+                if self.mirror:
+                    self.mirror.touch()
+            self.cycle = threading.Thread(target=run, name="company-search", daemon=True)
+            self.cycle.start()
+        return 202, {"started": True}
+
     def start_cycle(self, forced: bool = False) -> tuple[int, dict[str, Any]]:
         """The scheduled cycle, in the background. The cron job's tick skips
         while the schedule is paused; `forced` - "Run now" on the admin page -
@@ -303,12 +342,14 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
     admin.watch_errors()
     supabase_url = "" if verifier.dev else os.environ.get("SUPABASE_URL", "")
     csp = _csp(supabase_url)
+    connector = mcp.build(svc)                  # SwitchKaro inside Claude (hosted/mcp.py)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         if mirror:
             await run_in_threadpool(mirror.start)
-        yield
+        async with (connector[0].session_manager.run() if connector else nullcontext()):
+            yield
         if mirror:
             await run_in_threadpool(mirror.stop)
 
@@ -329,6 +370,15 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
         if mirror and request.method == "POST" and resp.status_code < 400:
             mirror.touch()
         return resp
+
+    if connector:
+        # Its own sign-in check: a 401 there names the metadata to sign in by.
+        for path in (mcp.PATH, "/.well-known/oauth-protected-resource" + mcp.PATH):
+            app.router.routes.insert(0, Route(path, endpoint=connector[1]))
+
+        @app.get("/.well-known/oauth-protected-resource")
+        def resource_metadata() -> dict[str, Any]:
+            return mcp.metadata(svc)
 
     # ── open to anyone ──────────────────────────────────────────────────────
     @app.get("/api/health")
@@ -509,6 +559,12 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
 
     static = static_dir if static_dir is not None else WEB_DIST
     if static.is_dir():
+        @app.get("/oauth/consent")
+        def consent_page() -> Response:
+            # Where Supabase sends a person to approve an app (the Claude
+            # connector); the web app shows it (pages/Consent.tsx).
+            return FileResponse(static / "index.html", headers={"Cache-Control": "no-store"})
+
         app.mount("/", StaticFiles(directory=static, html=True), name="web")
     else:
         @app.get("/")
