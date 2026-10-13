@@ -9,7 +9,7 @@ function LegalLinks() {
   return <p className="muted small"><a href="#/privacy">Privacy notice</a> · <a href="#/terms">Terms of use</a></p>;
 }
 
-function Brand() {
+export function Brand() {
   return <div className="brand"><span className="mark"><Icon name="brief" /></span><span>{appName()}</span></div>;
 }
 

@@ -17,8 +17,8 @@ dev = ["pytest>=8.0", "httpx>=0.27"]
 # the local app.
 server = ["mcp>=2.3,<3", "psycopg[binary]>=3.2", "uvicorn>=0.30"]
 # The hosted service (hosted/): sign-in tokens checked with PyJWT, the API on
-# FastAPI, var/ mirrored to Postgres.
-hosted = ["fastapi>=0.115", "uvicorn>=0.30", "pyjwt[crypto]>=2.9", "psycopg[binary]>=3.2"]
+# FastAPI, var/ mirrored to Postgres, and the Claude connector for every member (MCP).
+hosted = ["fastapi>=0.115", "uvicorn>=0.30", "pyjwt[crypto]>=2.9", "psycopg[binary]>=3.2", "mcp>=2.3,<3"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

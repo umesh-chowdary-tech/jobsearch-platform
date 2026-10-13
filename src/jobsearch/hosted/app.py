@@ -21,15 +21,16 @@ import os
 import shutil
 import threading
 import zipfile
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, nullcontext
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import parse_qs, urlparse
 
 from fastapi import FastAPI, Request
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
+from starlette.routing import Route
 
 from .. import onboard, statestore
 from ..models import utcnow
@@ -37,7 +38,7 @@ from ..profile import Profile, shared_var, var_dir
 from ..web import routes
 from ..web.routes import HOSTED, ApiError
 from ..web.runner import Runner
-from . import accounts, admin
+from . import accounts, admin, mcp
 from .auth import AuthError, Verifier, Who
 from .mirror import Mirror
 
@@ -341,12 +342,14 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
     admin.watch_errors()
     supabase_url = "" if verifier.dev else os.environ.get("SUPABASE_URL", "")
     csp = _csp(supabase_url)
+    connector = mcp.build(svc)                  # SwitchKaro inside Claude (hosted/mcp.py)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         if mirror:
             await run_in_threadpool(mirror.start)
-        yield
+        async with (connector[0].session_manager.run() if connector else nullcontext()):
+            yield
         if mirror:
             await run_in_threadpool(mirror.stop)
 
@@ -367,6 +370,15 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
         if mirror and request.method == "POST" and resp.status_code < 400:
             mirror.touch()
         return resp
+
+    if connector:
+        # Its own sign-in check: a 401 there names the metadata to sign in by.
+        for path in (mcp.PATH, "/.well-known/oauth-protected-resource" + mcp.PATH):
+            app.router.routes.insert(0, Route(path, endpoint=connector[1]))
+
+        @app.get("/.well-known/oauth-protected-resource")
+        def resource_metadata() -> dict[str, Any]:
+            return mcp.metadata(svc)
 
     # ── open to anyone ──────────────────────────────────────────────────────
     @app.get("/api/health")
@@ -547,6 +559,12 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
 
     static = static_dir if static_dir is not None else WEB_DIST
     if static.is_dir():
+        @app.get("/oauth/consent")
+        def consent_page() -> Response:
+            # Where Supabase sends a person to approve an app (the Claude
+            # connector); the web app shows it (pages/Consent.tsx).
+            return FileResponse(static / "index.html", headers={"Cache-Control": "no-store"})
+
         app.mount("/", StaticFiles(directory=static, html=True), name="web")
     else:
         @app.get("/")

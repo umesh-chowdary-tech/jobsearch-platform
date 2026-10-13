@@ -100,7 +100,9 @@ it's done.
 - **The Claude connector for every account.** Each person adds the agent to
   their own Claude (claude.ai or the app) and signs in with OAuth; its tools
   see only that person's profile and results, within their caps. It replaces
-  today's one-person connector behind a secret URL (docs/connector.md).
+  today's one-person connector behind a secret URL (docs/connector.md). Built:
+  Supabase's OAuth server, a consent page that approves only Claude, `/mcp`
+  on the service.
 - Invite codes to keep the beta to 20–50 people.
 - **Done when:** 20+ people have used it for two weeks, cost per person is
   measured, and at least 100 "good match?" answers are collected.

@@ -368,6 +368,8 @@ fieldset.choices legend { padding: 0 4px; }
 ul.asked { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; font-size: 13.5px; }
 ul.asked li { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
 
+code.addr { font-size: 13px; padding: 6px 10px; border-radius: 8px; background: var(--muted-soft); overflow-wrap: anywhere; }
+
 /* ── phones: the sidebar becomes a tab bar along the bottom ────────────── */
 @media (max-width: 760px) {
   .shell { grid-template-columns: 1fr; }

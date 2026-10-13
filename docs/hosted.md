@@ -38,7 +38,9 @@ passes `/api` to the service.
   running `assemble` or `rank`, and referral asks (who to ask, a drafted
   message, marking what happened; at most 80 characters for a name and 300
   for a line about them), and applications: pasted job emails and ones added
-  by hand (docs/mail.md), and asking for a company to be watched (below).
+  by hand (docs/mail.md), asking for a company to be watched (below), and
+  the Claude connector at `/mcp`, each member signed in as themselves
+  (docs/connector.md).
   Reading an inbox, the board registry and the schedule stay with the local
   app.
 - **Who you are** comes from a Supabase access token in the `Authorization`
