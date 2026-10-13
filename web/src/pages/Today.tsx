@@ -71,7 +71,10 @@ export function Today({ onCount }: { onCount: (n: number) => void }) {
       </div>
       {t.decide.length
         ? <div className="list">{t.decide.map(r => <JobRow key={r.id} row={r} actions onChange={load} />)}</div>
-        : <p className="empty">Nothing strong or possible is waiting on you. New postings are checked a few times a day;
+        : t.caught_up === false
+          ? <p className="empty">SwitchKaro is reading every job already open on the company boards it watches, against your
+              profile. That takes a few minutes after you first save your profile; the matches show here, then ranked.</p>
+          : <p className="empty">Nothing strong or possible is waiting on you. New postings are checked a few times a day;
             every job kept for you is under <a href="#/jobs">Jobs</a>.</p>}
       {t.unread > 0 && (
         <p className="muted">

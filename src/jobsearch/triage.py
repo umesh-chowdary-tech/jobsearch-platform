@@ -307,6 +307,28 @@ class Triaged:
         return self.coverage.score if self.coverage else 0
 
 
+def rejected_unread(profile: dict, posting: dict[str, Any]) -> Triaged | None:
+    """The rejection triage_posting would give without the description: the
+    title's function, the title's level, or a location field that names a
+    place - the location check reads the description only when the field names
+    none. None when the description could still matter. So a description is
+    fetched only for a posting that could pass, and the verdict is the same."""
+    title, location = posting.get("title", ""), posting.get("location", "")
+    ok, why = function_verdict(title, profile)
+    if not ok:
+        return Triaged(posting, REJECT, [why])
+    remote = (profile.get("location") or {}).get("remote_terms") or []
+    ok, why = location_verdict(location, "", profile)
+    if not ok and _places_named(location, remote):
+        return Triaged(posting, REJECT, [why])
+    level = _seniority_by_title(title, profile)
+    if level and level[0] == REJECT:
+        # The same reasons, in the same order, as triage_posting's: the last
+        # one is what the rejection tally counts.
+        return Triaged(posting, REJECT, [why, level[1]] if ok else [level[1]])
+    return None
+
+
 def triage_posting(index: SkillIndex, profile: dict, posting: dict[str, Any]) -> Triaged:
     title = posting.get("title", "")
     location = posting.get("location", "")

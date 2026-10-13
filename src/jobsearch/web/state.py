@@ -183,6 +183,9 @@ def today(prof: Profile) -> dict[str, Any]:
         "escalations": open_escalations(prof.shared / "escalations.jsonl"),
         "stages": pipeline.counts(pipeline.load(prof), [r["id"] for r in live]),
         "inbox": inbox_summary(prof),
+        # Read what was already open on the boards (cycle.py) - until then
+        # only postings that appeared since the boards were first read show.
+        "caught_up": (prof.var / "caught-up.json").exists(),
     }
 
 

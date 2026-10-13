@@ -40,6 +40,7 @@ export interface Today {
   in_progress: Row[];
   stages: Record<string, number>;
   outreach_due: { id: string; to: string; company: string; role: string; need: string; posting_id: string }[];
+  caught_up?: boolean;
 }
 
 export interface OutreachDraft {
