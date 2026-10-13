@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, get } from "./api";
-import { appName, loadConfig, onChange, signOut, token, type Config } from "./auth";
+import { appName, CONSENT_PATH, loadConfig, onChange, signOut, token, type Config } from "./auth";
 import type { Me, Overview } from "./types";
 import { ago, applyTheme, Icon, useDark, useRoute, type IconName } from "./ui";
 import { SignIn, Join, Paused, Reconsent } from "./pages/SignIn";
@@ -17,6 +17,7 @@ import { Setup } from "./pages/Setup";
 import { Settings } from "./pages/Settings";
 import { Admin } from "./pages/Admin";
 import { Legal } from "./pages/Legal";
+import { Consent } from "./pages/Consent";
 
 type Phase = "loading" | "signed-out" | "ready" | "error";
 
@@ -63,6 +64,10 @@ export function App() {
     );
   }
   if (phase === "signed-out" || !me || !config) return <SignIn config={config} onDone={refresh} />;
+  // Approving the Claude connector: it says itself what's missing, if anything.
+  if (window.location.pathname === CONSENT_PATH) {
+    return <Consent me={me} onSignOut={async () => { await signOut(); refresh(); }} />;
+  }
   if (!me.member) return <Join me={me} onJoined={setMe} onSignOut={async () => { await signOut(); refresh(); }} />;
   if (me.suspended) {
     const out = async () => { await signOut(); refresh(); };

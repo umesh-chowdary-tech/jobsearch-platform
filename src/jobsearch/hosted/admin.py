@@ -17,7 +17,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Protocol
 
-from .. import cycle, feedback, pipeline
+from .. import company_requests, cycle, feedback, pipeline
 from ..assemble import load_library
 from ..busy import holder
 from ..limits import Meter, load_limits, load_overrides, price_for, save_overrides
@@ -349,6 +349,7 @@ def overview(svc: Service, missing_settings: list[str]) -> dict[str, Any]:
                        for job, spec in JOBS.items()],
         },
         "log": history(shared),
+        "requests": company_requests.all_requests(shared),
     }
 
 
@@ -445,6 +446,22 @@ def act(svc: Service, by: str, body: dict[str, Any]) -> dict[str, Any]:
             raise AdminError(data.get("error") or "couldn't start it")
         record(shared, by, "boards_check")
         out["started"] = True
+    elif action == "company_search":
+        rid = str(body.get("id") or "")
+        rids = [rid] if rid else company_requests.waiting(shared)
+        status, data = svc.start_company_search(rids)
+        if status != 202:
+            raise AdminError(data.get("error") or "couldn't start it")
+        record(shared, by, "company_search", ", ".join(rids)[:200])
+        out["started"] = True
+    elif action in ("company_decline", "company_stop"):
+        rid, note = str(body.get("id") or ""), str(body.get("note") or "")
+        try:
+            row = (company_requests.decline(shared, rid, note) if action == "company_decline"
+                   else company_requests.stop_watching(shared, rid, note))
+        except company_requests.RequestError as exc:
+            raise AdminError(str(exc)) from None
+        record(shared, by, action, row["company"], note[:120])
     elif action in ("cycle_pause", "cycle_resume"):
         if action == "cycle_pause":
             cycle.pause(shared, None)

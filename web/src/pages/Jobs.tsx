@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { get } from "../api";
+import { AskCompany } from "../companies";
 import { JobRow, STAGES } from "../jobs";
 import type { Row } from "../types";
 import { fresh, Icon } from "../ui";
@@ -88,6 +89,8 @@ export function Jobs({ query }: { query: URLSearchParams }) {
             you chose (or remote), at your level, and asks for skills your profile backs. If nothing shows up within a day,
             check your <a href="#/profile?tab=prefs">preferences</a>.</p>
         </div>
+        <h2>Ask for a company</h2>
+        <AskCompany />
       </>
     );
   }
@@ -141,6 +144,8 @@ export function Jobs({ query }: { query: URLSearchParams }) {
       ) : (
         <p className="empty">Nothing matches these filters. <button className="quiet" onClick={clear}>Clear filters</button></p>
       )}
+      <h2>Ask for a company</h2>
+      <AskCompany />
     </>
   );
 }

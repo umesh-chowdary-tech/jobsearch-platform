@@ -309,6 +309,25 @@ def applications(prof: Profile) -> dict[str, Any]:
     }
 
 
+def tracked(prof: Profile) -> dict[str, Any]:
+    """Every application, however it was made - the hosted Applied screen.
+    What the ledger keeps of an email: its subject, and the sentence that
+    decided it."""
+    from .. import applications as A
+    from ..mail_paste import KINDS
+    ledger = A.load(prof)
+    rows = sorted((a for a in ledger["apps"].values() if not a.get("ignored")),
+                  key=lambda a: a["updated"], reverse=True)
+    keep = ("id", "company", "role", "status", "posting_id", "first_seen", "updated", "look")
+    return {
+        "apps": [{**{k: a.get(k) for k in keep},
+                  "events": [{k: e.get(k) for k in ("date", "status", "subject", "evidence")} for e in a["events"]]}
+                 for a in rows],
+        "kinds": KINDS,
+        "statuses": list(A.RANK),
+    }
+
+
 def inbox_summary(prof: Profile) -> dict[str, Any]:
     """For Today: what the inbox says needs the person's attention."""
     from .. import applications as A

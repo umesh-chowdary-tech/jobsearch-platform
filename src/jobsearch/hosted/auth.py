@@ -55,6 +55,13 @@ class Verifier:
                                                                      cache_keys=True, lifespan=3600))
 
     def verify(self, token: str) -> Who:
+        return self.verify_claims(token)[0]
+
+    def verify_claims(self, token: str, any_audience: bool = False) -> tuple[Who, dict[str, Any]]:
+        """The person and the token's claims. `any_audience`: a token Supabase
+        issued to an app the person approved (its OAuth server - the Claude
+        connector) may name that app as its audience; it is still this
+        project's, signed by its keys, unexpired, and a signed-in user's."""
         try:
             alg = jwt.get_unverified_header(token).get("alg")
             if alg == "HS256" and self.secret:
@@ -63,8 +70,10 @@ class Verifier:
                 key = self.jwks.get_signing_key_from_jwt(token).key
             else:
                 raise AuthError("this sign-in token isn't accepted here")
-            claims = jwt.decode(token, key, algorithms=[alg], audience=AUDIENCE, issuer=self.issuer,
-                                options={"require": ["exp", "sub", "aud", "iss"]})
+            claims = jwt.decode(token, key, algorithms=[alg], issuer=self.issuer,
+                                audience=None if any_audience else AUDIENCE,
+                                options={"require": ["exp", "sub", "iss"] if any_audience else ["exp", "sub", "aud", "iss"],
+                                         "verify_aud": not any_audience})
         except AuthError:
             raise
         except (jwt.PyJWTError, ValueError) as exc:
@@ -72,7 +81,14 @@ class Verifier:
         sub = str(claims.get("sub") or "")
         if not sub:
             raise AuthError("sign in again")
-        return Who(sub=sub, email=str(claims.get("email") or "").strip().lower())
+        if any_audience:
+            # Not the project's own keys (anon, service_role), not an anonymous
+            # user, and either a sign-in's audience or an app's grant.
+            if claims.get("role", "authenticated") != "authenticated" or claims.get("is_anonymous"):
+                raise AuthError("this sign-in token isn't accepted here")
+            if claims.get("aud") != AUDIENCE and AUDIENCE not in (claims.get("aud") or []) and not claims.get("client_id"):
+                raise AuthError("this sign-in token isn't accepted here")
+        return Who(sub=sub, email=str(claims.get("email") or "").strip().lower()), claims
 
     def mint_dev(self, email: str) -> str:
         """A token for `email`, in dev mode only. The same email always gets

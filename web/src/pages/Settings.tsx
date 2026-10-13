@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { download, post } from "../api";
+import { connectedApps, disconnectApp, loadConfig, type ConnectedApp } from "../auth";
 import type { Me } from "../types";
 import { applyTheme, day, getTheme, useToast, type Theme } from "../ui";
 
@@ -35,6 +36,8 @@ export function Settings({ me, onSignOut }: { me: Me; onSignOut: () => void }) {
         </div>
       </div>
 
+      <Claude />
+
       <div className="card stack" style={{ marginTop: 12 }}>
         <h3>Your data</h3>
         <p className="small">Everything kept for you: your confirmed facts, preferences, the uploaded resume, ranked jobs and built resumes.</p>
@@ -62,5 +65,39 @@ export function Settings({ me, onSignOut }: { me: Me; onSignOut: () => void }) {
 
       <div style={{ marginTop: 20 }}><button className="quiet" onClick={onSignOut}>Sign out</button></div>
     </>
+  );
+}
+
+/** SwitchKaro inside Claude: the address to add, and taking it back. */
+function Claude() {
+  const [hosted, setHosted] = useState(false);
+  const [apps, setApps] = useState<ConnectedApp[]>([]);
+  const toast = useToast();
+  const address = `${window.location.origin}/mcp`;
+  const load = () => connectedApps().then(setApps).catch(() => setApps([]));
+  useEffect(() => { loadConfig().then(c => { setHosted(c.auth === "supabase"); if (c.auth === "supabase") load(); }); }, []);
+  if (!hosted) return null;
+  const drop = async (a: ConnectedApp) => {
+    try { await disconnectApp(a.id); toast(`${a.name} disconnected`); load(); }
+    catch (e) { toast((e as Error).message); }
+  };
+  return (
+    <div className="card stack" style={{ marginTop: 12 }}>
+      <h3>Use SwitchKaro in Claude</h3>
+      <p className="small">Ask Claude about your jobs in any chat. In Claude: <b>Settings &gt; Connectors &gt; Add custom
+        connector</b>, paste this address, then <b>Connect</b> and approve it here. Needs a paid Claude plan.</p>
+      <div className="row">
+        <code className="addr">{address}</code>
+        <button onClick={() => navigator.clipboard.writeText(address).then(() => toast("Copied"), () => toast("Select it to copy"))}>Copy</button>
+      </div>
+      {apps.length > 0 && (
+        <ul className="asked">
+          {apps.map(a => (
+            <li key={a.id}><b>{a.name}</b> <span className="muted small">connected {day(a.since)}</span>
+              <button className="quiet" onClick={() => drop(a)}>Disconnect</button></li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
