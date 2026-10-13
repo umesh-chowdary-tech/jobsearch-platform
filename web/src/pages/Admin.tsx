@@ -3,6 +3,7 @@
 // only: nobody's resume, profile or jobs are shown here. Every change goes to
 // the log tab.
 
+import { REQUEST_WORD } from "../companies";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { get, post } from "../api";
 import type { AdminOverview, AdminPerson } from "../types";
@@ -431,6 +432,8 @@ function JobsTab({ o, act }: { o: AdminOverview; act: Act }) {
         <p className="small muted">Red: a day with a failed update.</p>
       </div>
 
+      <Requests o={o} act={act} />
+
       <h2>Health</h2>
       <div className="card">
         <ul className="checks">
@@ -453,12 +456,64 @@ function JobsTab({ o, act }: { o: AdminOverview; act: Act }) {
   );
 }
 
+function Requests({ o, act }: { o: AdminOverview; act: Act }) {
+  const reqs = o.requests || [];
+  const waiting = reqs.filter(r => r.status === "asked").length;
+  const running = o.health.running;
+  const note = (what: string) => window.prompt(what) ?? null;
+  return (
+    <>
+      <h2>Companies people asked for</h2>
+      <div className="card stack">
+        {reqs.length ? (
+          <>
+            <div className="row">
+              <button className="primary" disabled={!waiting || running}
+                      onClick={() => act({ action: "company_search" }, "Looking for their job boards - a minute or two")}>
+                Find job boards for all {waiting} waiting</button>
+              <span className="small muted">A few polite requests per company to the job-board providers we read.</span>
+            </div>
+            <div className="scroll-x">
+              <table>
+                <thead><tr><th>Company</th><th>Asked</th><th>Where it stands</th><th></th></tr></thead>
+                <tbody>{reqs.map(r => (
+                  <tr key={r.id}>
+                    <td><b>{r.company}</b>{r.url && /^https?:\/\//.test(r.url) && (
+                      <div className="small"><a href={r.url} target="_blank" rel="noopener noreferrer nofollow">careers page</a></div>)}</td>
+                    <td>{r.asked ?? 0}</td>
+                    <td>{REQUEST_WORD[r.status] || r.status}{r.board ? ` · ${r.board}` : ""}{r.postings != null && r.status === "watching" ? ` · ${r.postings} open` : ""}
+                      {r.note && <div className="small muted">{r.note}</div>}</td>
+                    <td className="row">
+                      {(r.status === "asked" || r.status === "not_found") && (
+                        <button disabled={running} onClick={() => act({ action: "company_search", id: r.id }, `Looking for ${r.company}'s job board`)}>Find its board</button>
+                      )}
+                      {r.status === "watching" && (
+                        <button onClick={() => { const n = note(`Stop watching ${r.company}'s board? Say why (people who asked see it):`);
+                                                 if (n !== null) act({ action: "company_stop", id: r.id, note: n }, "Stopped watching it"); }}>Stop watching</button>
+                      )}
+                      {r.status !== "declined" && r.status !== "watching" && (
+                        <button className="quiet" onClick={() => { const n = note(`Decline ${r.company}? Say why (people who asked see it):`);
+                                                                   if (n !== null) act({ action: "company_decline", id: r.id, note: n }, "Declined"); }}>Decline</button>
+                      )}
+                    </td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          </>
+        ) : <p className="empty">No requests yet. People ask on their Jobs page.</p>}
+      </div>
+    </>
+  );
+}
+
 const ACTIONS: Record<string, string> = {
   suspend: "Paused an account", unsuspend: "Resumed an account", delete: "Deleted an account",
   person_limit: "Changed a person's AI limit", revoke_invite: "Cancelled an invite", ai_pause: "Paused all AI",
   ai_resume: "Resumed AI", caps: "Changed spending limits", route: "Changed a job's model",
   cycle_run: "Ran a job update", cycle_pause: "Paused job updates", cycle_resume: "Resumed job updates",
-  boards_check: "Checked the job boards",
+  boards_check: "Checked the job boards", company_search: "Looked for companies' job boards",
+  company_decline: "Declined a company request", company_stop: "Stopped watching a company's board",
 };
 
 function LogTab({ o }: { o: AdminOverview }) {

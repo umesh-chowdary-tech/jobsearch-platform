@@ -12,8 +12,24 @@ python -m jobsearch.cli --profile <id> mail rules            # rules Groq propos
 The app's **Applications** screen shows the same, with one-click corrections.
 
 This is the local reader: one person's Gmail inbox, read with an app password.
-The hosted service will not ask for mail access. Each person will get a
-forwarding address instead, and the same rules will read what they forward
+The hosted service never asks for mail access.
+
+## On the hosted service: pasted emails (`mail_paste.py`)
+
+A person pastes a job email on the Applied screen, or adds an application they
+made anywhere. The same rules read a pasted email - its From, Subject and Date
+lines if they pasted them, else what they type - and it lands in the same
+ledger, linked to a tracked job and moving its stage like a synced one.
+
+- **No model reads it.** When the rules can't tell what an email says, the
+  person picks (received, interview, rejection, offer, on hold, withdrawn, a
+  recruiter reaching out); when it names no company, they type it.
+- **Kept like any email:** the subject line, the sender, the sentence that
+  decided it. Never the rest of the text.
+- The same email pasted twice is one event (a hash of sender, subject and
+  text). An email holds 20,000 characters.
+
+A forwarding address per person, read by the same rules, is still to come
 (docs/ROADMAP.md, Phase 3).
 
 ## Setup

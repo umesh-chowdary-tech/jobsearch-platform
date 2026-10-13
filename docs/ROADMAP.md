@@ -90,8 +90,9 @@ it's done.
 
 ### Phase 2: Invite-only hosted beta
 - Accounts, a database, the API and workers, and the web app with these pages:
-  setup, today's ranked jobs, job detail with a tailored resume, applied
-  tracker, settings.
+  setup, today's ranked jobs, every kept job with search and filters, job
+  detail with a tailored resume, applied tracker, resumes, the profile with
+  its skill gaps, settings.
 - Per-person AI caps, a global monthly cap, and the admin cost page.
 - Privacy policy and terms (India's DPDP Act: consent, purpose, export,
   deletion, breach handling), data export and account deletion.
@@ -99,17 +100,20 @@ it's done.
 - **The Claude connector for every account.** Each person adds the agent to
   their own Claude (claude.ai or the app) and signs in with OAuth; its tools
   see only that person's profile and results, within their caps. It replaces
-  today's one-person connector behind a secret URL (docs/connector.md).
+  today's one-person connector behind a secret URL (docs/connector.md). Built:
+  Supabase's OAuth server, a consent page that approves only Claude, `/mcp`
+  on the service.
 - Invite codes to keep the beta to 20–50 people.
 - **Done when:** 20+ people have used it for two weeks, cost per person is
   measured, and at least 100 "good match?" answers are collected.
 
 ### Phase 3: Applications and more boards
-- Application tracking by email forwarding: each person gets an address and
-  forwards job emails to it. The existing reader classifies them (rules first,
-  then the model on unclear ones, every claim quoted).
+- Application tracking by email: pasting a job email in, read by the same
+  rules, with the person settling what they can't (done); then a forwarding
+  address per person, so it happens with no manual steps.
 - People can ask for a company to be added. Board discovery finds its careers
-  feed, and the shared watcher starts polling it.
+  feed, and the shared watcher starts polling it (done: the admin page runs
+  discovery for what people asked; docs/hosted.md).
 - **Done when:** forwarded emails update applications with no manual steps,
   and the board list grows from what people ask for.
 

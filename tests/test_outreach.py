@@ -328,6 +328,16 @@ def test_the_recipients_name_never_reaches_the_model(root):
     assert d.by.startswith("store facts; opener by")
 
 
+def test_no_part_of_the_recipients_name_reaches_the_model(root):
+    """The privacy notice says their name is never sent: not the surname, and
+    not the first name typed in lower case either."""
+    llm = FakeLLM("It was great working together on the Acme Track team.")
+    o.draft(root, "1000001", "Ravi Kumar Reddy", "warm",
+            context="ravi kumar and I were on the Acme Track team; Reddy sat next to me", llm=llm)
+    sent = " ".join(llm.seen).lower()
+    assert llm.seen and not any(part in sent for part in ("ravi", "kumar", "reddy"))
+
+
 def test_a_bad_opener_falls_back_to_the_template(root):
     llm = FakeLLM("We shipped 40 features together, you led it all.")
     d = o.draft(root, "1000001", "Ravi Kumar", "warm",

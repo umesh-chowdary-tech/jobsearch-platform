@@ -44,6 +44,20 @@ export function Today({ onCount }: { onCount: (n: number) => void }) {
         <Kpi icon="star" tone="warm" n={t.favorites} label="favorites" />
       </div>
 
+      {t.outreach_due.length > 0 && (
+        <>
+          <h2>Referral asks to act on · {t.outreach_due.length}</h2>
+          <div className="list">
+            {t.outreach_due.map(d => (
+              <div key={d.id} className="item">
+                <div className="t"><a href={`#/p/${encodeURIComponent(d.posting_id)}`}>{d.to} · {d.role} at {d.company}</a></div>
+                <span className="badge possible">{d.need}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
       {t.back_from_later.length > 0 && (
         <>
           <h2>Back from later · {t.back_from_later.length}</h2>
@@ -51,10 +65,14 @@ export function Today({ onCount }: { onCount: (n: number) => void }) {
         </>
       )}
 
-      <h2>Needs a decision · {t.decide.length}</h2>
+      <div className="h2row">
+        <h2>Needs a decision · {t.decide.length}</h2>
+        <a href="#/jobs">All jobs</a>
+      </div>
       {t.decide.length
         ? <div className="list">{t.decide.map(r => <JobRow key={r.id} row={r} actions onChange={load} />)}</div>
-        : <p className="empty">Nothing strong or possible is waiting on you. New postings are checked a few times a day.</p>}
+        : <p className="empty">Nothing strong or possible is waiting on you. New postings are checked a few times a day;
+            every job kept for you is under <a href="#/jobs">Jobs</a>.</p>}
       {t.unread > 0 && (
         <p className="muted">
           {t.unread} more kept postings haven't been read by a model yet.{" "}

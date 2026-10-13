@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from .. import feedback, outreach, pipeline
 from ..assemble import load_library, load_store
 from ..busy import holder, stop_requested
@@ -26,7 +28,7 @@ from ..rank import sort_key
 from ..profile import Profile
 from ..skills import load_index
 from ..registry import open_escalations
-from ..triage import top_gaps
+from ..triage import load_profile as load_search_profile, top_gaps
 
 RESUME_EXT = (".pdf", ".html", ".txt", ".tex")
 
@@ -76,6 +78,7 @@ def _row(prof: Profile, p: dict[str, Any], pipe: dict, ledger: dict, variants: d
         "skills": list(matched)[:5],
         "gaps": [g for g in p.get("required_gaps") or [] if g not in matched][:3],
         "closed": bool(p.get("closed_at")),
+        "first_seen": p.get("first_seen"),
         "status": pipeline.status(pipe, pid),
         "variant": variants.get(pid),
         "asks": [{"to": d["to"], "status": d["status"]} for d in asks],
@@ -306,6 +309,25 @@ def applications(prof: Profile) -> dict[str, Any]:
     }
 
 
+def tracked(prof: Profile) -> dict[str, Any]:
+    """Every application, however it was made - the hosted Applied screen.
+    What the ledger keeps of an email: its subject, and the sentence that
+    decided it."""
+    from .. import applications as A
+    from ..mail_paste import KINDS
+    ledger = A.load(prof)
+    rows = sorted((a for a in ledger["apps"].values() if not a.get("ignored")),
+                  key=lambda a: a["updated"], reverse=True)
+    keep = ("id", "company", "role", "status", "posting_id", "first_seen", "updated", "look")
+    return {
+        "apps": [{**{k: a.get(k) for k in keep},
+                  "events": [{k: e.get(k) for k in ("date", "status", "subject", "evidence")} for e in a["events"]]}
+                 for a in rows],
+        "kinds": KINDS,
+        "statuses": list(A.RANK),
+    }
+
+
 def inbox_summary(prof: Profile) -> dict[str, Any]:
     """For Today: what the inbox says needs the person's attention."""
     from .. import applications as A
@@ -336,11 +358,20 @@ def posting_emails(prof: Profile, pid: str) -> list[dict[str, Any]]:
 # ── the other screens ────────────────────────────────────────────────────────
 
 def resumes(prof: Profile) -> dict[str, Any]:
+    posts = _postings(prof)
+
+    def used(s: dict[str, Any]) -> dict[str, Any]:
+        # The company as the rest of the app names it, and whether the job's
+        # page can still be opened.
+        p = posts.get(str(s.get("posting_id")))
+        name = outreach.company_name(prof, str(p.get("board") or ""), p)[0] if p else s.get("company")
+        return {**s, "company": name, "known": p is not None}
+
     lib = []
     for v in load_library(prof):
         lib.append({"id": v.id, "descriptor": v.title_descriptor, "summary": v.summary,
-                    "summary_by": v.summary_by, "surfaces": v.surfaces,
-                    "sent_to": v.sent_to, "files": resume_files(prof, v.id),
+                    "summary_by": v.summary_by, "surfaces": v.surfaces, "created": v.created,
+                    "sent_to": [used(s) for s in v.sent_to], "files": resume_files(prof, v.id),
                     "checks_ok": all(c.get("ok") for c in (v.parse_check or {}).get("checks", []))
                     if v.parse_check else None})
     manual_dir = prof.var / "manual" / "resumes"
@@ -358,9 +389,32 @@ def outreach_view(prof: Profile) -> list[dict[str, Any]]:
 
 
 def market(prof: Profile) -> dict[str, Any]:
-    # The dashboard's chart, reused as-is: one implementation of the chart
-    # and its validated palette, not two that drift apart.
-    return {"chart_html": _gap_chart(top_gaps(prof.var, limit=16))}
+    rows = top_gaps(prof.var, limit=16)
+    # The local app draws the dashboard's chart as-is: one implementation of
+    # the chart and its validated palette, not two that drift apart. The
+    # hosted app draws the same rows itself.
+    return {"chart_html": _gap_chart(rows),
+            "gaps": [{"skill": skill, "bucket": bucket, "required": req, "nice": nice}
+                     for bucket, skill, req, nice in rows]}
+
+
+ENTRY_FIELDS = ("id", "title", "type", "where", "period", "headline", "facts", "metrics", "tech",
+                "confidence", "priority", "status", "angles", "evidence", "sources", "notes")
+
+
+def _prefs_view(prof: Profile) -> dict[str, Any] | None:
+    """What the person is looking for, as search-profile.yaml says it."""
+    try:
+        sp = load_search_profile(prof.dir)
+    except (OSError, yaml.YAMLError):
+        return None
+    if not isinstance(sp, dict):
+        return None
+    loc, sen = sp.get("location") or {}, sp.get("seniority") or {}
+    return {"preferred": loc.get("preferred") or [], "acceptable": loc.get("acceptable") or [],
+            "remote": bool(loc.get("remote_terms")), "years": sen.get("years_experience"),
+            "max_years": sen.get("max_years_required"), "level": sen.get("level") or "",
+            "watch": sp.get("companies_to_watch") or []}
 
 
 def profile(prof: Profile) -> dict[str, Any]:
@@ -372,12 +426,17 @@ def profile(prof: Profile) -> dict[str, Any]:
         tiers.setdefault(c.tier, []).append(
             {"skill": c.skill, "scope": c.scope, "category": index.category.get(c.skill)})
     idn = store.get("identity") or {}
+    # Contact details stay out: the connector hands `identity` to a chat.
     return {
         "identity": {"name": idn.get("name"), "title": (idn.get("title") or {}).get("official"),
                      "descriptors": (idn.get("title") or {}).get("approved_descriptors"),
                      "location": idn.get("location")},
-        "entries": [{k: e.get(k) for k in ("id", "title", "type", "where", "period", "headline",
-                                            "facts", "metrics", "tech", "confidence", "priority")}
-                    for e in store.get("entries") or []],
+        "links": {k: idn[k] for k in ("linkedin", "github", "portfolio") if idn.get(k)},
+        "employment": [{k: j.get(k) for k in ("employer", "title", "location", "start", "end", "client") if j.get(k)}
+                       for j in idn.get("employment") or [] if isinstance(j, dict)],
+        "languages": [str(x) for x in idn.get("languages") or []],
+        "entries": [{k: e.get(k) for k in ENTRY_FIELDS}
+                    for e in store.get("entries") or [] if isinstance(e, dict)],
         "tiers": tiers,
+        "prefs": _prefs_view(prof),
     }

@@ -1,9 +1,10 @@
 // One job: why it fits, your decision, "good match?", the tailored resume,
-// and what the application form will ask.
+// what the application form will ask, and asking someone for a referral.
 
 import { useCallback, useEffect, useState } from "react";
 import { get, openFile, post } from "../api";
 import { STAGES, Star, useJob } from "../jobs";
+import { DraftCard, DraftForm, Leads } from "../referrals";
 import type { PostingDetail } from "../types";
 import { ago, Avatar, FitBadge, Icon, useToast } from "../ui";
 
@@ -178,9 +179,24 @@ export function Posting({ id }: { id: string }) {
             {p.status !== "applied" && <button onClick={() => setStatus("applied")}>Mark applied</button>}
           </div>
         </div>
+        <div className="card stack">
+          <h3>3 · Referral</h3>
+          <p className="small muted">
+            {p.drafts.length ? `${p.drafts.length} ${p.drafts.length === 1 ? "ask" : "asks"} below.` : "A referral often gets a resume read first."}
+          </p>
+          <Leads id={p.id} />
+        </div>
       </div>
 
       <ApplyKit id={p.id} />
+
+      <h2>Ask for a referral</h2>
+      {p.variant
+        ? <DraftForm posting={p.id} onDone={load} />
+        : <p className="muted">Build the resume first: a referral message shouldn't promise one that doesn't exist yet.</p>}
+      {p.drafts.length > 0 && (
+        <div className="stack" style={{ marginTop: 12 }}>{p.drafts.map(d => <DraftCard key={d.id} d={d} onChange={load} />)}</div>
+      )}
 
       <h2>The posting</h2>
       <div className="desc">{p.description || "No description stored."}</div>

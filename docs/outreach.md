@@ -78,7 +78,8 @@ means no model call.**
 The opener has its own gate. It is grounded against the context alone, may not
 mention the job, and has any leading greeting stripped. The recipient's name
 never reaches the provider: the model sees `{FIRST}`, and the name is filled in
-afterwards.
+afterwards. The rest of their name is removed from the line too, whatever its
+case.
 
 ## The checks
 

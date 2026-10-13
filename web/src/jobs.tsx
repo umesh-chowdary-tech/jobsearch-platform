@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { get, post } from "./api";
 import type { JobSnapshot, Later, Row } from "./types";
-import { Avatar, day, FitBadge, Icon, JobTags, useToast } from "./ui";
+import { ago, Avatar, day, FitBadge, fresh, Icon, JobTags, useToast } from "./ui";
 
 export const STAGES = ["new", "shortlisted", "applied", "interviewing", "offer", "closed", "skipped"];
 
@@ -51,6 +51,7 @@ export function JobRow({ row, actions, onChange, stagePicker }: {
           <div className="t">
             <a href={`#/p/${encodeURIComponent(row.id)}`}>{row.title}</a>
             <FitBadge fit={row.fit} />
+            {fresh(row.first_seen) && !row.closed && <span className="badge new" title={`First seen ${ago(row.first_seen)}`}>new</span>}
             {row.closed && <span className="badge closed">closed</span>}
           </div>
           <div className="co">{row.company}{meta && <span className="muted"> · {meta}</span>}</div>

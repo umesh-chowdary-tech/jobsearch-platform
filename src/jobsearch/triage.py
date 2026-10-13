@@ -431,8 +431,12 @@ def write_results(var_dir: Path, results: Iterable[Triaged]) -> Path:
             continue
         cov = t.coverage
         description = t.posting.get("description") or ""
+        previous = blob["postings"].get(pid) or {}
         record = {
             "id": pid,
+            # When the watcher first saw it, kept across re-triage: a recheck
+            # reads the board again and has no stamp of its own.
+            "first_seen": t.posting.get("first_seen") or previous.get("first_seen"),
             "title": t.title,
             "company": t.company,
             "location": t.posting.get("location", ""),
@@ -464,7 +468,6 @@ def write_results(var_dir: Path, results: Iterable[Triaged]) -> Path:
         # What later steps added. Re-triaging re-derives the verdict; it has
         # no business discarding the model's judgement or the watcher's word
         # that the posting has closed.
-        previous = blob["postings"].get(pid) or {}
         for key in ("ai", "closed_at"):
             if key in previous:
                 record[key] = previous[key]

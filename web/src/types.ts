@@ -22,6 +22,7 @@ export interface Row {
   skills: string[];
   gaps: string[];
   closed: boolean;
+  first_seen?: string | null;
   status: string;
   favorite: boolean;
   later: Later | null;
@@ -38,6 +39,77 @@ export interface Today {
   unread: number;
   in_progress: Row[];
   stages: Record<string, number>;
+  outreach_due: { id: string; to: string; company: string; role: string; need: string; posting_id: string }[];
+}
+
+export interface OutreachDraft {
+  id: string;
+  posting_id: string;
+  company: string;
+  role: string;
+  to: string;
+  how: string;
+  context: string;
+  note: string | null;
+  message: string;
+  subject: string;
+  blurb: string;
+  checks: { check: string; ok: boolean; level: string; detail: string }[];
+  by: string;
+  status: string;
+  created: string;
+  history: { status: string; at: string; note?: string }[];
+  need?: string | null;
+}
+
+export interface Leads {
+  company: string;
+  leads: { who: string; why: string; how: string; url: string; employer?: string }[];
+  already_asked: { to: string; status: string; role: string }[];
+}
+
+export interface ProfileEntry {
+  id: string;
+  title?: string | null;
+  type?: string | null;
+  where?: string | null;
+  period?: string | null;
+  headline?: string | null;
+  facts?: string[] | null;
+  metrics?: ({ measured?: boolean; claim?: string; estimate?: boolean } | string)[] | null;
+  tech?: string[] | null;
+  priority?: string | null;
+  status?: string | null;
+  evidence?: string | null;
+  sources?: string[] | null;
+  notes?: string | null;
+}
+
+export interface ProfileView {
+  identity: { name?: string | null; title?: string | null; location?: string | null };
+  links: Record<string, string>;
+  employment: { employer: string; title?: string; location?: string; start?: string; end?: string; client?: string }[];
+  languages: string[];
+  entries: ProfileEntry[];
+  tiers: Record<string, { skill: string; scope?: string | null }[]>;
+  prefs: {
+    preferred: string[]; acceptable: string[]; remote: boolean; years: number | null;
+    max_years: number | null; level: string; watch: string[];
+  } | null;
+}
+
+export interface Gap { skill: string; bucket: "absent" | "shallow"; required: number; nice: number }
+
+export interface ResumeVariant {
+  id: string;
+  descriptor: string;
+  summary: string | null;
+  summary_by: string | null;
+  surfaces: string[];
+  created: string;
+  sent_to: { posting_id: string; company?: string; role?: string; date?: string; ats?: { match: number } | null; known?: boolean }[];
+  files: { name: string; url: string }[];
+  checks_ok: boolean | null;
 }
 
 export interface Feedback {
@@ -58,6 +130,7 @@ export interface PostingDetail extends Row {
   files: { name: string; url: string }[];
   ats: { match: number; ceiling: number; missing: string[]; unclaimable: string[] } | null;
   feedback: Feedback | null;
+  drafts: OutreachDraft[];
 }
 
 export interface Me {
@@ -237,4 +310,5 @@ export interface AdminOverview {
     routes: { job: string; label: string; current: string; choices: { id: string; label: string }[] }[];
   };
   log: { at: string; by: string; action: string; target: string; detail: string }[];
+  requests: import("./companies").CompanyRequest[];
 }

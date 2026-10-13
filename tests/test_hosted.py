@@ -173,7 +173,9 @@ def test_the_hosted_scope_holds_on_the_service(env):
     joined(client, root)
     a = auth(token())
     assert client.get("/api/system", headers=a).status_code == 404
-    assert client.get("/api/applications", headers=a).status_code == 404
+    # Applications, yes - pasted and added ones; what an inbox sent, no.
+    assert "configured" not in client.get("/api/applications", headers=a).json()
+    assert client.get("/api/applications/x/sent", headers=a).status_code == 404
     assert client.post("/api/run", json={"action": "cycle"}, headers=a).status_code == 400
     assert client.post("/api/schedule/pause", json={"hours": 1}, headers=a).status_code == 404
 
