@@ -2,7 +2,7 @@
 
 **Draft for the invite-only beta, not yet reviewed by a lawyer.**
 
-Version 2026-10-13.3-draft. This notice explains what this service keeps about you, why, who it is shared with, and how you control it. It is written for India's Digital Personal Data Protection Act, 2023 and its Rules.
+Version 2026-10-13.4-draft. This notice explains what this service keeps about you, why, who it is shared with, and how you control it. It is written for India's Digital Personal Data Protection Act, 2023 and its Rules.
 
 ## Who runs this service
 
@@ -18,6 +18,7 @@ Version 2026-10-13.3-draft. This notice explains what this service keeps about y
 | The facts, skills and preferences you confirm | To find and rank jobs for you and to build your resumes |
 | The jobs ranked for you, your decisions on them, and the resumes built | To show you your search and where each application stands |
 | Applications you add, and job emails you paste in: the company, role, dates and status, and of each email only its subject line, sender and the one sentence that showed its status - never the rest of it. No AI reads them | To show where each application stands |
+| Companies you ask us to watch, and a careers page if you give one | To find their job boards and show you where your request stands. The shared list of requests says only how many people asked, not who |
 | Referral requests you draft: the name of the person you ask, how you know them, a line you write about them, the messages, and what you mark as done | To draft the messages and remind you when a follow-up is due |
 | Your "good match?" answers | To check and improve how well jobs are ranked |
 | The questions setup asks about your work, and your answers | To complete your profile facts - only what you confirm is used |

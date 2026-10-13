@@ -245,6 +245,44 @@ class Service:
             self.cycle.start()
         return 202, {"started": True}
 
+    def start_company_search(self, rids: list[str]) -> tuple[int, dict[str, Any]]:
+        """Look for the job boards of companies people asked for, in the
+        background: discovery's few polite requests each. A board that answers
+        is watched from the next job update."""
+        from .. import company_requests as cr
+        with self._lock:
+            if self.cycle and self.cycle.is_alive():
+                return 409, {"error": "a job update or a board check is already running"}
+            reqs = cr.load(self.shared)
+            rids = [r for r in rids if r in reqs]
+            if not rids:
+                return 400, {"error": "no request to look for"}
+            cr.mark_checking(self.shared, rids)
+
+            def run() -> None:
+                from .. import discovery
+                from ..busy import busy
+                from ..http import default_fetcher
+                from ..registry import write_run
+                try:
+                    with busy(self.shared, "looking for companies' job boards") as got:
+                        if got:
+                            fetcher = default_fetcher(self.shared)
+                            for rid in rids:
+                                found = discovery.search_company(fetcher, reqs[rid]["company"])
+                                write_run(self.shared, found.probes, found.escalations, found.summary())
+                                cr.record_search(self.shared, rid, found)
+                except Exception:  # noqa: BLE001 - logged; the admin page shows it
+                    log.exception("looking for job boards failed")
+                finally:
+                    # Whatever wasn't reached goes back in the queue.
+                    cr.release(self.shared, rids, "not looked at yet - try again")
+                if self.mirror:
+                    self.mirror.touch()
+            self.cycle = threading.Thread(target=run, name="company-search", daemon=True)
+            self.cycle.start()
+        return 202, {"started": True}
+
     def start_cycle(self, forced: bool = False) -> tuple[int, dict[str, Any]]:
         """The scheduled cycle, in the background. The cron job's tick skips
         while the schedule is paused; `forced` - "Run now" on the admin page -

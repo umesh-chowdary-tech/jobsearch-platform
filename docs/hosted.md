@@ -38,8 +38,9 @@ passes `/api` to the service.
   running `assemble` or `rank`, and referral asks (who to ask, a drafted
   message, marking what happened; at most 80 characters for a name and 300
   for a line about them), and applications: pasted job emails and ones added
-  by hand (docs/mail.md). Reading an inbox, the board registry and the
-  schedule stay with the local app.
+  by hand (docs/mail.md), and asking for a company to be watched (below).
+  Reading an inbox, the board registry and the schedule stay with the local
+  app.
 - **Who you are** comes from a Supabase access token in the `Authorization`
   header of every request. A token must be unexpired, issued by the project,
   meant for signed-in users, and signed by the project's published key (or,
@@ -162,3 +163,22 @@ What needs the maintainer's accounts, in order:
 - **The Claude connector for every account** (OAuth), replacing today's
   one-person connector.
 - **Frontend tests** once the build machine runs Node 22 (vitest needs it).
+
+## Asking for a company (`company_requests.py`)
+
+A person names a company on the Jobs page, and its careers page if they know
+it - shown on the admin page, never fetched. Asking twice, or two people
+asking, is one request; a company whose board is already read says so at
+once. Five requests can wait per person.
+
+On the admin page, "Find job boards" runs discovery for what's waiting
+(docs/discovery.md: a few polite requests per company, robots.txt and rate
+limits held), in the background. A board that answers goes into
+`boards.json`, so the next job update reads it; one discovery doubts is
+marked "check it's theirs". A board that didn't answer leaves the request
+waiting; no board at all is "no job board we can read". The admin can
+decline a request or stop watching a board, with a note the person sees.
+
+The shared list (`var/_shared/company-requests.json`) holds a company, the
+page given and how many asked - no one's name. Which requests are a person's
+own is in their folder, and goes with their account.

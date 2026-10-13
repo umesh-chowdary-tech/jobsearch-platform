@@ -110,7 +110,8 @@ it's done.
   rules, with the person settling what they can't (done); then a forwarding
   address per person, so it happens with no manual steps.
 - People can ask for a company to be added. Board discovery finds its careers
-  feed, and the shared watcher starts polling it.
+  feed, and the shared watcher starts polling it (done: the admin page runs
+  discovery for what people asked; docs/hosted.md).
 - **Done when:** forwarded emails update applications with no manual steps,
   and the board list grows from what people ask for.
 

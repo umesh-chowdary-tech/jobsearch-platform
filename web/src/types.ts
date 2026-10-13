@@ -310,4 +310,5 @@ export interface AdminOverview {
     routes: { job: string; label: string; current: string; choices: { id: string; label: string }[] }[];
   };
   log: { at: string; by: string; action: string; target: string; detail: string }[];
+  requests: import("./companies").CompanyRequest[];
 }
