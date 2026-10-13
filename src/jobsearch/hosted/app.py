@@ -33,6 +33,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.routing import Route
 
 from .. import onboard, statestore
+from ..cycle import caught_up
 from ..models import utcnow
 from ..profile import Profile, shared_var, var_dir
 from ..web import routes
@@ -554,7 +555,12 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
             _, prof = svc.member(request)
             if request.method == "GET":
                 return routes.get(prof, path, parse_qs(request.url.query), svc.runner(prof), scope=HOSTED)
-            return routes.post(prof, path, body, svc.runner(prof), scope=HOSTED)
+            out = routes.post(prof, path, body, svc.runner(prof), scope=HOSTED)
+            if path == "/api/setup/save" and not caught_up(prof):
+                # A new profile reads what's already open on the boards now,
+                # not at the next scheduled update (cycle.py, catching up).
+                svc.start_cycle()
+            return out
         return await run_in_threadpool(_respond, go)
 
     static = static_dir if static_dir is not None else WEB_DIST

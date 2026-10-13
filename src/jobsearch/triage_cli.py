@@ -21,6 +21,7 @@ from .triage import (
     angle_for,
     load_profile,
     recheck_results,
+    rejected_unread,
     top_gaps,
     triage_posting,
     update_gap_ledger,
@@ -216,7 +217,9 @@ def run_triage(prof: Profile, args) -> int:
     profile = load_profile(prof.dir)
     store = yaml.safe_load(prof.file("master-store.yaml").read_text(encoding="utf-8")) or {}
 
-    if getattr(args, "board", None):
+    if getattr(args, "postings", None) is not None:
+        postings = args.postings
+    elif getattr(args, "board", None):
         if ":" not in args.board:
             print("--board takes provider:slug, e.g. greenhouse:druva")
             return 2
@@ -243,10 +246,16 @@ def run_triage(prof: Profile, args) -> int:
         _print_gaps(var)
         return 0
 
+    # What fails on its title or its location field is rejected now, without
+    # its description: the same verdict, and no request to the board for it.
+    early = [r for r in (rejected_unread(profile, p) for p in queue) if r is not None]
+    gone = {id(r.posting) for r in early}
+    rest = [p for p in queue if id(p) not in gone]
+
     # Greenhouse and Workday withhold descriptions from their list endpoints
     # (Workday the full location list too), so fetch them here - once, for new
-    # postings only.
-    need = [p for p in queue if not p.get("description")
+    # postings that could still pass.
+    need = [p for p in rest if not p.get("description")
             and str(p.get("board", "")).split(":", 1)[0] in DETAIL_PROVIDERS]
     if need:
         if not getattr(args, "quiet", False):
@@ -256,7 +265,7 @@ def run_triage(prof: Profile, args) -> int:
             provider, slug = p["board"].split(":", 1)
             p.update(fetch_details(fetcher, provider, slug, p))
 
-    results = [triage_posting(index, profile, p) for p in queue]
+    results = early + [triage_posting(index, profile, p) for p in rest]
     kept = [t for t in results if t.verdict not in (REJECT, NO_MATCH)]
     kept.sort(key=lambda t: -t.score)
 

@@ -107,6 +107,9 @@ class BoardWatch:
     added: list[Posting] = field(default_factory=list)
     removed: list[str] = field(default_factory=list)
     total: int = 0
+    # Everything open on the board this run - in memory only, for a profile
+    # catching up (cycle.py). The baseline file keeps ids, nothing more.
+    current: list[Posting] = field(default_factory=list, repr=False)
     error: str | None = None
 
     @property
@@ -133,6 +136,7 @@ def watch_board(fetcher: Fetcher, var_dir: Path, board: dict[str, Any]) -> Board
 
     current = {post.id: post for post in p.postings}
     w.total = len(current)
+    w.current = list(current.values())
     path = seen_path(var_dir, provider, slug)
     previous = load_seen(path)
 
@@ -162,6 +166,12 @@ class WatchRun:
     @property
     def added(self) -> list[tuple[BoardWatch, Posting]]:
         return [(b, post) for b in self.boards for post in b.added]
+
+    def live(self) -> list[dict[str, Any]]:
+        """Every posting open on the boards this run read, shaped like the
+        queue's records. No first_seen: when it was posted isn't known."""
+        return [{"first_seen": None, "board": b.key, "company": b.company, **post.to_dict()}
+                for b in self.boards if b.status in (SEEDED, POLLED) for post in b.current]
 
     def summary(self) -> dict[str, int]:
         return {

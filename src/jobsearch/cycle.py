@@ -18,6 +18,7 @@ import time
 import traceback
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 
 from .busy import busy, holder, stop_requested, write_atomic
 from .dashboard import render
@@ -140,6 +141,7 @@ def _cycle(root: Path, profiles: list[Profile], quiet: bool) -> int:
     run = _Run(var, quiet)
 
     # ── watch: once, for everyone ────────────────────────────────────────────
+    live: list[dict[str, Any]] = []
     try:
         boards = load_boards(var)
         if not boards:
@@ -148,6 +150,7 @@ def _cycle(root: Path, profiles: list[Profile], quiet: bool) -> int:
             return 1
         w = watch_all(default_fetcher(var), var, boards)
         record_new(var, w)
+        live = w.live()
         s = w.summary()
         run.parts.append(
             f"watch boards={s['boards']} new={s['new_postings']} "
@@ -166,12 +169,35 @@ def _cycle(root: Path, profiles: list[Profile], quiet: bool) -> int:
     budget = max(RANK_FLOOR, RANK_BUDGET / len(profiles))
     keys: dict[str, tuple[bool, str]] = {}
     for prof in profiles:
-        if _for_profile(prof, run, budget, keys):
+        if _for_profile(prof, run, budget, keys, live):
             return run.end()
     return run.end()
 
 
-def _for_profile(prof: Profile, run: _Run, budget: float, keys: dict[str, tuple[bool, str]]) -> bool:
+CAUGHT_UP = "caught-up.json"
+
+
+def caught_up(prof: Profile) -> bool:
+    """Whether this profile has read what was already open on the boards. The
+    watcher's queue holds only what appeared after a board was first read, so
+    a profile made later sees nothing older until it catches up, once."""
+    return (prof.var / CAUGHT_UP).exists()
+
+
+def _catch_up(prof: Profile, run: _Run, live: list[dict[str, Any]]) -> None:
+    if caught_up(prof) or not live or not prof.exists():
+        return
+    try:
+        kept = run_triage(prof, argparse.Namespace(all=False, board=None, quiet=True, postings=live)) or 0
+        (prof.var / CAUGHT_UP).write_text(json.dumps({"at": utcnow(), "postings": len(live)}), encoding="utf-8")
+        run.parts.append(f"{prof.id} catch-up read={len(live)} kept={kept}")
+        run.say(f"{prof.id}: caught up on {len(live)} open posting(s), kept {kept}")
+    except Exception as exc:  # noqa: BLE001
+        run.failure(f"{prof.id} catch-up", exc)
+
+
+def _for_profile(prof: Profile, run: _Run, budget: float, keys: dict[str, tuple[bool, str]],
+                 live: list[dict[str, Any]] | None = None) -> bool:
     """One person's share of the cycle. True when the run was stopped."""
     tag = prof.id
     shared = prof.shared
@@ -192,6 +218,11 @@ def _for_profile(prof: Profile, run: _Run, budget: float, keys: dict[str, tuple[
         run.failure(f"{tag} closed", exc)
 
     if run.stopped(f"{tag} closed"):
+        return True
+
+    # ── catching up: what was open before this profile existed, once ────────
+    _catch_up(prof, run, live or [])
+    if run.stopped(f"{tag} catch-up"):
         return True
 
     # ── triage: the shared queue, less what this profile has seen ────────────

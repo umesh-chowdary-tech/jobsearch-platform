@@ -84,7 +84,8 @@ export function Jobs({ query }: { query: URLSearchParams }) {
       <>
         <h1>Jobs</h1>
         <div className="card stack">
-          <p><b>No jobs kept for you yet.</b></p>
+          <p><b>No jobs kept for you yet.</b> If you saved your profile in the last few minutes, SwitchKaro is still reading
+            what's open on the company boards - check back shortly.</p>
           <p className="small muted">Company job boards are checked a few times a day. A job is kept for you when it's in a city
             you chose (or remote), at your level, and asks for skills your profile backs. If nothing shows up within a day,
             check your <a href="#/profile?tab=prefs">preferences</a>.</p>

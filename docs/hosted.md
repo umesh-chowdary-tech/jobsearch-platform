@@ -184,3 +184,19 @@ decline a request or stop watching a board, with a note the person sees.
 The shared list (`var/_shared/company-requests.json`) holds a company, the
 page given and how many asked - no one's name. Which requests are a person's
 own is in their folder, and goes with their account.
+
+## A new profile catches up (`cycle.py`)
+
+The watcher reports only what appears on a board after it first read it -
+everything already open is its baseline - so a profile made later would see
+nothing older. Once, each profile reads every posting open on the boards in
+that run (`WatchRun.live`), the same triage as the queue, and is marked
+caught up (`caught-up.json`). Saving a profile in setup starts an update
+right away when it hasn't caught up, instead of waiting for the schedule.
+
+Pass 1 runs on the title and the location field before any description is
+fetched (`triage.rejected_unread`): what fails there gets the same verdict
+it would with its description, and the board is never asked for it. So a
+catch-up over thousands of open postings fetches descriptions only for the
+few that could fit.
+
