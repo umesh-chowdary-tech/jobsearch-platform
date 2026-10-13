@@ -39,6 +39,33 @@ export interface Today {
   unread: number;
   in_progress: Row[];
   stages: Record<string, number>;
+  outreach_due: { id: string; to: string; company: string; role: string; need: string; posting_id: string }[];
+}
+
+export interface OutreachDraft {
+  id: string;
+  posting_id: string;
+  company: string;
+  role: string;
+  to: string;
+  how: string;
+  context: string;
+  note: string | null;
+  message: string;
+  subject: string;
+  blurb: string;
+  checks: { check: string; ok: boolean; level: string; detail: string }[];
+  by: string;
+  status: string;
+  created: string;
+  history: { status: string; at: string; note?: string }[];
+  need?: string | null;
+}
+
+export interface Leads {
+  company: string;
+  leads: { who: string; why: string; how: string; url: string; employer?: string }[];
+  already_asked: { to: string; status: string; role: string }[];
 }
 
 export interface ProfileEntry {
@@ -103,6 +130,7 @@ export interface PostingDetail extends Row {
   files: { name: string; url: string }[];
   ats: { match: number; ceiling: number; missing: string[]; unclaimable: string[] } | null;
   feedback: Feedback | null;
+  drafts: OutreachDraft[];
 }
 
 export interface Me {

@@ -27,14 +27,43 @@ def prof(tmp_path):
 def test_the_hosted_scope_answers_only_its_own_screens(prof):
     run = Runner(prof)
     assert routes.get(prof, "/api/today", {}, run, scope=HOSTED)["decide"]
-    for path in ("/api/system", "/api/applications", "/api/outreach", "/api/postings/1000001/leads"):
+    for path in ("/api/system", "/api/applications"):
         with pytest.raises(ApiError) as e:
             routes.get(prof, path, {}, run, scope=HOSTED)
         assert e.value.status == 404, path
-    for path in ("/api/stop", "/api/schedule/pause", "/api/escalations/resolve", "/api/outreach/draft"):
+    for path in ("/api/stop", "/api/schedule/pause", "/api/escalations/resolve"):
         with pytest.raises(ApiError) as e:
             routes.post(prof, path, {}, run, scope=HOSTED)
         assert e.value.status == 404, path
+
+
+def _with_resume(prof):
+    from jobsearch.assemble import Variant
+    lib = [Variant(id="backend", angle="backend", sent_to=[{"posting_id": "1000001", "date": "2026-10-12"}]).to_dict()]
+    (prof.var / "resume-variants.json").write_text(json.dumps(lib))
+    return prof
+
+
+def test_a_referral_is_drafted_listed_and_marked_on_the_hosted_service(prof):
+    run = Runner(_with_resume(prof))
+    leads = routes.get(prof, "/api/postings/1000001/leads", {}, run, scope=HOSTED)
+    assert leads["leads"] and all(x["url"].startswith("https://www.linkedin.com/search/") for x in leads["leads"])
+    _, d = routes.post(prof, "/api/outreach/draft", {"posting": "1000001", "to": "Priya Shah", "how": "cold"},
+                       run, scope=HOSTED)
+    assert d["status"] == "drafted" and d["message"]
+    assert routes.get(prof, "/api/outreach", {}, run, scope=HOSTED)[0]["need"] == "review and send"
+    routes.post(prof, f"/api/outreach/{d['id']}/mark", {"status": "sent"}, run, scope=HOSTED)
+    assert routes.get(prof, "/api/postings/1000001", {}, run, scope=HOSTED)["drafts"][0]["status"] == "sent"
+
+
+@pytest.mark.parametrize("field, size", [("to", 81), ("context", 301), ("employer", 121), ("note", 301)])
+def test_a_referral_ask_holds_a_line_not_a_document(prof, field, size):
+    run = Runner(_with_resume(prof))
+    body = {"posting": "1000001", "to": "Priya Shah", "how": "cold", field: "x" * size}
+    path = "/api/outreach/x/mark" if field == "note" else "/api/outreach/draft"
+    with pytest.raises(ApiError) as e:
+        routes.post(prof, path, body, run, scope=HOSTED)
+    assert e.value.status == 400 and "too long" in e.value.message
 
 
 def test_the_hosted_scope_runs_only_resume_building_and_ranking(prof):

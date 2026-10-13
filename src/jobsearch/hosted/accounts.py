@@ -28,7 +28,7 @@ from ..models import utcnow
 FILE = "accounts.json"
 # The privacy notice and terms a person agrees to when they join
 # (web/src/legal/). Change it whenever their text changes in a way that matters.
-CONSENT_VERSION = "2026-10-13-draft"
+CONSENT_VERSION = "2026-10-13.2-draft"
 # No 0/O, 1/I/L: a code read out loud or off a phone is typed right first time.
 ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 _lock = threading.Lock()

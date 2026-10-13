@@ -350,6 +350,13 @@ ul.used li { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baselin
                text-decoration: none; font-size: 14px; }
 .more-menu a:hover, .more-menu a.on { background: var(--muted-soft); }
 
+/* ── referrals ─────────────────────────────────────────────────────────── */
+.fields select { width: 100%; margin-top: 3px; }
+ul.leads { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+ul.leads a { display: inline-flex; gap: 6px; align-items: flex-start; font-weight: 600; font-size: 13.5px; text-decoration: none; }
+ul.leads a .i { width: 15px; height: 15px; margin-top: 2px; }
+.part pre.box { margin-top: 4px; max-height: none; }
+
 /* ── phones: the sidebar becomes a tab bar along the bottom ────────────── */
 @media (max-width: 760px) {
   .shell { grid-template-columns: 1fr; }

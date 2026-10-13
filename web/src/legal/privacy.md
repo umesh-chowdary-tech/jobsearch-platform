@@ -2,7 +2,7 @@
 
 **Draft for the invite-only beta, not yet reviewed by a lawyer.**
 
-Version 2026-10-13-draft. This notice explains what this service keeps about you, why, who it is shared with, and how you control it. It is written for India's Digital Personal Data Protection Act, 2023 and its Rules.
+Version 2026-10-13.2-draft. This notice explains what this service keeps about you, why, who it is shared with, and how you control it. It is written for India's Digital Personal Data Protection Act, 2023 and its Rules.
 
 ## Who runs this service
 
@@ -17,6 +17,7 @@ Version 2026-10-13-draft. This notice explains what this service keeps about you
 | Your LinkedIn, GitHub and portfolio links, if you give them | To put them on the resumes built for you |
 | The facts, skills and preferences you confirm | To find and rank jobs for you and to build your resumes |
 | The jobs ranked for you, your decisions on them, and the resumes built | To show you your search and where each application stands |
+| Referral requests you draft: the name of the person you ask, how you know them, a line you write about them, the messages, and what you mark as done | To draft the messages and remind you when a follow-up is due |
 | Your "good match?" answers | To check and improve how well jobs are ranked |
 | The questions setup asks about your work, and your answers | To complete your profile facts - only what you confirm is used |
 | How many AI requests were made for you, and what they cost | To keep each person within their limit |
@@ -29,6 +30,7 @@ We keep nothing else. Details a resume often carries that we don't need - date o
 Some steps send text to an AI model run by another company:
 
 - **Drafting your profile:** the text of your resumes, portfolio page, GitHub repositories and note, with your email, phone number, links and the personal details above removed, and your answers to setup's questions about your work, go to Anthropic (Claude). Setup never asks about your age, family, religion, caste, gender, health, salary or notice period.
+- **Writing a referral message:** only if you write a line about the person you're asking, that line goes to Groq, with their name replaced, so it can write one opening sentence. The rest of the message is built from your confirmed facts without AI. Their name is never sent.
 - **Ranking jobs and writing a resume's summary line:** your job history (titles, employers, dates), education, confirmed facts and skills go to Anthropic (Claude) and Groq, without your name or contact details.
 
 These providers process the text only to answer the request; their terms for this kind of use say they do not train their models on it.

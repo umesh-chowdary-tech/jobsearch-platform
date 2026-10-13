@@ -8,7 +8,7 @@ import { operator, type Operator } from "../auth";
 import privacy from "../legal/privacy.md?raw";
 import terms from "../legal/terms.md?raw";
 
-export const LEGAL_VERSION = "2026-10-13-draft";
+export const LEGAL_VERSION = "2026-10-13.2-draft";
 const DOCS: Record<string, string> = { privacy, terms };
 
 /** The blanks in the text - who runs the service, where, and how to reach

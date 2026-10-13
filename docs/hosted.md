@@ -35,8 +35,10 @@ passes `/api` to the service.
   only the hosted screens: setup, today, every kept job (search, filters,
   newest first), a posting and its apply kit, resumes, the profile (work,
   skills, skill gaps, preferences; read-only - changes go through setup), and
-  running `assemble` or `rank`. The inbox, outreach, the board registry and
-  the schedule stay with the local app.
+  running `assemble` or `rank`, and referral asks (who to ask, a drafted
+  message, marking what happened; at most 80 characters for a name and 300
+  for a line about them). The inbox, the board registry and the schedule stay
+  with the local app.
 - **Who you are** comes from a Supabase access token in the `Authorization`
   header of every request. A token must be unexpired, issued by the project,
   meant for signed-in users, and signed by the project's published key (or,

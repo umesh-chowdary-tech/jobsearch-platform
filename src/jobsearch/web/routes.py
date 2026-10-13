@@ -53,15 +53,19 @@ def as_error(exc: Exception, scope: str = LOCAL) -> tuple[int, dict[str, Any]]:
 
 _ID = r"[\w.-]+"
 # What a signed-in person may ask the hosted service. Anything else is a 404
-# there: the inbox, outreach, the board registry and the schedule belong to
-# the local app or to whoever runs the service.
+# there: the inbox, the board registry and the schedule belong to the local
+# app or to whoever runs the service.
 HOSTED_GET = tuple(re.compile(p) for p in (
-    r"/api/(overview|today|postings|resumes|profile|setup|market|actions|job)",
-    rf"/api/postings/{_ID}", rf"/api/postings/{_ID}/kit"))
+    r"/api/(overview|today|postings|resumes|profile|setup|market|actions|job|outreach)",
+    rf"/api/postings/{_ID}", rf"/api/postings/{_ID}/(kit|leads)"))
 HOSTED_POST = tuple(re.compile(p) for p in (
     r"/api/setup/(upload|draft|item|fact|restore|skills|save|link|note|remove|reset|ask|answer|apply|labels)",
-    r"/api/run",
+    r"/api/run", r"/api/outreach/draft", rf"/api/outreach/{_ID}/mark",
     rf"/api/postings/{_ID}/(status|favorite|later|feedback)"))
+
+# What a referral ask may hold: a name, a line about them, a note on what
+# happened. Enough for a person; not a place to keep anything else.
+OUTREACH_MAX = {"to": 80, "context": 300, "employer": 120, "note": 300}
 
 # What a resume upload may be, by the type the page sends.
 UPLOAD_TYPES = {"application/pdf": ".pdf", "text/plain": ".txt",
@@ -266,6 +270,21 @@ def post(prof: Profile, path: str, body: dict[str, Any], runner: Runner, scope: 
     if m:
         return 200, _posting_action(prof, m.group(1), m.group(2), body)
 
+    # Referral asks: drafts the person sends themselves (outreach.py).
+    if path.startswith("/api/outreach/"):
+        for k, most in OUTREACH_MAX.items():
+            if len(str(body.get(k) or "")) > most:
+                raise ApiError(400, f"{k} is too long - {most} characters at most")
+    if path == "/api/outreach/draft":
+        d = outreach.draft(prof, str(body.get("posting") or ""), str(body.get("to") or ""),
+                           str(body.get("how") or ""), str(body.get("context") or ""),
+                           use_model=not body.get("no_model"), force=bool(body.get("force")),
+                           employer=str(body.get("employer") or ""))
+        return 200, d.to_dict()
+    m = re.fullmatch(rf"/api/outreach/({_ID})/mark", path)
+    if m:
+        return 200, outreach.mark(prof, m.group(1), str(body.get("status") or ""), str(body.get("note") or ""))
+
     # ── the local app only ──────────────────────────────────────────────────
     if path == "/api/stop":
         who = request_stop(prof.shared)
@@ -294,15 +313,6 @@ def post(prof: Profile, path: str, body: dict[str, Any], runner: Runner, scope: 
     m = re.fullmatch(rf"/api/applications/({_ID})/(confirm|status|ignore|merge|suggestion|undo-auto)", path)
     if m:
         return 200, _application(prof, m.group(1), m.group(2), body)
-    if path == "/api/outreach/draft":
-        d = outreach.draft(prof, str(body.get("posting") or ""), str(body.get("to") or ""),
-                           str(body.get("how") or ""), str(body.get("context") or ""),
-                           use_model=not body.get("no_model"), force=bool(body.get("force")),
-                           employer=str(body.get("employer") or ""))
-        return 200, d.to_dict()
-    m = re.fullmatch(rf"/api/outreach/({_ID})/mark", path)
-    if m:
-        return 200, outreach.mark(prof, m.group(1), str(body.get("status") or ""), str(body.get("note") or ""))
     if path == "/api/escalations/resolve":
         provider, slug = str(body.get("provider") or ""), str(body.get("slug") or "")
         note = str(body.get("note") or "").strip()
