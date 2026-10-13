@@ -350,6 +350,26 @@ ul.used li { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baselin
                text-decoration: none; font-size: 14px; }
 .more-menu a:hover, .more-menu a.on { background: var(--muted-soft); }
 
+/* ── referrals ─────────────────────────────────────────────────────────── */
+.fields select { width: 100%; margin-top: 3px; }
+ul.leads { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+ul.leads a { display: inline-flex; gap: 6px; align-items: flex-start; font-weight: 600; font-size: 13.5px; text-decoration: none; }
+ul.leads a .i { width: 15px; height: 15px; margin-top: 2px; }
+.part pre.box { margin-top: 4px; max-height: none; }
+
+/* ── applications ─────────────────────────────────────────────────────── */
+.look { margin-top: 6px; color: var(--warn-ink); background: var(--warn-soft); border-radius: 8px; padding: 4px 8px; display: inline-block; }
+.look button { padding: 2px 8px; font-size: 12px; color: inherit; }
+ul.events { list-style: none; padding: 0; margin: 6px 0 0; display: grid; gap: 6px; font-size: 12.5px; }
+ul.events q { font-style: italic; }
+fieldset.choices { margin: 0; }
+fieldset.choices legend { padding: 0 4px; }
+
+ul.asked { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; font-size: 13.5px; }
+ul.asked li { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
+
+code.addr { font-size: 13px; padding: 6px 10px; border-radius: 8px; background: var(--muted-soft); overflow-wrap: anywhere; }
+
 /* ── phones: the sidebar becomes a tab bar along the bottom ────────────── */
 @media (max-width: 760px) {
   .shell { grid-template-columns: 1fr; }

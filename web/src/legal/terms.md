@@ -2,7 +2,7 @@
 
 **Draft for the invite-only beta, not yet reviewed by a lawyer.**
 
-Version 2026-10-13-draft. By joining with an invite code you agree to these terms and to the [privacy notice](#/privacy).
+Version 2026-10-13.5-draft. By joining with an invite code you agree to these terms and to the [privacy notice](#/privacy).
 
 ## The service
 
@@ -12,6 +12,7 @@ A job-search assistant run by [Operator name]: it watches companies' public job 
 
 - **Everything you confirm is true.** The service never adds a skill, number or claim you haven't confirmed, and you are responsible for what your profile says.
 - **You apply yourself.** The service never submits an application or contacts an employer for you.
+- **You send your own messages.** Referral requests are drafts you copy and send yourself; the service never messages anyone. Ask people politely, and only people you're comfortable contacting.
 - **One account, yours.** Don't share it, and don't try to reach anyone else's data, overload the service, or copy it by automated means.
 - **You are 18 or older.**
 

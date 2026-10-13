@@ -2,10 +2,9 @@
 
     python -m jobsearch.cli --profile <id> connector   # serves /<secret>/mcp on $PORT
 
-One connector serves one profile today: the secret URL is the only lock, so it
-is one person's. The hosted service will put each person behind their own
-sign-in instead (OAuth, which claude.ai's connectors support), with the tools
-scoped to that person's data - see docs/connector.md.
+Here one connector serves one profile: the secret URL is the only lock, so it
+is one person's. The hosted service serves the same tools to every member,
+each behind their own sign-in (OAuth; hosted/mcp.py and docs/connector.md).
 
 Claude in the chat is the ranker here. The server finds, filters and
 remembers; it hands Claude the shortlist with the same profile and rules the
@@ -30,7 +29,7 @@ import os
 import threading
 import traceback
 from contextlib import nullcontext
-from typing import Any, Literal
+from typing import Any, Callable, Literal
 
 import yaml
 from pydantic import BaseModel, Field
@@ -285,8 +284,28 @@ resume store does not back; coverage is a count like 8/11, never a percentage.
 Never apply, message anyone, or send anything on their behalf - only record
 what they say they did."""
 
+HOSTED_INSTRUCTIONS = """SwitchKaro, a job-search service, for the person signed in. It watches
+company job boards a few times a day, filters postings against their
+confirmed profile, and remembers what they decided.
 
-def build_server(tools: Tools) -> Any:
+Typical flow: today for what needs them; find_jobs to list what is worth
+deciding; jobs_to_rank + save_rankings when postings are 'unranked'; get_job
+for the full text; application_kit for a form; set_status / save_for_later /
+set_favorite to record their decisions.
+
+Rules that always hold: never invent a number; never claim a skill the
+resume store does not back; coverage is a count like 8/11, never a
+percentage. Never apply, message anyone, or send anything on their behalf -
+only record what they say they did."""
+
+# Polling every board for one person: on the hosted service the schedule does it.
+LOCAL_ONLY = {"refresh_jobs", "refresh_status"}
+
+
+def build_server(tools: Tools | Callable[[], Tools], hosted: bool = False, **server_kw: Any) -> Any:
+    """`tools`: one profile's, or - on the hosted service - a function that
+    gives the signed-in person's, asked for on every call. `server_kw` goes to
+    the MCP server (its sign-in settings, there)."""
     from mcp.server.mcpserver import MCPServer
     from mcp.types import ToolAnnotations
 
@@ -305,10 +324,14 @@ def build_server(tools: Tools) -> Any:
                 raise ToolError(str(exc)) from exc
         return wrapper
 
-    srv = MCPServer("jobsearch", instructions=INSTRUCTIONS)
+    srv = MCPServer("switchkaro" if hosted else "jobsearch",
+                    instructions=HOSTED_INSTRUCTIONS if hosted else INSTRUCTIONS, **server_kw)
+    t: Callable[[], Tools] = (lambda: tools) if isinstance(tools, Tools) else tools
 
     def tool(**kw: Any) -> Any:
-        return lambda fn: srv.tool(**kw)(explained(fn))
+        def add(fn: Any) -> Any:
+            return fn if hosted and fn.__name__ in LOCAL_ONLY else srv.tool(**kw)(explained(fn))
+        return add
     ro = ToolAnnotations(readOnlyHint=True, openWorldHint=False)
     rw = ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False)
 
@@ -319,43 +342,43 @@ def build_server(tools: Tools) -> Any:
         status: new (undecided, the default) | shortlisted | applied | interviewing |
         offer | skipped | closed | any. fit: any of strong, possible, weak, unranked.
         search: matches title, company or location."""
-        return tools.find_jobs(status, fit, search, limit)
+        return t().find_jobs(status, fit, search, limit)
 
     @tool(annotations=ro)
     def get_job(posting_id: str) -> dict[str, Any]:
         """One posting in full: description, matched skills, gaps, the ranking's
         reason, decision history and referral drafts. A unique id prefix works."""
-        return tools.get_job(posting_id)
+        return t().get_job(posting_id)
 
     @tool(annotations=ro)
     def today() -> dict[str, Any]:
         """What needs the person now: postings to decide, ones back from 'later',
         applications in progress, referral follow-ups due."""
-        return tools.today()
+        return t().today()
 
     @tool(annotations=ro)
     def resume_store() -> dict[str, Any]:
         """The person's defensible profile and the skills they may claim, by
         tier. Use it for fit questions and tailoring; never add to it."""
-        return tools.resume_store()
+        return t().resume_store()
 
     @tool(annotations=ro)
     def application_kit(posting_id: str) -> dict[str, Any]:
         """Everything an application form asks for, for one posting: experience
         rows, skills to add or remove, certifications, education, links."""
-        return tools.application_kit(posting_id)
+        return t().application_kit(posting_id)
 
     @tool(annotations=ro)
     def jobs_to_rank(limit: int = 8) -> dict[str, Any]:
         """Postings no model has judged yet, with the profile and the ranking
         rules. Read them, judge each, then call save_rankings."""
-        return tools.jobs_to_rank(limit)
+        return t().jobs_to_rank(limit)
 
     @tool(annotations=rw)
     def save_rankings(judgements: list[Judgement]) -> dict[str, Any]:
         """Store fit judgements from jobs_to_rank. A posting asking more years
         than the profile allows is recorded as weak whatever is sent."""
-        return tools.save_rankings(judgements)
+        return t().save_rankings(judgements)
 
     @tool(annotations=rw)
     def set_status(posting_id: str,
@@ -364,30 +387,30 @@ def build_server(tools: Tools) -> Any:
                    note: str = "") -> dict[str, Any]:
         """Record what the person decided or did. Only when they say so - never
         apply on their behalf."""
-        return tools.set_status(posting_id, status, note)
+        return t().set_status(posting_id, status, note)
 
     @tool(annotations=rw)
     def save_for_later(posting_id: str, days: int | None = 7) -> dict[str, Any]:
         """Off the list until `days` from now (1-90), then back. days=null means
         someday, with no date."""
-        return tools.save_for_later(posting_id, days)
+        return t().save_for_later(posting_id, days)
 
     @tool(annotations=rw)
     def set_favorite(posting_id: str, on: bool = True) -> dict[str, Any]:
         """Star a posting so it sorts first; on=false removes the star."""
-        return tools.set_favorite(posting_id, on)
+        return t().set_favorite(posting_id, on)
 
     @tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False,
                                           openWorldHint=True))
     def refresh_jobs() -> dict[str, Any]:
         """Poll every board now, mark closed postings, filter what is new. Runs in
         the background for a few minutes; check with refresh_status."""
-        return tools.refresh_jobs()
+        return t().refresh_jobs()
 
     @tool(annotations=ro)
     def refresh_status() -> dict[str, Any]:
         """Whether a refresh is running, and the last finished one's summary."""
-        return tools.refresh_status()
+        return t().refresh_status()
 
     return srv
 

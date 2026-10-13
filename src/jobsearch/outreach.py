@@ -400,6 +400,7 @@ class Context:
     city: str = ""            # where the person is, from identity.location
     shared: str = ""          # for "ex-colleague": the employer they share
     shared_current: bool = False
+    to_rest: str = ""         # the rest of their name, kept from the model too
 
 
 def _role(ctx: Context) -> str:
@@ -747,9 +748,14 @@ def opener_ok(s: str, ctx: Context) -> tuple[bool, str]:
 
 def write_opener(llm: LLM, ctx: Context) -> tuple[str | None, str, str]:
     """(sentence, attribution, why rejected). Called only when there is context."""
-    # The recipient's name stays on this machine: the model sees {FIRST}.
-    context = (re.sub(rf"\b{re.escape(ctx.to_first)}\b", "{FIRST}", ctx.context)
+    # The recipient's name stays on this machine: the model sees {FIRST}, and
+    # nothing of the rest of their name.
+    context = (re.sub(rf"\b{re.escape(ctx.to_first)}\b", "{FIRST}", ctx.context, flags=re.I)
                if ctx.to_first else ctx.context)
+    for part in ctx.to_rest.split():
+        if len(part.strip(".")) > 1:
+            context = re.sub(rf"\b{re.escape(part)}\b", "", context, flags=re.I)
+    context = _squash(context)
     ans = llm.ask_json(OPENER_SYSTEM, f"RELATIONSHIP: {ctx.how}\nCONTEXT: {context}",
                        max_tokens=600, temperature=0.4)
     if not ans.ok or not ans.data:
@@ -856,7 +862,7 @@ def draft(prof: Profile, posting_ref: str, to: str, how: str, context: str = "",
 
     ctx = Context(
         me_full=me_full, me_first=me_full.split()[0] if me_full else "",
-        to_first=to.split()[0], how=how, company=company, role=role,
+        to_first=to.split()[0], to_rest=" ".join(to.split()[1:]), how=how, company=company, role=role,
         url=str(posting.get("url") or ""), descriptor=variant.title_descriptor,
         band=str((identity.get("title") or {}).get("official") or ""),
         college=_college(store), context=_squash(context),
