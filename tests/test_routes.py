@@ -27,7 +27,7 @@ def prof(tmp_path):
 def test_the_hosted_scope_answers_only_its_own_screens(prof):
     run = Runner(prof)
     assert routes.get(prof, "/api/today", {}, run, scope=HOSTED)["decide"]
-    for path in ("/api/system", "/api/applications"):
+    for path in ("/api/system", "/api/applications/x/sent"):
         with pytest.raises(ApiError) as e:
             routes.get(prof, path, {}, run, scope=HOSTED)
         assert e.value.status == 404, path

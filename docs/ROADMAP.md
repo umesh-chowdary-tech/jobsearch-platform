@@ -106,9 +106,9 @@ it's done.
   measured, and at least 100 "good match?" answers are collected.
 
 ### Phase 3: Applications and more boards
-- Application tracking by email forwarding: each person gets an address and
-  forwards job emails to it. The existing reader classifies them (rules first,
-  then the model on unclear ones, every claim quoted).
+- Application tracking by email: pasting a job email in, read by the same
+  rules, with the person settling what they can't (done); then a forwarding
+  address per person, so it happens with no manual steps.
 - People can ask for a company to be added. Board discovery finds its careers
   feed, and the shared watcher starts polling it.
 - **Done when:** forwarded emails update applications with no manual steps,

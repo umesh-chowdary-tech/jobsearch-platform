@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .. import feedback, onboard, outreach, pipeline
+from .. import feedback, mail_paste, onboard, outreach, pipeline
 from ..busy import EditTimeout, holder, request_stop
 from ..profile import Profile
 from ..registry import resolve_escalation
@@ -41,7 +41,7 @@ def as_error(exc: Exception, scope: str = LOCAL) -> tuple[int, dict[str, Any]]:
         return exc.status, {"error": exc.message, **exc.extra}
     if isinstance(exc, (outreach.OutreachError, pipeline.PipelineError)):
         return 409, {"error": str(exc)}
-    if isinstance(exc, onboard.SetupError):
+    if isinstance(exc, (onboard.SetupError, mail_paste.PasteError)):
         return 400, {"error": str(exc)}
     if isinstance(exc, EditTimeout):
         return 409, {"error": "still saving another change - try again in a moment"}
@@ -56,11 +56,12 @@ _ID = r"[\w.-]+"
 # there: the inbox, the board registry and the schedule belong to the local
 # app or to whoever runs the service.
 HOSTED_GET = tuple(re.compile(p) for p in (
-    r"/api/(overview|today|postings|resumes|profile|setup|market|actions|job|outreach)",
+    r"/api/(overview|today|postings|resumes|profile|setup|market|actions|job|outreach|applications)",
     rf"/api/postings/{_ID}", rf"/api/postings/{_ID}/(kit|leads)"))
 HOSTED_POST = tuple(re.compile(p) for p in (
     r"/api/setup/(upload|draft|item|fact|restore|skills|save|link|note|remove|reset|ask|answer|apply|labels)",
     r"/api/run", r"/api/outreach/draft", rf"/api/outreach/{_ID}/mark",
+    r"/api/applications/(paste|add)", rf"/api/applications/{_ID}/(confirm|status|ignore|merge)",
     rf"/api/postings/{_ID}/(status|favorite|later|feedback)"))
 
 # What a referral ask may hold: a name, a line about them, a note on what
@@ -117,7 +118,9 @@ def get(prof: Profile, path: str, query: dict[str, list[str]], runner: Runner, s
         "/api/market": lambda: state.market(prof),
         "/api/system": lambda: state.system(prof),
         "/api/profile": lambda: state.profile(prof),
-        "/api/applications": lambda: state.applications(prof),
+        # The local app's view also covers the inbox it reads; the service
+        # reads no one's inbox.
+        "/api/applications": lambda: state.applications(prof) if scope == LOCAL else state.tracked(prof),
         "/api/setup": lambda: onboard.state(prof),
         "/api/job": lambda: runner.snapshot(int((query.get("since") or ["0"])[0] or 0)),
     }
@@ -285,6 +288,17 @@ def post(prof: Profile, path: str, body: dict[str, Any], runner: Runner, scope: 
     if m:
         return 200, outreach.mark(prof, m.group(1), str(body.get("status") or ""), str(body.get("note") or ""))
 
+    # Applications: a pasted job email, one made elsewhere, the person's corrections.
+    if path == "/api/applications/paste":
+        return 200, mail_paste.paste(prof, *(str(body.get(k) or "") for k in
+                                             ("text", "subject", "from", "date", "company", "role", "kind")))
+    if path == "/api/applications/add":
+        return 200, mail_paste.add(prof, *(str(body.get(k) or "") for k in ("company", "role", "date")),
+                                   status=str(body.get("status") or "applied"))
+    m = re.fullmatch(rf"/api/applications/({_ID})/(confirm|status|ignore|merge|suggestion|undo-auto)", path)
+    if m:
+        return 200, _application(prof, m.group(1), m.group(2), body)
+
     # ── the local app only ──────────────────────────────────────────────────
     if path == "/api/stop":
         who = request_stop(prof.shared)
@@ -310,9 +324,6 @@ def post(prof: Profile, path: str, body: dict[str, Any], runner: Runner, scope: 
             return 200, fn(prof, m.group(1))
         except ValueError as exc:
             raise ApiError(404, str(exc)) from exc
-    m = re.fullmatch(rf"/api/applications/({_ID})/(confirm|status|ignore|merge|suggestion|undo-auto)", path)
-    if m:
-        return 200, _application(prof, m.group(1), m.group(2), body)
     if path == "/api/escalations/resolve":
         provider, slug = str(body.get("provider") or ""), str(body.get("slug") or "")
         note = str(body.get("note") or "").strip()
