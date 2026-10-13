@@ -90,8 +90,9 @@ it's done.
 
 ### Phase 2: Invite-only hosted beta
 - Accounts, a database, the API and workers, and the web app with these pages:
-  setup, today's ranked jobs, job detail with a tailored resume, applied
-  tracker, settings.
+  setup, today's ranked jobs, every kept job with search and filters, job
+  detail with a tailored resume, applied tracker, resumes, the profile with
+  its skill gaps, settings.
 - Per-person AI caps, a global monthly cap, and the admin cost page.
 - Privacy policy and terms (India's DPDP Act: consent, purpose, export,
   deletion, breach handling), data export and account deletion.

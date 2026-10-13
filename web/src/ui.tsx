@@ -22,6 +22,10 @@ const ICONS = {
   thumbDown: "M17 13V4h3v9zM17 13l-4 8a2 2 0 0 1-2-2v-4H5.5a2 2 0 0 1-2-2.3l1.2-7A2 2 0 0 1 6.7 4H17",
   file: "M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M9 13h6M9 17h4",
   external: "M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5",
+  search: "M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14zM16 16l4.5 4.5",
+  user: "M12 4a4 4 0 1 0 0 8a4 4 0 1 0 0-8zM4.5 20.5a7.5 7.5 0 0 1 15 0",
+  more: "M5 12h.01M12 12h.01M19 12h.01",
+  edit: "M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4",
 };
 export type IconName = keyof typeof ICONS;
 
@@ -81,6 +85,9 @@ export function ago(iso?: string | null): string {
 }
 
 export const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+
+/** First seen on its board in the last three days. */
+export const fresh = (iso?: string | null) => !!iso && Date.now() - new Date(iso).getTime() < 3 * 86_400_000;
 
 // ── toasts ─────────────────────────────────────────────────────────────────
 const ToastContext = createContext<(msg: string) => void>(() => {});

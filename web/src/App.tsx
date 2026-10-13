@@ -8,7 +8,10 @@ import type { Me, Overview } from "./types";
 import { ago, applyTheme, Icon, useDark, useRoute, type IconName } from "./ui";
 import { SignIn, Join, Paused, Reconsent } from "./pages/SignIn";
 import { Today } from "./pages/Today";
+import { Jobs } from "./pages/Jobs";
 import { Tracker } from "./pages/Tracker";
+import { Resumes } from "./pages/Resumes";
+import { Profile } from "./pages/Profile";
 import { Posting } from "./pages/Posting";
 import { Setup } from "./pages/Setup";
 import { Settings } from "./pages/Settings";
@@ -78,7 +81,9 @@ function Shell({ me, onMe, onSignOut }: { me: Me; onMe: (m: Me) => void; onSignO
   const route = useRoute();
   const [count, setCount] = useState<number | null>(null);
   const [health, setHealth] = useState<Overview | null>(null);
+  const [more, setMore] = useState(false);
   const dark = useDark();
+  useEffect(() => setMore(false), [route]);
 
   useEffect(() => {
     const load = () => get<Overview>("/api/overview").then(setHealth).catch(() => setHealth(null));
@@ -88,22 +93,33 @@ function Shell({ me, onMe, onSignOut }: { me: Me; onMe: (m: Me) => void; onSignO
   }, []);
 
   const ready = me.profile_ready;
-  const nav: NavItem[] = [
-    ...(ready ? [{ hash: "#/", view: "today", label: "Today", icon: "sun" as IconName },
-                 { hash: "#/applied", view: "applied", label: "Applied", icon: "send" as IconName }] : []),
+  const setupEtc: NavItem[] = [
     { hash: "#/setup", view: "setup", label: "Setup", icon: "upload" },
     { hash: "#/settings", view: "settings", label: "Settings", icon: "gear" },
     ...(me.admin ? [{ hash: "#/admin", view: "admin", label: "Admin", icon: "shield" as IconName }] : []),
   ];
+  // Once there's a profile, the everyday screens come first; on a phone they
+  // are the tab bar and the rest sits behind the top bar's "More".
+  const nav: NavItem[] = ready ? [
+    { hash: "#/", view: "today", label: "Today", icon: "sun" },
+    { hash: "#/jobs", view: "jobs", label: "Jobs", icon: "search" },
+    { hash: "#/applied", view: "applied", label: "Applied", icon: "send" },
+    { hash: "#/resumes", view: "resumes", label: "Resumes", icon: "file" },
+    { hash: "#/profile", view: "profile", label: "Profile", icon: "user" },
+  ] : setupEtc;
+  const minor: NavItem[] = ready ? setupEtc : [];
 
   // Before a profile exists, setup (and settings) is all there is.
   let key = route.path[0] || "today";
   if (!ready && !["setup", "settings", "admin", ...LEGAL].includes(key)) key = "setup";
-  const view = key === "p" ? "applied" : key;
+  const view = key === "p" ? "jobs" : key;
 
   const page = (() => {
     switch (key) {
+      case "jobs": return <Jobs key={route.query.toString()} query={route.query} />;
       case "applied": return <Tracker query={route.query} />;
+      case "resumes": return <Resumes />;
+      case "profile": return <Profile query={route.query} />;
       case "p": return <Posting id={decodeURIComponent(route.path[1] || "")} />;
       case "setup": return <Setup onSaved={() => get<Me>("/api/me").then(onMe)} />;
       case "settings": return <Settings me={me} onSignOut={onSignOut} />;
@@ -125,6 +141,12 @@ function Shell({ me, onMe, onSignOut }: { me: Me; onMe: (m: Me) => void; onSignO
             {n.view === "today" && count ? <span className="count">{count}</span> : null}
           </a>
         ))}
+        {minor.length > 0 && <div className="sep" />}
+        {minor.map(n => (
+          <a key={n.view} href={n.hash} className={`minor${view === n.view ? " on" : ""}`} aria-current={view === n.view ? "page" : undefined}>
+            <Icon name={n.icon} /><span>{n.label}</span>
+          </a>
+        ))}
         <div className="who">{me.email}</div>
       </nav>
       <div className="main">
@@ -135,6 +157,20 @@ function Shell({ me, onMe, onSignOut }: { me: Me; onMe: (m: Me) => void; onSignO
             <span>{health?.busy ? "Updating jobs…" : health?.last_cycle ? `Jobs updated ${ago(health.last_cycle.at)}` : "Jobs not updated yet"}</span>
           </span>
           <div className="top-actions">
+            {minor.length > 0 && (
+              <div className="top-more">
+                <button className="icon" onClick={() => setMore(!more)} aria-expanded={more} aria-label="More" title="More">
+                  <Icon name="more" className="dots" />
+                </button>
+                {more && (
+                  <div className="more-menu">
+                    {minor.map(n => (
+                      <a key={n.view} href={n.hash} className={view === n.view ? "on" : ""}><Icon name={n.icon} />{n.label}</a>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <button className="icon" onClick={flip} aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
                     title={dark ? "Switch to light mode" : "Switch to dark mode"}>
               <Icon name={dark ? "sun" : "moon"} />

@@ -32,9 +32,11 @@ passes `/api` to the service.
 
 - **One API, two hosts.** `web/routes.py` holds every route. The local app
   (`web/server.py`) serves all of them for its one person. The service serves
-  only the hosted screens: setup, today, postings, a posting and its apply
-  kit, resumes, the profile, and running `assemble` or `rank`. The inbox,
-  outreach, the board registry and the schedule stay with the local app.
+  only the hosted screens: setup, today, every kept job (search, filters,
+  newest first), a posting and its apply kit, resumes, the profile (work,
+  skills, skill gaps, preferences; read-only - changes go through setup), and
+  running `assemble` or `rank`. The inbox, outreach, the board registry and
+  the schedule stay with the local app.
 - **Who you are** comes from a Supabase access token in the `Authorization`
   header of every request. A token must be unexpired, issued by the project,
   meant for signed-in users, and signed by the project's published key (or,

@@ -51,10 +51,14 @@ export function Today({ onCount }: { onCount: (n: number) => void }) {
         </>
       )}
 
-      <h2>Needs a decision · {t.decide.length}</h2>
+      <div className="h2row">
+        <h2>Needs a decision · {t.decide.length}</h2>
+        <a href="#/jobs">All jobs</a>
+      </div>
       {t.decide.length
         ? <div className="list">{t.decide.map(r => <JobRow key={r.id} row={r} actions onChange={load} />)}</div>
-        : <p className="empty">Nothing strong or possible is waiting on you. New postings are checked a few times a day.</p>}
+        : <p className="empty">Nothing strong or possible is waiting on you. New postings are checked a few times a day;
+            every job kept for you is under <a href="#/jobs">Jobs</a>.</p>}
       {t.unread > 0 && (
         <p className="muted">
           {t.unread} more kept postings haven't been read by a model yet.{" "}
