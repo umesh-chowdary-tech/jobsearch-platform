@@ -5,12 +5,39 @@ server. Added to claude.ai as a custom connector, any chat - phone or web - can
 find postings, rank them, and record decisions, with the same memory the local
 app has.
 
-**Today one connector serves one profile.** Its only lock is a secret URL, so
-it belongs to one person. The bigger version - every user connects their own
-Claude account to the hosted service, signs in, and the tools see only their
-data - needs accounts, so it comes with the hosted beta (docs/ROADMAP.md,
-Phase 2). claude.ai's custom connectors support OAuth, which is what that
-sign-in will use.
+**Run this way, one connector serves one profile.** Its only lock is a secret
+URL, so it belongs to one person. The hosted service serves the same tools to
+every member, each behind their own sign-in - next section.
+
+## On the hosted service: every member, signed in (`hosted/mcp.py`)
+
+The service answers at `<its address>/mcp`. A member adds that address in
+Claude (Settings > Connectors > Add custom connector) and presses Connect:
+
+1. Claude reads `/.well-known/oauth-protected-resource/mcp`, which names the
+   project's Supabase Auth as the authorization server, registers itself there
+   (dynamic client registration) and sends the person to sign in.
+2. Supabase sends them to the service's consent page, `/oauth/consent`
+   (`web/src/pages/Consent.tsx`). Signed in as themselves - a member, not
+   paused, agreed to the current notice - they approve. **Only a client whose
+   return address is Claude's own** (`https://claude.ai/api/mcp/auth_callback`
+   or the claude.com one) can be approved: anyone may register an app under
+   any name, so the name proves nothing.
+3. Supabase issues Claude a token. Each call to `/mcp` is checked like a
+   sign-in - the project's keys, issuer, expiry, a signed-in user (not anon,
+   not the service role, not anonymous) - and the person must still be a
+   member in good standing. A token Supabase issued to an approved app may
+   name that app as its audience; the web app's own check stays strict.
+4. The tools run on that person's profile alone. `refresh_jobs` and
+   `refresh_status` aren't there: the service updates jobs on its schedule.
+
+Settings shows the address to paste, and every app connected, with
+Disconnect. The connector is off in dev sign-in, and wherever the service has
+no public address (`JOBSEARCH_PUBLIC_URL`, or Render's `RENDER_EXTERNAL_URL`).
+
+Supabase side, once: Authentication > OAuth Server - on, Authorization Path
+`/oauth/consent`, dynamic OAuth apps allowed. Claude needs a paid plan for
+custom connectors.
 
 ## How it fits together
 

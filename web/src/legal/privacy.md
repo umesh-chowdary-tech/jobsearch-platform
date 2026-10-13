@@ -2,7 +2,7 @@
 
 **Draft for the invite-only beta, not yet reviewed by a lawyer.**
 
-Version 2026-10-13.4-draft. This notice explains what this service keeps about you, why, who it is shared with, and how you control it. It is written for India's Digital Personal Data Protection Act, 2023 and its Rules.
+Version 2026-10-13.5-draft. This notice explains what this service keeps about you, why, who it is shared with, and how you control it. It is written for India's Digital Personal Data Protection Act, 2023 and its Rules.
 
 ## Who runs this service
 
@@ -33,6 +33,7 @@ Some steps send text to an AI model run by another company:
 
 - **Drafting your profile:** the text of your resumes, portfolio page, GitHub repositories and note, with your email, phone number, links and the personal details above removed, and your answers to setup's questions about your work, go to Anthropic (Claude). Setup never asks about your age, family, religion, caste, gender, health, salary or notice period.
 - **Writing a referral message:** only if you write a line about the person you're asking, that line goes to Groq, with their name replaced, so it can write one opening sentence. The rest of the message is built from your confirmed facts without AI. Their name is never sent.
+- **SwitchKaro in Claude:** only if you connect it, Claude reads your jobs, profile and decisions in your own Claude chats, and records what you tell it there. That goes to Anthropic under your own Claude account and its terms. You can disconnect it in Settings at any time.
 - **Ranking jobs and writing a resume's summary line:** your job history (titles, employers, dates), education, confirmed facts and skills go to Anthropic (Claude) and Groq, without your name or contact details.
 
 These providers process the text only to answer the request; their terms for this kind of use say they do not train their models on it.
