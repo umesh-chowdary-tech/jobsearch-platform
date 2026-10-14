@@ -12,6 +12,7 @@ import { Jobs } from "./pages/Jobs";
 import { Tracker } from "./pages/Tracker";
 import { Resumes } from "./pages/Resumes";
 import { Profile } from "./pages/Profile";
+import { Market } from "./pages/Market";
 import { Posting } from "./pages/Posting";
 import { Setup } from "./pages/Setup";
 import { Settings } from "./pages/Settings";
@@ -111,6 +112,7 @@ function Shell({ me, onMe, onSignOut }: { me: Me; onMe: (m: Me) => void; onSignO
     { hash: "#/applied", view: "applied", label: "Applied", icon: "send" },
     { hash: "#/resumes", view: "resumes", label: "Resumes", icon: "file" },
     { hash: "#/profile", view: "profile", label: "Profile", icon: "user" },
+    { hash: "#/market", view: "market", label: "Market", icon: "chart" },
   ] : setupEtc;
   const minor: NavItem[] = ready ? setupEtc : [];
 
@@ -124,7 +126,8 @@ function Shell({ me, onMe, onSignOut }: { me: Me; onMe: (m: Me) => void; onSignO
       case "jobs": return <Jobs key={route.query.toString()} query={route.query} />;
       case "applied": return <Tracker query={route.query} />;
       case "resumes": return <Resumes />;
-      case "profile": return <Profile query={route.query} />;
+      case "profile": return <Profile />;
+      case "market": return <Market />;
       case "p": return <Posting id={decodeURIComponent(route.path[1] || "")} />;
       case "setup": return <Setup onSaved={() => get<Me>("/api/me").then(onMe)} />;
       case "settings": return <Settings me={me} onSignOut={onSignOut} />;

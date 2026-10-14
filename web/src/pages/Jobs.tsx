@@ -88,7 +88,7 @@ export function Jobs({ query }: { query: URLSearchParams }) {
             what's open on the company boards - check back shortly.</p>
           <p className="small muted">Company job boards are checked a few times a day. A job is kept for you when it's in a city
             you chose (or remote), at your level, and asks for skills your profile backs. If nothing shows up within a day,
-            check your <a href="#/profile?tab=prefs">preferences</a>.</p>
+            check your preferences in <a href="#/setup">Setup</a>.</p>
         </div>
         <h2>Ask for a company</h2>
         <AskCompany />
