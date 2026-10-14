@@ -168,6 +168,34 @@ def test_a_job_can_be_given_another_model_but_only_an_allowed_one(env):
     assert {r["job"]: r["current"] for r in o["settings"]["routes"]}["rank"] == "groq"
 
 
+def test_groq_for_everything_is_one_switch_that_turns_itself_off(env):
+    client, root = env
+    alice = joined(client, root)
+    fm = do(client, action="free_mode", on=True, hours=1).json()["overview"]["settings"]["free_mode"]
+    assert fm["on"] and fm["until"] and not fm["dev"]
+    routes = load_routes(root)
+    assert routes["rank"] == routes["resume"] == routes["outreach"] == {"groq": ""}
+    assert [p.name for p in LLM(alice, purpose="resume").chain] == ["groq"]
+    # On the live service resumes still go to Anthropic only, as the privacy notice says.
+    assert routes["setup"] == {"claude": "claude-opus-5-5"}
+    assert do(client, action="free_mode", on=True, hours=5).status_code == 400
+    # Its time up, every job is back on its own model, without anyone turning it off.
+    p = shared_var(root) / "free-mode.json"
+    doc = json.loads(p.read_text(encoding="utf-8"))
+    p.write_text(json.dumps({**doc, "until": "2000-01-01T00:00:00+00:00"}), encoding="utf-8")
+    assert load_routes(root)["resume"] == {"claude": "claude-sonnet-5-5"}
+    do(client, action="free_mode", on=True, hours=None)
+    assert load_routes(root)["rank"] == {"groq": ""}
+    o = do(client, action="free_mode", on=False).json()["overview"]
+    assert not o["settings"]["free_mode"]["on"] and load_routes(root)["rank"] == {"claude": "claude-haiku-5-5"}
+    assert [r["detail"] for r in o["log"] if r["action"] == "free_mode"][:2] == ["off", "on until turned off"]
+
+
+def test_on_a_dev_server_the_switch_reads_resumes_with_groq_too():
+    from jobsearch.hosted.admin import free_jobs
+    assert "setup" in free_jobs(dev=True) and "setup" not in free_jobs(dev=False)
+
+
 def test_invites_unused_can_be_cancelled_and_used_ones_name_who(env):
     client, root = env
     joined(client, root)

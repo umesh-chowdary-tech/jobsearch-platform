@@ -295,6 +295,7 @@ label.consent input { margin-top: 2px; flex-shrink: 0; width: auto; }
 tr.manage td { background: var(--muted-soft); padding: 12px; }
 tr.manage .row + .row { margin-top: 10px; }
 .field.route { max-width: 360px; }
+.free-on { border-color: var(--warn); background: var(--warn-soft); color: var(--warn-ink); }
 
 /* ── jobs, profile, resumes ────────────────────────────────────────────── */
 .h2row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }

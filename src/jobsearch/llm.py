@@ -16,6 +16,7 @@ import os
 import re
 import time
 from dataclasses import dataclass, field, replace
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -104,6 +105,28 @@ KNOWN: dict[str, Provider] = {
 # The admin page's choice of model for a job, over data/models.yaml - in
 # var/_shared, so the hosted service's database keeps it.
 ROUTES_OVERRIDE = "models.json"
+# The admin page's "Groq for everything" switch, over both: while it's on,
+# the jobs it names use Groq's free tier, for trying things without spending.
+# It turns itself off when its time is up.
+FREE_MODE = "free-mode.json"
+
+
+def free_mode(root: Path) -> dict[str, Any] | None:
+    """The switch, while it's on: {"jobs": [...], "until": ISO time or None,
+    "since", "by"}."""
+    try:
+        doc = json.loads((shared_var(Path(root)) / FREE_MODE).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(doc, dict) or not isinstance(doc.get("jobs"), list):
+        return None
+    if doc.get("until"):
+        try:
+            if datetime.fromisoformat(str(doc["until"])) <= datetime.now(timezone.utc):
+                return None
+        except ValueError:
+            return None
+    return doc
 
 
 def _routes(doc: Any) -> dict[str, dict[str, str]]:
@@ -123,6 +146,9 @@ def load_routes(root: Path) -> dict[str, dict[str, str]]:
         over = {}
     if isinstance(over, dict):
         routes.update(_routes(over))
+    free = free_mode(root)
+    for job in (free or {}).get("jobs") or []:
+        routes[str(job)] = {"groq": ""}
     return routes
 
 

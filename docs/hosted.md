@@ -75,6 +75,12 @@ passes `/api` to the service.
     account; invite codes - make, cancel unused, see who used which.
   - *AI & budget:* which model does each job, the Claude spending limits,
     one switch to pause all AI; cost this month by job, model and person.
+    **Groq for everything** puts ranking, resume summaries and referral
+    lines on Groq's free tier for 1, 8 or 24 hours or until turned off, so
+    trying things costs nothing; it turns itself off when its time is up.
+    Reading an uploaded resume stays with Claude on the service, as the
+    privacy notice says - on a `--dev` server on your own machine it moves
+    to Groq too.
   - *Jobs & health:* run a job update now, pause the schedule; updates and
     new postings per day, keys set or not, the database's last save, boards
     not read for two days, recent errors.
@@ -83,7 +89,7 @@ passes `/api` to the service.
   Admins see counts and emails, never anyone's resume, profile or jobs. The
   only thing kept for the page is the day each person last used the service.
   The page's changes live in `var/_shared/` (`llm-limits.json`,
-  `models.json`, `admin-log.jsonl`), so the database keeps them too.
+  `models.json`, `free-mode.json`, `admin-log.jsonl`), so the database keeps them too.
 
 ## Security
 

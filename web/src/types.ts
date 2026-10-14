@@ -309,6 +309,8 @@ export interface AdminOverview {
   };
   settings: {
     ai_paused: boolean;
+    /** Groq's free tier for every job, for a while (hosted/admin.py). */
+    free_mode: { on: boolean; until: string | null; jobs: string[]; dev: boolean };
     caps: { usd_per_month: number | null; usd_per_day: number | null; person_usd_per_day: number | null;
             person_usd_per_month: number | null };
     ceiling: { usd_per_month: number; usd_per_day: number; person_usd_per_day: number; person_usd_per_month: number };
