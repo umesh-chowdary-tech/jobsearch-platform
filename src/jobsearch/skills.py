@@ -198,12 +198,22 @@ def _strip_paren(name: str) -> str:
 
 
 def load_index(prof: "Profile") -> SkillIndex:
-    """The person's claims over the shared vocabulary."""
-    return _load_index(str(prof.file("skills.yaml")), str(prof.data / "skill-vocabulary.yaml"))
+    """The person's claims over the shared vocabulary. Re-read when either
+    file changes: a long-running service sees a profile saved a moment ago."""
+    skills, vocab = prof.file("skills.yaml"), prof.data / "skill-vocabulary.yaml"
+    return _load_index(str(skills), str(vocab), _stamp(skills), _stamp(vocab))
+
+
+def _stamp(p: Path) -> tuple[int, int]:
+    try:
+        st = p.stat()
+    except OSError:
+        return (0, 0)
+    return (st.st_mtime_ns, st.st_size)
 
 
 @lru_cache(maxsize=16)
-def _load_index(skills_path: str, vocab_path: str) -> SkillIndex:
+def _load_index(skills_path: str, vocab_path: str, *_stamps: tuple[int, int]) -> SkillIndex:
     skills = yaml.safe_load(Path(skills_path).read_text(encoding="utf-8")) or {}
     vocab = yaml.safe_load(Path(vocab_path).read_text(encoding="utf-8")) or {}
     return SkillIndex(skills, vocab)

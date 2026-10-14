@@ -328,6 +328,8 @@ tr.manage .row + .row { margin-top: 10px; }
 .tier .lbl { font-weight: 650; }
 .tier .help { color: var(--ink-3); font-size: 12.5px; margin-bottom: 8px; }
 .tier .pill { margin: 0 4px 4px 0; }
+h3.group { margin: 22px 0 10px; }
+.history { margin-bottom: 4px; }
 .legend { display: flex; gap: 16px; font-size: 12px; color: var(--ink-2); margin: 12px 0; }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
 .gaps { display: grid; gap: 12px; }
@@ -376,7 +378,7 @@ code.addr { font-size: 13px; padding: 6px 10px; border-radius: 8px; background: 
   .side { position: fixed; top: auto; left: 0; right: 0; bottom: 0; height: auto; z-index: 6; flex-direction: row;
           overflow-x: auto; padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); }
   .side .brand, .side .sep, .side .who { display: none; }
-  .side a { flex-direction: column; gap: 3px; font-size: 11px; padding: 6px 8px; min-width: 66px; flex: 1; }
+  .side a { flex-direction: column; gap: 3px; font-size: 11px; padding: 6px 4px; min-width: 54px; flex: 1; }
   .side a.on::before { left: 22%; right: 22%; top: -6px; bottom: auto; width: auto; height: 3px; border-radius: 0 0 3px 3px; }
   .side .count { position: absolute; top: 2px; right: 8px; margin: 0; font-size: 10px; padding: 0 5px; }
   .top { padding: 10px 16px; }
@@ -420,3 +422,35 @@ code.addr { font-size: 13px; padding: 6px 10px; border-radius: 8px; background: 
 .question.skipped { opacity: .65; }
 .question.done { border-left-color: var(--border); opacity: .8; }
 .question textarea { width: 100%; }
+
+/* ── profile: editing, and what isn't in it yet ────────────────────────── */
+.missing { margin: 4px 0 8px; }
+.missing.done { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13.5px; color: var(--ink-2); }
+.missing.done > .i { color: var(--good); width: 18px; height: 18px; }
+.missing.done .left-out { flex-basis: 100%; margin-top: 4px; }
+.why-group { margin-top: 18px; }
+.why-group .lbl { font-weight: 650; overflow-wrap: anywhere; }
+.why-group .help { color: var(--ink-3); font-size: 12.5px; margin-bottom: 8px; }
+.why-group .kids { margin-top: 10px; }
+.reason { color: var(--warn-ink); }
+.check { border-left: 3px solid var(--border); padding: 6px 0 6px 12px; overflow-wrap: anywhere; }
+.check > * + * { margin-top: 6px; }
+.check.disputed { border-left-color: var(--warn); }
+.check .kind { font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-3); margin-right: 8px; }
+.left-out { margin-top: 18px; }
+.left-out summary { cursor: pointer; font-weight: 650; font-size: 13.5px; }
+.first-save, .next-step { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; border-color: var(--accent); }
+.first-save { margin-bottom: 16px; }
+.first-save p { margin: 4px 0 0; }
+.next-step { margin-top: 24px; }
+.edit-card { border-color: var(--accent); }
+.edit-card .lbl { font-weight: 650; }
+.card-top { align-items: center; margin-bottom: 2px; }
+.card-top .lbl { font-weight: 650; font-size: 13px; }
+.history .card-top + .h { border-top: 0; padding-top: 4px; }
+.entry-edit .part { border-top: 1px solid var(--border); padding-top: 12px; }
+.part .lbl { font-weight: 650; font-size: 13.5px; }
+.part .help { color: var(--ink-3); font-size: 12.5px; margin-bottom: 6px; }
+.line { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.line input { flex: 1; min-width: 180px; }
+.toggle button { padding: 4px 10px; font-size: 12.5px; }

@@ -17,11 +17,13 @@
            (setup_merge.py): one item per job, piece of work or fact, quoting
            every source that says it. Where sources disagree, both versions
            are kept for the person to choose - never chosen for them.
-  review   the person confirms, edits or removes each item. Facts they type
-           themselves are theirs, numbers included.
+  review   the person confirms, edits or removes each item, on the profile
+           page. What they add in their own words - a fact, a result, a
+           skill they used, a whole job - is theirs, numbers included.
   write    only confirmed items become the profile: master-store.yaml,
            skills.yaml and search-profile.yaml - saved over an earlier profile
-           without losing what was added to it by hand.
+           without losing what was added to it by hand. Once saved, every
+           change writes the profile again.
 
 Nothing from a draft reaches a profile without a click. The draft and each
 source's text live in var/<id>/setup/ (gitignored) until then; the uploaded
@@ -57,6 +59,8 @@ SETUP_TIMEOUT = 600.0          # seconds: thinking hard over a long resume takes
 ENTRY_TYPES = ("work", "project", "education", "certification", "award")
 STATES = ("pending", "confirmed", "removed")
 TIERS = ("core", "working", "incidental", "remove")
+IDENTITY_FIELDS = ("name", "location", "email", "phone", "linkedin", "github", "portfolio")
+MAX_FIELD = 600                # characters in one thing a person types
 # Words that make a claim stronger without changing a number. In a draft, each
 # must be in the line it quotes (the same list outreach checks drafts with).
 STRONGER = setup_merge.STRONGER
@@ -729,6 +733,8 @@ def update_item(prof: Profile, item_id: str, state: str | None = None,
                 it["measured"] = v
                 continue
             v = " ".join(str(v).split())
+            if len(v) > MAX_FIELD:
+                raise SetupError(f"keep it under {MAX_FIELD} characters")
             if v != it.get(k):
                 it[k], it["edited"] = v, True
                 it.pop("conflict", None)
@@ -740,23 +746,96 @@ def update_item(prof: Profile, item_id: str, state: str | None = None,
     return it
 
 
-def add_fact(prof: Profile, entry: str, text: str) -> dict[str, Any]:
-    """A fact the person writes themselves: confirmed by writing it."""
-    text = " ".join(str(text).split())
-    if not text:
-        raise SetupError("write the fact first")
+# What a person may add in their own words: the fields each takes, the one
+# it can't be without, and what to say when that one is missing.
+ADDABLE: dict[str, tuple[tuple[str, ...], str, str]] = {
+    "identity": (("field", "value"), "value", "write it first"),
+    "job": (("employer", "title", "client", "location", "start", "end"), "employer", "say who you worked for"),
+    "entry": (("type", "title", "where", "period", "headline"), "headline", "say in a line what it was"),
+    "language": (("value",), "value", "name the language"),
+    "fact": (("text",), "text", "write the fact first"),
+    "tech": (("name",), "name", "name the skill"),
+    "metric": (("claim", "measured"), "claim", "write the result first"),
+    "note": (("text",), "text", "write the note first"),
+}
+UNDER_ENTRY = {"fact": "f", "tech": "t", "metric": "m", "note": "n"}
+MONTH = re.compile(r"\d{4}(-(0[1-9]|1[0-2]))?")
+
+
+def add_item(prof: Profile, kind: str, fields: dict[str, Any], entry: str = "") -> dict[str, Any]:
+    """Something the person adds in their own words - a job, a piece of work,
+    a fact, a measured result or an estimate, a skill they used in a piece of
+    work: confirmed by writing it. A detail about them the draft already has
+    (their phone, say) is changed in place, not added twice."""
+    if kind not in ADDABLE:
+        raise SetupError(f"kind must be one of {', '.join(ADDABLE)}")
+    allowed, need, say = ADDABLE[kind]
+    vals: dict[str, Any] = {}
+    for k, v in fields.items():
+        if k not in allowed:
+            raise SetupError(f"{k} can't be given for a {kind}")
+        if k == "measured":
+            if not isinstance(v, bool):
+                raise SetupError("say whether it was measured or is your estimate")
+            vals[k] = v
+            continue
+        v = " ".join(str(v or "").split())
+        if len(v) > MAX_FIELD:
+            raise SetupError(f"keep it under {MAX_FIELD} characters")
+        vals[k] = v
+    if not vals.get(need):
+        raise SetupError(say)
+    if kind == "identity" and vals.get("field") not in IDENTITY_FIELDS:
+        raise SetupError(f"field must be one of {', '.join(IDENTITY_FIELDS)}")
+    if kind == "metric" and "measured" not in vals:
+        raise SetupError("say whether it was measured or is your estimate")
+    if kind == "entry":
+        vals["type"] = vals.get("type") or "work"
+        if vals["type"] not in ENTRY_TYPES:
+            raise SetupError(f"type must be one of {', '.join(ENTRY_TYPES)}")
+    if kind == "job":
+        for k in ("start", "end"):
+            if vals.get(k) and not (MONTH.fullmatch(vals[k]) or (k == "end" and vals[k] == "present")):
+                raise SetupError("write dates as YYYY-MM, like 2022-04")
     with editing(prof.var):
         d = load_draft(prof)
-        if _find(d, entry)["kind"] != "entry":
-            raise SetupError(f"{entry!r} is not an entry")
-        n = sum(1 for it in d["items"] if it.get("entry") == entry and it["kind"] == "fact") + 1
-        while any(it["id"] == f"{entry}-f{n}" for it in d["items"]):
-            n += 1
-        it = {"id": f"{entry}-f{n}", "kind": "fact", "entry": entry, "text": text,
+        if not d:
+            raise SetupError("add your resume in Setup first")
+        items = d.setdefault("items", [])
+        if kind in UNDER_ENTRY and _find(d, entry)["kind"] != "entry":
+            raise SetupError(f"{entry!r} is not a piece of work")
+        same = None
+        if kind == "identity":
+            same = next((i for i in items if i["kind"] == "identity" and i.get("field") == vals["field"]), None)
+            if same is not None:
+                same.update(value=vals["value"], state="confirmed", edited=True)
+        elif kind == "tech":
+            same = next((i for i in items if i["kind"] == "tech" and i.get("entry") == entry
+                         and str(i.get("name", "")).lower() == vals["name"].lower()), None)
+            if same is not None:
+                same["state"] = "confirmed"
+        if same is not None:
+            same.pop("conflict", None)
+            _save(prof, d)
+            return same
+        if kind == "identity":
+            iid = f"id-{vals['field']}"
+        else:
+            stem = f"{entry}-{UNDER_ENTRY[kind]}" if kind in UNDER_ENTRY else f"you-{kind}-"
+            n = sum(1 for it in items if it["kind"] == kind and (kind not in UNDER_ENTRY or it.get("entry") == entry)) + 1
+            while any(it["id"] == f"{stem}{n}" for it in items):
+                n += 1
+            iid = f"{stem}{n}"
+        it = {"id": iid, "kind": kind, **({"entry": entry} if kind in UNDER_ENTRY else {}), **vals,
               "source": "", "sources": [], "by": "you", "state": "confirmed", "at": utcnow()}
-        d["items"].append(it)
+        items.append(it)
         _save(prof, d)
     return it
+
+
+def add_fact(prof: Profile, entry: str, text: str) -> dict[str, Any]:
+    """A fact the person writes themselves: confirmed by writing it."""
+    return add_item(prof, "fact", {"text": text}, entry)
 
 
 def restore(prof: Profile, index: int) -> dict[str, Any]:
@@ -1034,7 +1113,8 @@ def _provenance(it: dict[str, Any], names: dict[str, dict[str, Any]]) -> list[st
     """Where an item came from, for the store: "<file>: <its line>", or that
     the person wrote it."""
     if it.get("by") == "you":
-        return [f"typed by you{', ' + str(it['at'])[:10] if it.get('at') else ''}: {it.get('text') or ''}".strip()]
+        said = it.get("text") or it.get("claim") or it.get("headline") or ""
+        return [f"typed by you{', ' + str(it['at'])[:10] if it.get('at') else ''}: {said}".strip()]
     out = []
     for s in it.get("sources") or []:
         rec = names.get(s["src"])
@@ -1063,7 +1143,7 @@ def build(d: dict[str, Any], prefs: dict[str, Any]) -> tuple[dict, dict, dict]:
     names = {s["id"]: s for s in d.get("sources") or []}
     ident = {it["field"]: it["value"] for it in _confirmed(d, "identity")}
     if not ident.get("name"):
-        raise SetupError("confirm your name first")
+        raise SetupError("add your name first")
     jobs = _confirmed(d, "job")
     jobs.sort(key=lambda j: str(j.get("start") or ""), reverse=True)     # newest first,
     jobs.sort(key=lambda j: j.get("end") != "present")                   # current ones before them
@@ -1097,7 +1177,7 @@ def build(d: dict[str, Any], prefs: dict[str, Any]) -> tuple[dict, dict, dict]:
             "sources": [s for x in [e, *mine, *results] for s in _provenance(x, names)],
         })
     if not entries and not jobs:
-        raise SetupError("confirm at least one job or entry")
+        raise SetupError("add at least one job or piece of work")
 
     store = {"identity": {
         "name": ident["name"], "location": ident.get("location", ""), "email": ident.get("email", ""),
@@ -1148,10 +1228,22 @@ KEEP_ON_ENTRY = ("status", "pins", "scope")
 KEEP_IF_EMPTY = ("metrics", "angles", "notes", "priority")
 
 
-def _keep_hand_work(prof: Profile, store: dict, skills: dict) -> tuple[dict, dict]:
+def _keep_hand_work(prof: Profile, store: dict, skills: dict, d: dict[str, Any]) -> tuple[dict, dict]:
     """Saving over an existing profile keeps what setup doesn't produce: an
     entry added by hand, an entry's notes, metrics, angles, priority; an
-    approved job-title descriptor; skills marked banned or not-skills."""
+    approved job-title descriptor; skills marked banned or not-skills.
+    What the draft itself has a say on - a piece of work, a skill, a contact
+    detail, an entry's results or notes the person removed - goes by the
+    draft, so removing it on the profile page removes it."""
+    items = d.get("items") or []
+    drafted = {it["id"] for it in items if it["kind"] == "entry"}
+    named_in_draft = {it.get("name") for it in items if it["kind"] == "tech"} | set(d.get("skills") or {})
+    fields = {it.get("field") for it in items if it["kind"] == "identity"}
+    has = {(it.get("entry"), it["kind"]) for it in items if it.get("entry")}
+    labelled = {it["id"] for it in items if it["kind"] == "entry" and it.get("labels_by")}
+    decides = {"metrics": lambda eid: (eid, "metric") in has, "notes": lambda eid: (eid, "note") in has,
+               "angles": lambda eid: eid in labelled, "priority": lambda eid: eid in labelled}
+
     def read(name: str) -> dict:
         try:
             return yaml.safe_load(prof.file(name).read_text(encoding="utf-8")) or {}
@@ -1168,25 +1260,26 @@ def _keep_hand_work(prof: Profile, store: dict, skills: dict) -> tuple[dict, dic
             if k in was:
                 e[k] = was[k]
         for k in KEEP_IF_EMPTY:
-            if not e.get(k) and was.get(k):
+            if not e.get(k) and was.get(k) and not decides[k](e["id"]):
                 e[k] = was[k]
         if str(was.get("evidence", "")).startswith("http") and e.get("evidence") == "resume":
             e["evidence"] = was["evidence"]
         if was.get("confidence") and was["confidence"] != "high":
             e["confidence"] = was["confidence"]
-    store["entries"] += [e for i, e in olds.items() if i not in new_ids]
+    store["entries"] += [e for i, e in olds.items() if i not in new_ids and i not in drafted]
     old_title = (old.get("identity") or {}).get("title") or {}
     if old_title.get("approved_descriptors") or old_title.get("descriptor_flexes"):
         store["identity"]["title"] = {**old_title, "official": store["identity"]["title"]["official"]
                                       or old_title.get("official", "")}
     for k in ("email", "phone", "linkedin", "github", "portfolio"):
-        if not store["identity"].get(k) and (old.get("identity") or {}).get(k):
+        if not store["identity"].get(k) and (old.get("identity") or {}).get(k) and k not in fields:
             store["identity"][k] = old["identity"][k]
     for k in ("not_skills", "banned", "always"):
         if old_skills.get(k):
             skills[k] = old_skills[k]
     named = {s["skill"] if isinstance(s, dict) else s for s in skills["tiers"]["core"] + skills["tiers"]["incidental"]}
     named |= set(skills["tiers"]["working"].get("from_resume") or [])
+    named |= named_in_draft
     for tier, val in (old_skills.get("tiers") or {}).items():
         if tier == "working" and isinstance(val, dict):
             for group, names in val.items():
@@ -1205,18 +1298,66 @@ HEADER = ("# {name} - written by setup from a resume on {day}.\n"
           "# nothing they can't defend in an interview. See profiles/README.md.\n\n")
 
 
-def save(prof: Profile, prefs: dict[str, Any], replace: bool = False) -> dict[str, Any]:
+PREF_LISTS = {"preferred": "cities you prefer", "acceptable": "places that are also fine",
+              "watch": "companies to watch"}
+
+
+def _checked_prefs(p: dict[str, Any]) -> dict[str, Any]:
+    """Preferences as the form sends them, checked: what the job filters read."""
+    out = _listed({k: p.get(k) for k in PREF_LISTS})
+    for k, what in PREF_LISTS.items():
+        if len(out[k]) > 30 or any(len(x) > 80 for x in out[k]):
+            raise SetupError(f"{what}: keep it to 30, each under 80 characters")
+
+    def number(k: str, most: int, default: int) -> int:
+        v = p.get(k)
+        if v is None or v == "":
+            return default
+        try:
+            n = int(v)
+        except (TypeError, ValueError):
+            raise SetupError(f"{k.replace('_', ' ')} must be a number") from None
+        if not 0 <= n <= most:
+            raise SetupError(f"{k.replace('_', ' ')} must be between 0 and {most}")
+        return n
+    years = number("years", 50, 0)
+    skip = p.get("skip") or []
+    if not isinstance(skip, list) or any(s not in SKIP for s in skip):
+        raise SetupError(f"roles to skip must be from: {', '.join(sorted(SKIP))}")
+    level = p.get("level") or "ic"
+    if level not in LEVELS:
+        raise SetupError(f"level must be one of {', '.join(LEVELS)}")
+    return {**out, "remote": p.get("remote") is not False, "years": years,
+            "max_years": number("max_years", 60, years + 2), "level": level, "skip": list(dict.fromkeys(skip))}
+
+
+def set_prefs(prof: Profile, prefs: dict[str, Any]) -> dict[str, Any]:
+    """What the person is looking for, kept with the draft; saving the
+    profile writes it into the job filters."""
+    clean = _checked_prefs(prefs)
+    with editing(prof.var):
+        d = load_draft(prof)
+        if not d:
+            raise SetupError("add your resume in Setup first")
+        d["prefs"] = clean
+        _save(prof, d)
+    return clean
+
+
+def save(prof: Profile, prefs: dict[str, Any] | None = None, replace: bool = False) -> dict[str, Any]:
     """Write the profile from confirmed items. Pending items are left out; an
-    existing profile keeps what was added to it by hand."""
+    existing profile keeps what was added to it by hand. Without `prefs`,
+    the ones kept with the draft (or suggested from it) are used."""
     if prof.exists() and not replace:
         raise SetupError(f"a profile '{prof.id}' already exists - confirm replacing it")
     with editing(prof.var):
         d = load_draft(prof)
         if d.get("status") not in ("drafted", "saved"):
             raise SetupError("draft your facts first")
+        prefs = _checked_prefs(d.get("prefs") or suggested_prefs(d) if prefs is None else prefs)
         store, skills, search = build(d, prefs)
         if prof.exists():
-            store, skills = _keep_hand_work(prof, store, skills)
+            store, skills = _keep_hand_work(prof, store, skills, d)
         prof.dir.mkdir(parents=True, exist_ok=True)
         day = date.today().isoformat()
         for name, doc in (("master-store.yaml", store), ("skills.yaml", skills),
@@ -1230,8 +1371,33 @@ def save(prof: Profile, prefs: dict[str, Any], replace: bool = False) -> dict[st
             "entries": len(store["entries"]), "skills": len(skill_suggestions(d))}
 
 
+def resave(prof: Profile) -> bool:
+    """After a change: write the profile again, if setup wrote it before. A
+    change that leaves nothing to write (no name, say) waits in the draft;
+    the profile page says why (`blocked` in state)."""
+    d = load_draft(prof)
+    if not d.get("saved_at") or not prof.exists():
+        return False
+    try:
+        save(prof, replace=True)
+    except SetupError:
+        return False
+    return True
+
+
+def _blocked(d: dict[str, Any]) -> str:
+    """Why the profile can't be written from the draft as it stands, if so."""
+    if not d.get("items"):
+        return ""
+    try:
+        build(d, d.get("prefs") or suggested_prefs(d))
+    except SetupError as exc:
+        return str(exc)
+    return ""
+
+
 def state(prof: Profile) -> dict[str, Any]:
-    """Everything the setup screen shows."""
+    """Everything the setup screen and the profile page's editing show."""
     d = load_draft(prof)
     srcs = []
     for s in d.get("sources") or []:
@@ -1250,6 +1416,7 @@ def state(prof: Profile) -> dict[str, Any]:
             "progress": progress(d), "skills": skill_suggestions(d) if d else [],
             "prefs": _listed(d["prefs"]) if d.get("prefs") else (suggested_prefs(d) if d else {}),
             "drafted_by": d.get("drafted_by"), "merge_notes": d.get("merge_notes") or [],
+            "saved_at": d.get("saved_at"), "blocked": _blocked(d) if d else "",
             "interview": {"questions": Q.questions(d), "rounds": len((d.get("interview") or {}).get("rounds") or []),
                           "max_rounds": Q.MAX_ROUNDS, "angles": list(Q.ANGLES),
                           # The model found nothing more worth asking last time.
