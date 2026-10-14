@@ -39,8 +39,8 @@ export function Market() {
                 </div>
               ))}
             </div>
-            <p className="small muted" style={{ marginBottom: 0 }}>If you have really used one, <a href="#/setup">add where in Setup</a> and
-              it counts from then on.</p>
+            <p className="small muted" style={{ marginBottom: 0 }}>If you have really used one, add it to the work where you used it, on
+              your <a href="#/profile">Profile</a>, and it counts from then on.</p>
           </>
         ) : <p className="empty" style={{ margin: 0 }}>No gaps recorded yet: they appear once jobs have been checked against your profile.</p>}
       </div>

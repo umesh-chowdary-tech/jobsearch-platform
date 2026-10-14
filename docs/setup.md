@@ -4,12 +4,15 @@
 python -m jobsearch.cli setup <id>        # opens the app on its Setup screen
 ```
 
-How a person gets a profile without writing YAML: add their resumes - every
-version they have - and, if they like, their GitHub, a portfolio page and a
-note; let the AI read each; confirm every fact, choosing the true version
-wherever their documents disagree; say what they're looking for; save. The
-code is `src/jobsearch/onboard.py`, with `setup_sources.py` (reading) and
-`setup_merge.py` (combining).
+How a person gets a profile without writing YAML: in Setup, add their
+resumes - every version they have - and, if they like, their GitHub, a
+portfolio page and a note; let the AI read each; answer its questions. Then,
+on the profile page, add what's true, choosing the true version wherever
+their documents disagree; say what they're looking for; save. After that,
+every change on the profile page saves as it's made. The code is
+`src/jobsearch/onboard.py`, with `setup_sources.py` (reading) and
+`setup_merge.py` (combining); the pages are `web/src/pages/Setup.tsx` and
+`Profile.tsx`, with `web/src/checking.tsx`.
 
 ## The steps
 
@@ -90,23 +93,43 @@ code is `src/jobsearch/onboard.py`, with `setup_sources.py` (reading) and
    fixed list: backend, data, ml, ...) and which a resume should cut first.
    They're labels, not claims; the person changes them, and the model doesn't
    overrule them after.
-6. **Review.** Each item shows the line it came from and which file. The
-   person confirms, edits or removes it; an edit is their own words, and they
-   can add facts in their own words, numbers included. A skill only in a
-   skills list is confirmed only if they used it in that work. Nothing is
-   confirmed for them.
-7. **Skills.** Only skills that confirmed lines of confirmed entries name:
-   strong (core), used it (working), touched it (never listed on a resume), or
-   not a skill of theirs.
+6. **Check, on the profile page.** At the top, **Not in your profile yet**
+   lists everything left out, grouped by why: not checked yet; the files
+   disagree (pick a version or write your own); a skill only in a skills
+   list (add it only if it was used in that work); a result not yet marked
+   measured or an estimate; what the AI said that didn't match a line (with
+   "use the line itself" where that works); a file not read; answers not
+   used; and, folded away, what the person left out themselves, to put back.
+   Each item shows the line it came from and which file. The person adds,
+   edits or leaves out each one - an edit is their own words. A piece of work
+   can be added with what's listed under it in one click, except those that
+   need a choice. Nothing is added for them.
+7. **Edit, on the profile page.** Each part has Edit: name, location, email,
+   phone and links (email and phone are shown only in this form, and never to
+   the Claude connector), languages; the work history; each piece of work -
+   its kind, name, where, when, what it was, facts, results (each measured or
+   an estimate - only a measured one is ever printed as a number), the skills
+   used in it, a note for whoever words the resume, angles and "cut first".
+   The person can add a job, a piece of work or any of those in their own
+   words, numbers included; dates are YYYY-MM. Skills: only those that
+   confirmed lines of confirmed work name - strong (core), used it (working),
+   touched it (never listed on a resume), or not a skill of theirs; a new one
+   is added to the work where it was used.
 8. **Preferences.** Cities, remote or not, years of experience (suggested
    from the earliest confirmed job), the most years a posting may ask, level,
-   roles to skip, companies to watch.
-9. **Save.** Only confirmed items are written, as `master-store.yaml`,
-   `skills.yaml` and `search-profile.yaml`. Each entry records where it came
-   from (`sources`: "file: line", or "typed by you") and, for public work, a
-   link to open (`evidence`). Saving over an existing profile keeps what was
-   added to it by hand: an entry's notes, metrics, angles, priority, an entry
-   added by hand, approved title descriptors, skills marked banned.
+   roles to skip, companies to watch - kept with the draft and checked.
+9. **Save.** The first save is a button on the profile page; after it, every
+   change writes the profile again (`onboard.resave`). A change that leaves
+   nothing to write (no name, say) waits in the draft, and the page says why.
+   Only confirmed items are written, as `master-store.yaml`, `skills.yaml`
+   and `search-profile.yaml`. Each entry records where it came from
+   (`sources`: "file: line", or "typed by you") and, for public work, a link
+   to open (`evidence`). Saving over an existing profile keeps what was added
+   to it by hand: an entry added by hand, an entry's notes, metrics, angles,
+   priority, approved title descriptors, skills marked banned. What the draft
+   has a say on goes by the draft, so removing it on the profile page removes
+   it: a piece of work, a skill, a contact detail, an entry's results or
+   notes, its angles and "cut first" once the person has set them.
 
 Removing a source takes what only it said, unless the person confirmed it;
 where it was one side of a disagreement, the other side's version stays.

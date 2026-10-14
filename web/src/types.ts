@@ -256,6 +256,10 @@ export interface SetupState {
   will_send: string;
   levels: Record<string, string>;
   result?: { entries: number; skills: number };
+  /** When setup last wrote the profile; from then on every change writes it again. */
+  saved_at: string | null;
+  /** Why the profile can't be written from the draft as it stands, if so. */
+  blocked: string;
 }
 
 export interface AdminCounts {

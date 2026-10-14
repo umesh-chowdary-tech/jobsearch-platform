@@ -28,7 +28,7 @@ export function Resumes() {
         <div className="card stack">
           <p><b>No resumes yet.</b></p>
           <p className="small muted">Open any job in <a href="#/jobs">Jobs</a> and choose <b>Build resume</b>. It's built from what you
-            confirmed in Setup, matched to what that job asks for, and checked the way an applicant tracking system reads it.</p>
+            added to your profile, matched to what that job asks for, and checked the way an applicant tracking system reads it.</p>
         </div>
       )}
     </>

@@ -59,7 +59,8 @@ HOSTED_GET = tuple(re.compile(p) for p in (
     r"/api/(overview|today|postings|resumes|profile|setup|market|actions|job|outreach|applications|companies)",
     rf"/api/postings/{_ID}", rf"/api/postings/{_ID}/(kit|leads)"))
 HOSTED_POST = tuple(re.compile(p) for p in (
-    r"/api/setup/(upload|draft|item|fact|restore|skills|save|link|note|remove|reset|ask|answer|apply|labels)",
+    r"/api/setup/(upload|draft|items?|fact|add|restore|skills|prefs|save|link|note|remove|reset|ask|answer|apply|"
+    r"labels)",
     r"/api/run", r"/api/outreach/draft", rf"/api/outreach/{_ID}/mark",
     r"/api/applications/(paste|add)", rf"/api/applications/{_ID}/(confirm|status|ignore|merge)",
     r"/api/companies/ask", rf"/api/companies/{_ID}/withdraw",
@@ -168,7 +169,8 @@ def upload(prof: Profile, ctype: str, data: bytes, filename: str = "") -> dict[s
 
 
 def _setup(prof: Profile, step: str, body: dict[str, Any]) -> Any:
-    """Each step returns the whole setup state."""
+    """Each step returns the whole setup state. Once setup has saved the
+    profile, a change writes it again (onboard.resave)."""
     if step == "draft":
         onboard.draft(prof, source=str(body["source"]) if body.get("source") else None)
     elif step == "item":
@@ -177,6 +179,15 @@ def _setup(prof: Profile, step: str, body: dict[str, Any]) -> Any:
             raise ApiError(400, "choose must be a number")
         onboard.update_item(prof, str(body.get("id") or ""), body.get("state"),
                             body.get("fields") if isinstance(body.get("fields"), dict) else None, choose)
+    elif step == "items":
+        # Several at once: a piece of work and what the person saw listed under it.
+        ids, to = body.get("ids"), body.get("state")
+        if not (isinstance(ids, list) and 0 < len(ids) <= 200 and all(isinstance(i, str) for i in ids)):
+            raise ApiError(400, "ids must be a list of item ids")
+        if not isinstance(to, str):
+            raise ApiError(400, "say which state")
+        for iid in ids:
+            onboard.update_item(prof, iid, to)
     elif step == "link":
         onboard.add_link(prof, str(body.get("kind") or ""), str(body.get("url") or ""))
     elif step == "note":
@@ -199,6 +210,14 @@ def _setup(prof: Profile, step: str, body: dict[str, Any]) -> Any:
         onboard.set_labels(prof, str(body.get("entry") or ""), angles, cut if isinstance(cut, bool) else None)
     elif step == "fact":
         onboard.add_fact(prof, str(body.get("entry") or ""), str(body.get("text") or ""))
+    elif step == "add":
+        if not isinstance(body.get("fields"), dict):
+            raise ApiError(400, "fields must be an object")
+        onboard.add_item(prof, str(body.get("kind") or ""), body["fields"], str(body.get("entry") or ""))
+    elif step == "prefs":
+        if not isinstance(body.get("prefs"), dict):
+            raise ApiError(400, "prefs must be an object")
+        onboard.set_prefs(prof, body["prefs"])
     elif step == "restore":
         if isinstance(body.get("index"), bool) or not isinstance(body.get("index"), int):
             raise ApiError(400, "index must be a number")
@@ -209,11 +228,13 @@ def _setup(prof: Profile, step: str, body: dict[str, Any]) -> Any:
             raise ApiError(400, "tiers must be an object")
         onboard.set_tiers(prof, tiers)
     elif step == "save":
-        prefs = body.get("prefs") if isinstance(body.get("prefs"), dict) else {}
+        prefs = body.get("prefs") if isinstance(body.get("prefs"), dict) else None
         res = onboard.save(prof, prefs, replace=body.get("replace") is True)
         return onboard.state(prof) | {"result": res}
     else:
         raise ApiError(404, "not found")
+    if step != "reset":
+        onboard.resave(prof)
     return onboard.state(prof)
 
 

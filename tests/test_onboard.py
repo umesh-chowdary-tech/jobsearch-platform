@@ -310,7 +310,7 @@ def test_pending_items_are_left_out_and_counted(new):
 def test_nothing_is_written_without_a_confirmed_name(new):
     _drafted(new)
     O.update_item(new, "job-1", "confirmed")
-    with pytest.raises(O.SetupError, match="confirm your name"):
+    with pytest.raises(O.SetupError, match="add your name"):
         O.save(new, {})
     assert not new.exists()
 

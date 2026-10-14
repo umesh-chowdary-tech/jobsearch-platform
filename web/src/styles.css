@@ -422,3 +422,35 @@ code.addr { font-size: 13px; padding: 6px 10px; border-radius: 8px; background: 
 .question.skipped { opacity: .65; }
 .question.done { border-left-color: var(--border); opacity: .8; }
 .question textarea { width: 100%; }
+
+/* ── profile: editing, and what isn't in it yet ────────────────────────── */
+.missing { margin: 4px 0 8px; }
+.missing.done { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13.5px; color: var(--ink-2); }
+.missing.done > .i { color: var(--good); width: 18px; height: 18px; }
+.missing.done .left-out { flex-basis: 100%; margin-top: 4px; }
+.why-group { margin-top: 18px; }
+.why-group .lbl { font-weight: 650; overflow-wrap: anywhere; }
+.why-group .help { color: var(--ink-3); font-size: 12.5px; margin-bottom: 8px; }
+.why-group .kids { margin-top: 10px; }
+.reason { color: var(--warn-ink); }
+.check { border-left: 3px solid var(--border); padding: 6px 0 6px 12px; overflow-wrap: anywhere; }
+.check > * + * { margin-top: 6px; }
+.check.disputed { border-left-color: var(--warn); }
+.check .kind { font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-3); margin-right: 8px; }
+.left-out { margin-top: 18px; }
+.left-out summary { cursor: pointer; font-weight: 650; font-size: 13.5px; }
+.first-save, .next-step { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; border-color: var(--accent); }
+.first-save { margin-bottom: 16px; }
+.first-save p { margin: 4px 0 0; }
+.next-step { margin-top: 24px; }
+.edit-card { border-color: var(--accent); }
+.edit-card .lbl { font-weight: 650; }
+.card-top { align-items: center; margin-bottom: 2px; }
+.card-top .lbl { font-weight: 650; font-size: 13px; }
+.history .card-top + .h { border-top: 0; padding-top: 4px; }
+.entry-edit .part { border-top: 1px solid var(--border); padding-top: 12px; }
+.part .lbl { font-weight: 650; font-size: 13.5px; }
+.part .help { color: var(--ink-3); font-size: 12.5px; margin-bottom: 6px; }
+.line { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.line input { flex: 1; min-width: 180px; }
+.toggle button { padding: 4px 10px; font-size: 12.5px; }

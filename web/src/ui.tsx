@@ -27,6 +27,7 @@ const ICONS = {
   more: "M5 12h.01M12 12h.01M19 12h.01",
   edit: "M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4",
   chart: "M4 20h16M7 16v-5M12 16V6M17 16v-8",
+  plus: "M12 5v14M5 12h14",
 };
 export type IconName = keyof typeof ICONS;
 
