@@ -33,9 +33,9 @@ passes `/api` to the service.
 - **One API, two hosts.** `web/routes.py` holds every route. The local app
   (`web/server.py`) serves all of them for its one person. The service serves
   only the hosted screens: setup, today, every kept job (search, filters,
-  newest first), a posting and its apply kit, resumes, the profile (skills by
-  tier and every entry, as the local app shows it; read-only - changes go
-  through setup), the market (skill gaps), and
+  newest first), a posting and its apply kit, resumes, the profile (one page:
+  skills, experience - work, then personal projects - and preferences;
+  read-only - changes go through setup), the market (skill gaps), and
   running `assemble` or `rank`, and referral asks (who to ask, a drafted
   message, marking what happened; at most 80 characters for a name and 300
   for a line about them), and applications: pasted job emails and ones added
