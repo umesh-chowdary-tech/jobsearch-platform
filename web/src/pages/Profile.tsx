@@ -1,12 +1,12 @@
 // Your profile on one page - who you are, skills, experience (work, then
-// personal projects) and what you're looking for - each part with Edit.
-// Above it, everything from your files that isn't in it yet, and why. Every
-// change is saved as you make it (onboard.resave); nothing goes in without
-// your OK. Skill gaps are on Market; adding files is in Setup.
+// personal projects) and what you're looking for - each part with Edit or
+// Add. Every change is saved as you make it (onboard.resave). Checking what
+// the AI found from your files is in Setup, one card at a time; this page
+// only says how many are left. Skill gaps are on Market.
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { get, post } from "../api";
-import { EditItem, Fields, FIELDS, IDENTITY, Missing, sourceNames, type Step } from "../checking";
+import { deck, EditItem, Fields, FIELDS, IDENTITY, PrefsForm, type Step } from "../checking";
 import type { ProfileEntry, ProfileView, SetupItem, SetupState } from "../types";
 import { Icon, useToast } from "../ui";
 
@@ -40,36 +40,7 @@ function month(s?: string): string {
 /** What editing needs: the draft, a way to change it, and which part is open. */
 interface Ed { s: SetupState; step: Step; editing: string; open: (part: string) => void }
 
-/** The profile as it will be saved, from the draft's confirmed items - what
- * the page shows before the first save (onboard.build writes the same). */
-function fromDraft(s: SetupState): ProfileView {
-  const ok = (k: string) => s.items.filter(i => i.kind === k && i.state === "confirmed");
-  const idn: Record<string, string> = Object.fromEntries(ok("identity").map(i => [i.field || "", String(i.value ?? "")]));
-  const jobs = ok("job").sort((a, b) => String(b.start || "").localeCompare(String(a.start || "")))
-    .sort((a, b) => Number(a.end !== "present") - Number(b.end !== "present"));
-  const under = (k: string, eid: string) => ok(k).filter(i => i.entry === eid);
-  const tier = (t: string) => s.skills.filter(k => k.tier === t).map(k => ({ skill: k.name }));
-  return {
-    identity: { name: idn.name, location: idn.location,
-                title: ((jobs.find(j => j.end === "present") || jobs[0]) as SetupItem | undefined)?.title },
-    links: Object.fromEntries(Object.keys(LINK_NAMES).filter(k => idn[k]).map(k => [k, idn[k]])),
-    employment: jobs.map(j => ({ employer: j.employer || "", title: j.title, location: j.location, start: j.start,
-                                  end: j.end || "present", client: j.client })),
-    languages: ok("language").map(l => String(l.value)),
-    entries: ok("entry").map(e => ({
-      id: e.id, title: e.title, type: e.type, where: e.where, period: e.period, headline: e.headline,
-      facts: under("fact", e.id).map(f => String(f.text)),
-      metrics: under("metric", e.id).map(m => ({ claim: m.claim, measured: m.measured === true,
-                                                  ...(m.measured === false ? { estimate: true } : {}) })),
-      tech: under("tech", e.id).map(t => String(t.name)), priority: e.priority,
-      notes: under("note", e.id).map(n => n.text).join(" ") || null,
-    })),
-    tiers: { core: tier("core"), working: tier("working"), incidental: tier("incidental") },
-    prefs: { ...s.prefs, level: s.levels[s.prefs.level] || s.prefs.level },
-  };
-}
-
-export function Profile({ onSaved }: { onSaved?: () => void }) {
+export function Profile() {
   const [s, setS] = useState<SetupState | null>(null);
   const [p, setP] = useState<ProfileView | null>(null);
   const [err, setErr] = useState("");
@@ -91,52 +62,39 @@ export function Profile({ onSaved }: { onSaved?: () => void }) {
 
   if (err) return <p className="fail">{err}</p>;
   if (!s || (s.exists && !p)) return <p className="muted">Loading…</p>;
-  const drafted = s.items.length > 0;
-  if (!s.exists && !drafted) {
+  if (!s.exists || !p) {
     return (
       <>
         <h1>Your profile</h1>
-        <p className="empty">Nothing here yet. <a href="#/setup">Add your resume in Setup</a>: the AI reads it, and you check
-          what it found here.</p>
+        <p className="empty">Your profile isn't saved yet. <a href="#/setup">Finish setup</a>: add your resume, check what the
+          AI found, and save.</p>
       </>
     );
   }
-  const v = s.exists && p ? p : fromDraft(s);
-  const ed: Ed | null = drafted ? { s, step, editing, open: setEditing } : null;
-
-  const saveFirst = async () => {
-    const left = s.progress.pending + s.progress.conflicts;
-    if (left && !window.confirm(`${left} found in your files ${left === 1 ? "isn't" : "aren't"} added and will stay out - you can add them later. Save now?`)) return;
-    const next = await step("save", {});
-    if (next) {
-      toast(`Saved: ${next.result?.entries ?? 0} pieces of work, ${next.result?.skills ?? 0} skills`);
-      onSaved?.();
-    }
-  };
+  const drafted = s.items.length > 0;
+  // Changes here write the profile once setup has saved it from this draft
+  // (onboard.resave); after "Start over" in Setup, not until it's saved again.
+  const ed: Ed | null = drafted && s.saved_at ? { s, step, editing, open: setEditing } : null;
+  const left = drafted ? deck(s).length : 0;
 
   return (
     <>
-      <Head v={v} ed={ed} />
-      {!s.exists && (
-        <div className="card first-save">
-          <div className="grow">
-            <b>Your profile isn't saved yet.</b>
-            <p className="small">Add what's true from the list below and check what you're looking for, then save. Jobs are
-              matched against your profile from then on, and you can keep changing it here.</p>
-            {s.blocked && <p className="small reason">Before you can save: {s.blocked}.</p>}
-          </div>
-          <button className="primary" disabled={!!s.blocked} onClick={saveFirst}>Save my profile</button>
-        </div>
+      {left > 0 && (
+        <a className="remind" href="#/setup">{left} {left === 1 ? "thing" : "things"} from your resume to check <span aria-hidden="true">→</span></a>
       )}
-      {s.exists && s.blocked && <div className="notice">Your latest changes aren't in your profile yet: {s.blocked}.</div>}
-      {s.exists && !drafted && (
+      <Head v={p} ed={ed} />
+      {ed && s.blocked && <div className="notice">Your latest changes aren't in your profile yet: {s.blocked}.</div>}
+      {!drafted && (
         <p className="small muted">This profile wasn't made from your files in Setup, so it's shown as it is. <a href="#/setup">Add
-          your resume in Setup</a> to check and change it here.</p>
+          your resume in Setup</a> to change it here.</p>
       )}
-      {drafted && <Missing s={s} step={step} names={sourceNames(s)} />}
-      <SkillsPart v={v} ed={ed} />
-      <Experience v={v} ed={ed} />
-      <PrefsPart v={v} ed={ed} />
+      {drafted && !s.saved_at && (
+        <p className="small muted">You started setup over. <a href="#/setup">Finish it in Setup</a> and save, and you can change
+          your profile here again.</p>
+      )}
+      <SkillsPart v={p} ed={ed} />
+      <Experience v={p} ed={ed} />
+      <PrefsPart v={p} ed={ed} />
     </>
   );
 }
@@ -598,45 +556,10 @@ function Prefs({ v, editable }: { v: ProfileView; editable: boolean }) {
 }
 
 function PrefsEditor({ ed }: { ed: Ed }) {
-  const { s, step } = ed;
-  const p = s.prefs;
-  const [v, setV] = useState({
-    preferred: (p.preferred || []).join(", "), acceptable: (p.acceptable || []).join(", "), remote: p.remote !== false,
-    years: p.years ?? 0, max_years: p.max_years ?? 2, level: p.level, skip: p.skip || [], watch: (p.watch || []).join(", "),
-  });
   return (
-    <div className="card stack edit-card">
-      <label className="field">Cities you'd most like (comma-separated)
-        <input value={v.preferred} onChange={e => setV({ ...v, preferred: e.target.value })} /></label>
-      <label className="field">Also fine - cities or a country
-        <input value={v.acceptable} onChange={e => setV({ ...v, acceptable: e.target.value })} /></label>
-      <label className="inline"><input type="checkbox" checked={v.remote} onChange={e => setV({ ...v, remote: e.target.checked })} /> Remote roles are fine</label>
-      <div className="row">
-        <label className="field">Years of experience
-          <input type="number" min={0} max={50} value={v.years} onChange={e => setV({ ...v, years: Number(e.target.value) })} /></label>
-        <label className="field">Skip roles asking more than (years)
-          <input type="number" min={0} max={60} value={v.max_years} onChange={e => setV({ ...v, max_years: Number(e.target.value) })} /></label>
-      </div>
-      <label className="field">You are
-        <select value={v.level} onChange={e => setV({ ...v, level: e.target.value })}>
-          {Object.entries(s.levels).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-        </select></label>
-      <div>
-        <div className="muted small">Roles to skip</div>
-        {s.skip_options.map(k => (
-          <label key={k} className="inline">
-            <input type="checkbox" checked={v.skip.includes(k)}
-                   onChange={e => setV({ ...v, skip: e.target.checked ? [...v.skip, k] : v.skip.filter(x => x !== k) })} /> {k}
-          </label>
-        ))}
-      </div>
-      <label className="field">Companies you'd like watched (comma-separated)
-        <input value={v.watch} onChange={e => setV({ ...v, watch: e.target.value })} /></label>
-      <div className="row">
-        <button className="primary" onClick={async () => { if (await step("prefs", { prefs: v })) ed.open(""); }}>
-          <Icon name="check" />Save</button>
-        <button className="quiet" onClick={() => ed.open("")}>Cancel</button>
-      </div>
+    <div className="card edit-card">
+      <PrefsForm s={ed.s} label="Save" onCancel={() => ed.open("")}
+                 onSave={async v => { if (await ed.step("prefs", { prefs: v })) ed.open(""); }} />
     </div>
   );
 }

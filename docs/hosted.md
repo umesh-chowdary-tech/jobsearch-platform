@@ -35,8 +35,8 @@ passes `/api` to the service.
   only the hosted screens: setup, today, every kept job (search, filters,
   newest first), a posting and its apply kit, resumes, the profile (one page:
   skills, experience - work, then personal projects - and preferences, each
-  edited in place and saved as it changes; on top, what from the person's
-  files isn't in it yet, and why), the market (skill gaps), and
+  edited in place and saved as it changes; what the AI found and isn't
+  checked yet is asked in setup, one card at a time), the market (skill gaps), and
   running `assemble` or `rank`, and referral asks (who to ask, a drafted
   message, marking what happened; at most 80 characters for a name and 300
   for a line about them), and applications: pasted job emails and ones added

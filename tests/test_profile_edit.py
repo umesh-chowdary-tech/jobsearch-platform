@@ -181,8 +181,20 @@ def test_a_piece_of_work_and_what_is_listed_under_it_are_added_together(new):
         _step(new, "items", {"ids": "e2", "state": "confirmed"})
 
 
+def test_a_line_the_ai_couldnt_use_is_added_word_for_word_or_let_go(new):
+    d, _ = _drafted(new)
+    lines = [n for n, g in enumerate(d["dropped"]) if g.get("entry") and g.get("source")]
+    s = _step(new, "restore", {"index": lines[0], "add": True})
+    mine = next(it for it in s["items"] if it.get("by") == "resume line")
+    assert mine["state"] == "confirmed" and mine["text"] == mine["source"]
+    left = len(s["dropped"])
+    assert len(_step(new, "dismiss", {"index": 0})["dropped"]) == left - 1
+    with pytest.raises(O.SetupError, match="no such"):
+        _step(new, "dismiss", {"index": 99})
+
+
 def test_the_hosted_service_takes_the_new_steps():
-    for step in ("add", "prefs", "items"):
+    for step in ("add", "prefs", "items", "dismiss"):
         assert routes.allowed("POST", f"/api/setup/{step}", HOSTED)
 
 

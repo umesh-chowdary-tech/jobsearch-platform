@@ -59,7 +59,7 @@ HOSTED_GET = tuple(re.compile(p) for p in (
     r"/api/(overview|today|postings|resumes|profile|setup|market|actions|job|outreach|applications|companies)",
     rf"/api/postings/{_ID}", rf"/api/postings/{_ID}/(kit|leads)"))
 HOSTED_POST = tuple(re.compile(p) for p in (
-    r"/api/setup/(upload|draft|items?|fact|add|restore|skills|prefs|save|link|note|remove|reset|ask|answer|apply|"
+    r"/api/setup/(upload|draft|items?|fact|add|restore|dismiss|skills|prefs|save|link|note|remove|reset|ask|answer|apply|"
     r"labels)",
     r"/api/run", r"/api/outreach/draft", rf"/api/outreach/{_ID}/mark",
     r"/api/applications/(paste|add)", rf"/api/applications/{_ID}/(confirm|status|ignore|merge)",
@@ -218,10 +218,13 @@ def _setup(prof: Profile, step: str, body: dict[str, Any]) -> Any:
         if not isinstance(body.get("prefs"), dict):
             raise ApiError(400, "prefs must be an object")
         onboard.set_prefs(prof, body["prefs"])
-    elif step == "restore":
+    elif step in ("restore", "dismiss"):
         if isinstance(body.get("index"), bool) or not isinstance(body.get("index"), int):
             raise ApiError(400, "index must be a number")
-        onboard.restore(prof, body["index"])
+        if step == "dismiss":
+            onboard.dismiss(prof, body["index"])
+        else:
+            onboard.restore(prof, body["index"], add=body.get("add") is True)
     elif step == "skills":
         tiers = body.get("tiers")
         if not isinstance(tiers, dict):

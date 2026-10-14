@@ -838,9 +838,10 @@ def add_fact(prof: Profile, entry: str, text: str) -> dict[str, Any]:
     return add_item(prof, "fact", {"text": text}, entry)
 
 
-def restore(prof: Profile, index: int) -> dict[str, Any]:
+def restore(prof: Profile, index: int, add: bool = False) -> dict[str, Any]:
     """A dropped fact, back as the source line itself - the person's own
-    words claim nothing their document doesn't."""
+    words claim nothing their document doesn't. With `add`, the person said
+    yes to it as they saw it, so it goes straight in."""
     with editing(prof.var):
         d = load_draft(prof)
         try:
@@ -854,11 +855,22 @@ def restore(prof: Profile, index: int) -> dict[str, Any]:
             n += 1
         it = {"id": f"{gone['entry']}-r{n}", "kind": "fact", "entry": gone["entry"], "text": gone["source"],
               "source": gone["source"], "sources": [{"src": gone.get("src", "s1"), "quote": gone["source"]}],
-              "by": "resume line", "state": "pending"}
+              "by": "resume line", "state": "confirmed" if add else "pending"}
         d["items"].append(it)
         d["dropped"].pop(index)
         _save(prof, d)
     return it
+
+
+def dismiss(prof: Profile, index: int) -> None:
+    """A left-out line the person doesn't want back: it isn't asked again."""
+    with editing(prof.var):
+        d = load_draft(prof)
+        try:
+            d["dropped"].pop(index)
+        except (IndexError, KeyError, TypeError):
+            raise SetupError("no such left-out item") from None
+        _save(prof, d)
 
 
 # ── questions: written by the model for this person (setup_interview.py) ─────

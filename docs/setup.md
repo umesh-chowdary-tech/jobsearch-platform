@@ -6,10 +6,11 @@ python -m jobsearch.cli setup <id>        # opens the app on its Setup screen
 
 How a person gets a profile without writing YAML: in Setup, add their
 resumes - every version they have - and, if they like, their GitHub, a
-portfolio page and a note; let the AI read each; answer its questions. Then,
-on the profile page, add what's true, choosing the true version wherever
-their documents disagree; say what they're looking for; save. After that,
-every change on the profile page saves as it's made. The code is
+portfolio page and a note; let the AI read each; answer its questions if
+they like; check what it found, one card at a time, choosing the true
+version wherever their documents disagree; say what they're looking for;
+save. After that, the profile page is for changing and adding, and every
+change there saves as it's made. The code is
 `src/jobsearch/onboard.py`, with `setup_sources.py` (reading) and
 `setup_merge.py` (combining); the pages are `web/src/pages/Setup.tsx` and
 `Profile.tsx`, with `web/src/checking.tsx`.
@@ -93,17 +94,19 @@ every change on the profile page saves as it's made. The code is
    fixed list: backend, data, ml, ...) and which a resume should cut first.
    They're labels, not claims; the person changes them, and the model doesn't
    overrule them after.
-6. **Check, on the profile page.** At the top, **Not in your profile yet**
-   lists everything left out, grouped by why: not checked yet; the files
-   disagree (pick a version or write your own); a skill only in a skills
-   list (add it only if it was used in that work); a result not yet marked
-   measured or an estimate; what the AI said that didn't match a line (with
-   "use the line itself" where that works); a file not read; answers not
-   used; and, folded away, what the person left out themselves, to put back.
-   Each item shows the line it came from and which file. The person adds,
-   edits or leaves out each one - an edit is their own words. A piece of work
-   can be added with what's listed under it in one click, except those that
-   need a choice. Nothing is added for them.
+6. **Check, in Setup, one card at a time.** Each card asks one plain
+   question about one thing, shows the line it came from and which file, and
+   takes one tap: "Your files say different things - which is right?" (or
+   write your own); "Is this right?" about you, a fact, a note; "Did you work
+   here?"; a piece of work with what it says ticked, to untick what isn't
+   true; "Did you use Kubernetes in the refund service?" for a skill only in
+   a skills list; "Is this number measured, or your guess?"; and "Add this
+   line from your resume, word for word?" for a line the AI couldn't use. Yes
+   adds it, Change edits it in the person's own words first, No leaves it
+   out; "Skip for now" comes round again. What's under a piece of work is
+   asked only once the work is added. What the person said no to can be
+   asked again. Nothing is added for them. The profile page shows only how
+   many cards are left, as a link to them.
 7. **Edit, on the profile page.** Each part has Edit: name, location, email,
    phone and links (email and phone are shown only in this form, and never to
    the Claude connector), languages; the work history; each piece of work -
@@ -118,8 +121,9 @@ every change on the profile page saves as it's made. The code is
 8. **Preferences.** Cities, remote or not, years of experience (suggested
    from the earliest confirmed job), the most years a posting may ask, level,
    roles to skip, companies to watch - kept with the draft and checked.
-9. **Save.** The first save is a button on the profile page; after it, every
-   change writes the profile again (`onboard.resave`). A change that leaves
+9. **Save.** The first save is in Setup, under what jobs they want (and
+   again after **Start over**); after it, every change writes the profile
+   again (`onboard.resave`). A change that leaves
    nothing to write (no name, say) waits in the draft, and the page says why.
    Only confirmed items are written, as `master-store.yaml`, `skills.yaml`
    and `search-profile.yaml`. Each entry records where it came from
