@@ -21,7 +21,7 @@ from .. import company_requests, cycle, feedback, pipeline
 from ..assemble import load_library
 from ..busy import holder
 from ..limits import Meter, load_limits, load_overrides, price_for, save_overrides
-from ..llm import KNOWN, ROUTES_OVERRIDE, load_routes
+from ..llm import FREE_MODE, KNOWN, ROUTES_OVERRIDE, free_mode, load_routes
 from ..models import utcnow
 from ..profile import Profile
 from . import accounts
@@ -53,6 +53,7 @@ class Service(Protocol):
     shared: Path
     mirror: Any
     cycle: Any
+    verifier: Any
 
     def delete_account(self, sub: str, prof: Profile) -> None: ...
     def start_cycle(self, forced: bool = False) -> tuple[int, dict[str, Any]]: ...
@@ -142,6 +143,44 @@ def _set_route(root: Path, shared: Path, job: str, choice: str) -> None:
     tmp = shared / (ROUTES_OVERRIDE + ".tmp")
     tmp.write_text(json.dumps(doc, indent=1, sort_keys=True), encoding="utf-8")
     tmp.replace(shared / ROUTES_OVERRIDE)
+
+
+# ── Groq for everything, for a while ────────────────────────────────────────
+
+# How long the switch may stay on; None is until it's turned off.
+FREE_HOURS = (1, 8, 24, None)
+
+
+def free_jobs(dev: bool) -> list[str]:
+    """What the switch moves to Groq: every job the privacy notice lets Groq
+    do, and referral lines (Groq already). Reading an uploaded resume too,
+    but only on a dev server on the operator's own machine - the notice tells
+    members their resumes go to Anthropic."""
+    return [job for job, spec in JOBS.items() if spec["groq"] or dev] + ["outreach"]
+
+
+def _free_view(svc: Service) -> dict[str, Any]:
+    dev = bool(getattr(svc.verifier, "dev", False))
+    now = free_mode(svc.root)
+    names = {**{job: spec["label"] for job, spec in JOBS.items()}, "outreach": "Referral lines"}
+    return {"on": now is not None, "until": (now or {}).get("until"),
+            "jobs": [names.get(j, j) for j in ((now or {}).get("jobs") or free_jobs(dev))], "dev": dev}
+
+
+def _set_free_mode(shared: Path, by: str, on: bool, hours: Any, dev: bool) -> str:
+    path = shared / FREE_MODE
+    if not on:
+        path.unlink(missing_ok=True)
+        return "off"
+    if hours not in FREE_HOURS or isinstance(hours, bool):
+        raise AdminError("choose 1, 8 or 24 hours, or until it's turned off")
+    until = (datetime.now(timezone.utc) + timedelta(hours=hours)).isoformat(timespec="seconds") if hours else None
+    shared.mkdir(parents=True, exist_ok=True)
+    tmp = shared / (FREE_MODE + ".tmp")
+    tmp.write_text(json.dumps({"jobs": free_jobs(dev), "since": utcnow(), "until": until, "by": by}, indent=1),
+                   encoding="utf-8")
+    tmp.replace(path)
+    return f"on for {hours} h" if hours else "on until turned off"
 
 
 # ── reading what is kept ────────────────────────────────────────────────────
@@ -340,6 +379,7 @@ def overview(svc: Service, missing_settings: list[str]) -> dict[str, Any]:
         },
         "settings": {
             "ai_paused": bool(over.get("paused")),
+            "free_mode": _free_view(svc),
             "caps": {"usd_per_month": claude.get("usd_per_month"), "usd_per_day": claude.get("usd_per_day"),
                      "person_usd_per_day": (claude.get("per_profile") or {}).get("usd_per_day"),
                      "person_usd_per_month": (claude.get("per_profile") or {}).get("usd_per_month")},
@@ -434,6 +474,10 @@ def act(svc: Service, by: str, body: dict[str, Any]) -> dict[str, Any]:
         job, choice = str(body.get("job") or ""), str(body.get("choice") or "")
         _set_route(root, shared, job, choice)
         record(shared, by, "route", job, choice)
+    elif action == "free_mode":
+        detail = _set_free_mode(shared, by, body.get("on") is True, body.get("hours"),
+                                bool(getattr(svc.verifier, "dev", False)))
+        record(shared, by, "free_mode", "", detail)
     elif action == "cycle_run":
         status, data = svc.start_cycle(forced=True)
         if status != 202:

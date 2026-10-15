@@ -302,6 +302,9 @@ function AiTab({ o, act }: { o: AdminOverview; act: Act }) {
     person_usd_per_month: String(s.caps.person_usd_per_month ?? ""),
   });
   const g = o.ai.groq_today;
+  const fm = s.free_mode;
+  const [hours, setHours] = useState("1");
+  const until = (iso: string) => new Date(iso).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
   const saveCaps = () => act({
     action: "caps", usd_per_month: Number(caps.usd_per_month), usd_per_day: Number(caps.usd_per_day),
     person_usd_per_day: Number(caps.person_usd_per_day), person_usd_per_month: Number(caps.person_usd_per_month),
@@ -321,12 +324,41 @@ function AiTab({ o, act }: { o: AdminOverview; act: Act }) {
         <Kpi icon="list" tone="cool" n={`${g.requests} / ${g.requests_cap ?? "—"}`} label="Groq requests today (free tier)" />
       </div>
 
+      <h2>Groq for everything</h2>
+      <div className={`card stack${fm.on ? " free-on" : ""}`}>
+        {fm.on ? (
+          <>
+            <p style={{ margin: 0 }}><b>On</b> - {fm.jobs.join(", ").toLowerCase()} use Groq's free tier
+              {fm.until ? ` until ${until(fm.until)}` : " until you turn it off"}. Nothing goes to Claude for these.</p>
+            <div><button className="primary" onClick={() => act({ action: "free_mode", on: false }, "Back to the usual models")}>
+              Turn off</button></div>
+          </>
+        ) : (
+          <>
+            <p className="small" style={{ margin: 0 }}>For trying things out without spending: {fm.jobs.join(", ").toLowerCase()} use
+              Groq's free tier instead of Claude. Answers are weaker, and Groq allows about 200,000 tokens a day for everyone.
+              {!fm.dev && " Reading an uploaded resume stays with Claude, as the privacy notice says."}</p>
+            <div className="row">
+              <select aria-label="For how long" value={hours} onChange={e => setHours(e.target.value)} style={{ width: "auto" }}>
+                <option value="1">for 1 hour</option>
+                <option value="8">for 8 hours</option>
+                <option value="24">for a day</option>
+                <option value="">until I turn it off</option>
+              </select>
+              <button className="primary" onClick={() => act({ action: "free_mode", on: true, hours: hours ? Number(hours) : null },
+                "Groq is doing every job now")}>Use Groq for everything</button>
+            </div>
+          </>
+        )}
+      </div>
+
       <h2>Which model does each job</h2>
       <div className="card stack">
+        {fm.on && <p className="small muted" style={{ margin: 0 }}>Groq for everything is on - these take over again when it's off.</p>}
         {s.routes.map(r => (
           <label key={r.job} className="field route">{r.label}
-            <select value={r.current} onChange={e => act({ action: "route", job: r.job, choice: e.target.value }, `${r.label}: model changed`)}>
-              {!r.choices.some(c => c.id === r.current) && <option value={r.current}>{r.current}</option>}
+            <select disabled={fm.on} value={r.current} onChange={e => act({ action: "route", job: r.job, choice: e.target.value }, `${r.label}: model changed`)}>
+              {!r.choices.some(c => c.id === r.current) && <option value={r.current}>{r.current === "groq" ? "Groq (free tier)" : r.current}</option>}
               {r.choices.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
             </select>
           </label>
@@ -511,6 +543,7 @@ const ACTIONS: Record<string, string> = {
   suspend: "Paused an account", unsuspend: "Resumed an account", delete: "Deleted an account",
   person_limit: "Changed a person's AI limit", revoke_invite: "Cancelled an invite", ai_pause: "Paused all AI",
   ai_resume: "Resumed AI", caps: "Changed spending limits", route: "Changed a job's model",
+  free_mode: "Groq for everything",
   cycle_run: "Ran a job update", cycle_pause: "Paused job updates", cycle_resume: "Resumed job updates",
   boards_check: "Checked the job boards", company_search: "Looked for companies' job boards",
   company_decline: "Declined a company request", company_stop: "Stopped watching a company's board",

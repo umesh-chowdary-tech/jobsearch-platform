@@ -1,25 +1,22 @@
 // A profile from a person's own documents: add resumes (old versions help),
 // a portfolio, GitHub and a note; let the AI read each one; answer a few
-// questions. Then checking what it found - every fact against the line it
-// came from, the true version wherever the documents disagree - happens on
-// the Profile page, where nothing goes in until it's added (docs/setup.md).
+// questions if you like; check what it found, one card at a time - only a
+// yes puts anything in; say what jobs you want; save (docs/setup.md).
 
 import { useCallback, useEffect, useState, type DragEvent } from "react";
 import { get, post, upload } from "../api";
+import { CheckCards, deck, PrefsForm, SaidNo, type Step } from "../checking";
 import type { SetupQuestion, SetupSource, SetupState } from "../types";
 import { go, Icon, useToast, type IconName } from "../ui";
 
-const STEPS = ["Your files", "Read", "Questions", "Check your profile"];
+const STEPS = ["Your files", "Read", "Check", "Save"];
 const SOURCE_ICON: Record<string, IconName> = { resume: "file", portfolio: "external", github: "brief", note: "list" };
 const DROP_NOTE = "PDF, Word (.docx) or plain text, up to 5 MB each";
 
-type Step = (step: string, body?: unknown) => Promise<boolean>;
-
 function Stepper({ s }: { s: SetupState }) {
   const waiting = s.sources.some(x => !x.drafted);
-  const qs = s.interview.questions;
-  const asking = !s.interview.done && (!qs.length || qs.some(q => (!q.answer && !q.skipped) || (q.answer && !q.applied)));
-  const now = s.exists && !waiting ? STEPS.length : !s.sources.length ? 0 : waiting ? 1 : asking ? 2 : 3;
+  const left = deck(s).length;
+  const now = !s.sources.length ? 0 : waiting ? 1 : left ? 2 : !s.exists ? 3 : STEPS.length;
   return (
     <ol className="stepper" aria-label="Setup steps">
       {STEPS.map((label, i) => (
@@ -29,6 +26,17 @@ function Stepper({ s }: { s: SetupState }) {
         </li>
       ))}
     </ol>
+  );
+}
+
+/** Once everything is read, the files fold into one line. */
+function FilesLine({ s, open }: { s: SetupState; open: () => void }) {
+  return (
+    <div className="card files-line">
+      <Icon name="file" />
+      <span className="grow small">{s.sources.length === 1 ? "1 file read" : `${s.sources.length} files read`}: {s.sources.map(x => x.name).join(", ")}</span>
+      <button className="quiet" onClick={open}>Add or change files</button>
+    </div>
   );
 }
 
@@ -179,7 +187,7 @@ function QuestionRow({ q, step }: { q: SetupQuestion; step: Step }) {
       <div className="question done">
         <div><b>{q.text}</b></div>
         <div className="small">Your answer: {q.answer}</div>
-        <div className="muted small">Used - what it added waits on your Profile page, for you to add.</div>
+        <div className="muted small">Used - what it added comes up below, for you to check.</div>
       </div>
     );
   }
@@ -213,10 +221,10 @@ function Questions({ s, step }: { s: SetupState; step: Step }) {
   const run = async (name: string, label: string) => { setBusy(label); await step(name); setBusy(""); };
   return (
     <div className="card stack" style={{ marginTop: 12 }}>
-      <h3>3 · A few questions about your work</h3>
+      <h3>Optional · A few questions about your work</h3>
       <p className="small">Claude reads what you added and asks only what would help a recruiter see your real work -
         your own part in team projects, results, where you used a skill. Skip any you like. Your answers are kept with your
-        profile, and anything taken from them waits on your Profile page for you to add.</p>
+        profile, and anything taken from them comes up below as cards for you to check.</p>
       {iv.questions.map(q => <QuestionRow key={`${q.id}-${q.answer ?? ""}-${q.skipped ?? ""}`} q={q} step={step} />)}
       <div className="row">
         {!iv.rounds && <button className="primary" disabled={!!busy} onClick={() => run("ask", "Thinking of questions…")}>
@@ -231,50 +239,72 @@ function Questions({ s, step }: { s: SetupState; step: Step }) {
   );
 }
 
-/** Where checking happens: the profile page, with what's not in it yet on top. */
-function Next({ s }: { s: SetupState }) {
-  const left = s.progress.pending + s.progress.conflicts;
+/** Saving from setup: the first time, or again after starting over - what
+ * jobs the person wants, then the profile. After that, changes save as
+ * they're made. */
+function SaveFirst({ s, step, onSaved }: { s: SetupState; step: Step; onSaved: () => void }) {
+  const toast = useToast();
+  const left = deck(s).length;
+  const save = async (prefs: unknown) => {
+    if (s.exists && !window.confirm("Update your saved profile with this? What you added to it by hand stays.")) return;
+    if (!(await step("prefs", { prefs }))) return;
+    const r = await step("save", { replace: s.exists });
+    if (r) {
+      toast(`Saved: ${r.result?.entries ?? 0} pieces of work, ${r.result?.skills ?? 0} skills`);
+      onSaved();
+      go("#/profile");
+    }
+  };
   return (
-    <div className="card next-step">
-      <div className="grow">
-        <h3>4 · Check your profile</h3>
-        <p className="small" style={{ margin: 0 }}>{s.exists
-          ? "Your profile is saved. Anything new from your files waits at the top of your Profile page, with why it isn't in yet."
-          : "Everything the AI found is on your Profile page. Add what's true, leave out what isn't, then save."}
-          {left > 0 && <> <b>{left} to check.</b></>}</p>
-      </div>
-      <button className="primary" onClick={() => go("#/profile")}>Go to my profile</button>
+    <div className="card stack" style={{ marginTop: 24 }}>
+      <h3>4 · What jobs do you want?</h3>
+      <p className="small" style={{ margin: 0 }}>{left
+        ? `${left} left to check above. Anything you don't check stays out of your profile - you can check it later.`
+        : "Everything is checked. Say what you're looking for, and save."}</p>
+      {s.blocked && <p className="small reason" style={{ margin: 0 }}>Before you can save: {s.blocked}.</p>}
+      {/* Suggested from the jobs added so far (years, level), until the person saves. */}
+      <PrefsForm key={JSON.stringify(s.prefs)} s={s} label={s.exists ? "Update my profile" : "Save my profile"} onSave={save} />
     </div>
   );
 }
 
-export function Setup() {
+export function Setup({ onSaved }: { onSaved: () => void }) {
   const [s, setS] = useState<SetupState | null>(null);
   const [err, setErr] = useState("");
+  const [files, setFiles] = useState(false);
   const toast = useToast();
   useEffect(() => {
     get<SetupState>("/api/setup").then(setS).catch(e => setErr((e as Error).message));
   }, []);
   const step: Step = useCallback(async (name, body = {}) => {
-    try { setS(await post<SetupState>(`/api/setup/${name}`, body)); return true; }
-    catch (e) { toast((e as Error).message); return false; }
+    try { const next = await post<SetupState>(`/api/setup/${name}`, body); setS(next); return next; }
+    catch (e) { toast((e as Error).message); return null; }
   }, [toast]);
 
   if (err) return <p className="fail">{err}</p>;
   if (!s) return <p className="muted">Loading…</p>;
   const read = s.sources.some(x => x.drafted);
+  const waiting = s.sources.some(x => !x.drafted);
   return (
     <>
       <h1>Set up from your resumes</h1>
-      <p className="sub">Add your files and let the AI read them. You check what it found on your Profile page - nothing
-        goes into your profile until you add it.</p>
+      <p className="sub">Add your files and the AI reads them. Then you check what it found, one card at a time - only what
+        you say yes to goes into your profile.</p>
       <Stepper s={s} />
-      <Sources s={s} step={step} onState={setS} />
-      {s.sources.some(x => !x.drafted) && <div style={{ marginTop: 12 }}><Read s={s} step={step} /></div>}
+      {read && !waiting && !files ? <FilesLine s={s} open={() => setFiles(true)} /> : <Sources s={s} step={step} onState={setS} />}
+      {waiting && <div style={{ marginTop: 12 }}><Read s={s} step={step} /></div>}
       {read && (
         <>
           <Questions s={s} step={step} />
-          <Next s={s} />
+          <h3 style={{ marginTop: 24 }}>3 · Check what we found</h3>
+          <CheckCards s={s} step={step} />
+          <SaidNo s={s} step={step} />
+          {s.exists && s.saved_at ? (
+            <div className="card next-step">
+              <span className="grow small">Your profile is saved. Change anything in it on your Profile page.</span>
+              <button onClick={() => go("#/profile")}>Go to my profile</button>
+            </div>
+          ) : <SaveFirst s={s} step={step} onSaved={onSaved} />}
         </>
       )}
     </>

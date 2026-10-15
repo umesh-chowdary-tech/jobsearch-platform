@@ -101,8 +101,6 @@ function Shell({ me, onMe, onSignOut }: { me: Me; onMe: (m: Me) => void; onSignO
   const ready = me.profile_ready;
   const setupEtc: NavItem[] = [
     { hash: "#/setup", view: "setup", label: "Setup", icon: "upload" },
-    // Before the first save, checking what the AI found happens on Profile.
-    ...(ready ? [] : [{ hash: "#/profile", view: "profile", label: "Profile", icon: "user" as IconName }]),
     { hash: "#/settings", view: "settings", label: "Settings", icon: "gear" },
     ...(me.admin ? [{ hash: "#/admin", view: "admin", label: "Admin", icon: "shield" as IconName }] : []),
   ];
@@ -118,9 +116,9 @@ function Shell({ me, onMe, onSignOut }: { me: Me; onMe: (m: Me) => void; onSignO
   ] : setupEtc;
   const minor: NavItem[] = ready ? setupEtc : [];
 
-  // Before a profile exists, setup, the profile being checked (and settings) is all there is.
+  // Before a profile exists, setup (and settings) is all there is.
   let key = route.path[0] || "today";
-  if (!ready && !["setup", "profile", "settings", "admin", ...LEGAL].includes(key)) key = "setup";
+  if (!ready && !["setup", "settings", "admin", ...LEGAL].includes(key)) key = "setup";
   const view = key === "p" ? "jobs" : key;
 
   const page = (() => {
@@ -128,10 +126,10 @@ function Shell({ me, onMe, onSignOut }: { me: Me; onMe: (m: Me) => void; onSignO
       case "jobs": return <Jobs key={route.query.toString()} query={route.query} />;
       case "applied": return <Tracker query={route.query} />;
       case "resumes": return <Resumes />;
-      case "profile": return <Profile onSaved={() => get<Me>("/api/me").then(onMe)} />;
+      case "profile": return <Profile />;
       case "market": return <Market />;
       case "p": return <Posting id={decodeURIComponent(route.path[1] || "")} />;
-      case "setup": return <Setup />;
+      case "setup": return <Setup onSaved={() => get<Me>("/api/me").then(onMe)} />;
       case "settings": return <Settings me={me} onSignOut={onSignOut} />;
       case "admin": return me.admin ? <Admin /> : null;
       case "privacy": case "terms": return <Legal doc={key} />;

@@ -295,6 +295,7 @@ label.consent input { margin-top: 2px; flex-shrink: 0; width: auto; }
 tr.manage td { background: var(--muted-soft); padding: 12px; }
 tr.manage .row + .row { margin-top: 10px; }
 .field.route { max-width: 360px; }
+.free-on { border-color: var(--warn); background: var(--warn-soft); color: var(--warn-ink); }
 
 /* ── jobs, profile, resumes ────────────────────────────────────────────── */
 .h2row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
@@ -423,26 +424,40 @@ code.addr { font-size: 13px; padding: 6px 10px; border-radius: 8px; background: 
 .question.done { border-left-color: var(--border); opacity: .8; }
 .question textarea { width: 100%; }
 
-/* ── profile: editing, and what isn't in it yet ────────────────────────── */
-.missing { margin: 4px 0 8px; }
-.missing.done { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13.5px; color: var(--ink-2); }
-.missing.done > .i { color: var(--good); width: 18px; height: 18px; }
-.missing.done .left-out { flex-basis: 100%; margin-top: 4px; }
-.why-group { margin-top: 18px; }
-.why-group .lbl { font-weight: 650; overflow-wrap: anywhere; }
-.why-group .help { color: var(--ink-3); font-size: 12.5px; margin-bottom: 8px; }
-.why-group .kids { margin-top: 10px; }
+/* ── setup: checking what was found, one card at a time ───────────────── */
+.deck-top { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.deck-top .progress { flex: 1; margin: 0; }
+.qcard { display: grid; gap: 10px; padding: 22px; }
+.qcard .ask { font-size: 16px; font-weight: 650; }
+.qcard .big { font-size: 17px; font-weight: 600; overflow-wrap: anywhere; }
+.qcard .sub-line { color: var(--ink-3); font-size: 13px; }
+.qcard .from { color: var(--ink-3); font-size: 12.5px; overflow-wrap: anywhere; }
+.qcard .from q { font-style: italic; }
+.qcard .answers { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.qcard .answers button { padding: 9px 18px; font-size: 14px; }
+.qcard .skip { border-top: 1px solid var(--border); padding-top: 8px; margin-top: 4px; }
+.choice-btn { display: grid; gap: 2px; width: 100%; text-align: left; justify-content: start; justify-items: start;
+              padding: 12px 14px; font-size: 14px; }
+.ticks { display: grid; gap: 6px; }
+.ticks label { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; cursor: pointer; }
+.ticks input { margin-top: 3px; width: auto; flex-shrink: 0; }
+.chip-btn { border-radius: 999px; padding: 4px 12px; font-size: 13px; background: var(--accent-soft); color: var(--accent-ink);
+            border-color: transparent; }
+.chip-btn.off { background: transparent; color: var(--ink-3); border-color: var(--border); text-decoration: line-through; }
+.all-checked { display: flex; gap: 10px; align-items: center; font-size: 14px; }
+.all-checked > .i { color: var(--good); width: 20px; height: 20px; }
+.said-no { margin-top: 12px; font-size: 13.5px; }
+.said-no summary { cursor: pointer; color: var(--ink-2); }
+.said-no .stack { margin-top: 10px; }
+.files-line { display: flex; gap: 10px; align-items: center; padding: 12px 16px; }
+.files-line > .i { color: var(--accent); width: 18px; height: 18px; flex-shrink: 0; }
+.next-step { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-top: 24px; }
 .reason { color: var(--warn-ink); }
-.check { border-left: 3px solid var(--border); padding: 6px 0 6px 12px; overflow-wrap: anywhere; }
-.check > * + * { margin-top: 6px; }
-.check.disputed { border-left-color: var(--warn); }
-.check .kind { font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-3); margin-right: 8px; }
-.left-out { margin-top: 18px; }
-.left-out summary { cursor: pointer; font-weight: 650; font-size: 13.5px; }
-.first-save, .next-step { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; border-color: var(--accent); }
-.first-save { margin-bottom: 16px; }
-.first-save p { margin: 4px 0 0; }
-.next-step { margin-top: 24px; }
+
+/* ── profile: editing in place ─────────────────────────────────────────── */
+.remind { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; margin-bottom: 14px; padding: 6px 12px;
+          border-radius: 999px; background: var(--accent-soft); color: var(--accent-ink); text-decoration: none; }
+.remind:hover { text-decoration: underline; }
 .edit-card { border-color: var(--accent); }
 .edit-card .lbl { font-weight: 650; }
 .card-top { align-items: center; margin-bottom: 2px; }
