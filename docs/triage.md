@@ -34,10 +34,36 @@ Of the skills the posting names, how many are backed and at what tier?
 
 Azure appearing in a posting must not score. If it did, the skills layer was pointless.
 
-### Pass 3 — model, on the shortlist only.
+### The match score — passes 1 and 2 in one number. Deterministic, free.
 
-Top ~10 only. This is where keyword matching fails and reasoning pays for itself: a posting
-saying *"take our AI platform from prototype to production"* is a near-perfect match to the
+`scoring.py` weighs everything the first two passes saw into a score from 0 to 100, kept
+with the posting (`match`) along with its parts (`match_parts`), which the posting's page
+shows:
+
+| part | points | from |
+|---|---|---|
+| skills | 0–45 | backed skills, by tier (core 3, working 2, scoped 1), over the skills named |
+| gaps | 0 to −15 | −5 for each required skill nothing backs |
+| role | 0–15 | the posting's kind of work against the person's own titles (below) |
+| place | 0–15 | preferred city 15, remote 12, acceptable city 11, remote from the description 9 |
+| level | 0–15 | years asked within the years had 15, within the cap 8, none stated 10, a junior title 4 |
+| fresh | 0–10 | posted in the last 3 days 10, a week 8, two weeks 6, a month 4, two months 2 |
+
+A rejected posting, or one naming nothing the person backs, scores 0. **The model reads
+only postings at or above the bar** — 40 (`scoring.AI_MIN`), or the profile's
+`scoring.ai_min` — best first. Lists sort by the model's judgement, then this score.
+
+**Role families** (`roles.py`): each posting's kind of work — backend, frontend, full
+stack, mobile, software, ML/AI, data, DevOps/SRE, security, QA, embedded,
+solutions/DevRel, support, management, design, product, program, non-tech, other — is
+worked out once from its title and kept in the pool. A person's own families come from
+their titles in the master store; one ruled out in setup ("roles to skip") earns no role
+points. The Jobs screen filters on it.
+
+### Pass 3 — model, on what clears the bar.
+
+This is where keyword matching fails and reasoning pays for itself: a posting saying
+*"take our AI platform from prototype to production"* is a near-perfect match to the
 headline entry, and no keyword overlap would ever surface that.
 
 ## The number must not lie
@@ -82,7 +108,16 @@ Stored per person in `var/<id>/skill-gaps.json`.
 
 ## When the profile changes
 
-A change to `search-profile.yaml` only reaches postings triaged after it. Once,
+**A person's verdicts are their cache.** When `search-profile.yaml`, `skills.yaml` or
+`master-store.yaml` changes, the next triage reads every open posting in the pool again
+(`triage-profile.json` holds a fingerprint of the three). The pool keeps the descriptions,
+so this costs no request for what was read before. The gap ledger and the rejection
+tallies are counted afresh; the model's judgements are kept. A posting kept before and
+rejected now stays as a record, marked `reject` - the person may have acted on it.
+
+What follows is how it was before the pool, and what `--recheck` still does.
+
+A change to `search-profile.yaml` only reached postings triaged after it. Once,
 three analyst roles and three remote-abroad roles were still keeps on the dashboard after
 the filters that reject them had landed. `triage --all` is not the fix: it re-reads only
 the watcher's queue (20 of 29 stored results were not in it), counts the gap ledger and
