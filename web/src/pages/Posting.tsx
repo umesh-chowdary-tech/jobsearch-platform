@@ -144,6 +144,11 @@ export function Posting({ id }: { id: string }) {
       </div>
 
       {p.why && <div className="why">{p.why} <span className="muted">— {p.judged_by}</span></div>}
+      {p.checks && (
+        <p className="small muted" style={{ marginTop: 4 }}>
+          The AI checked: {Object.entries(p.checks).map(([k, v]) => `${k} ${v === "ok" ? "✓" : v === "no" ? "✗" : "?"}`).join(" · ")}
+        </p>
+      )}
       {p.match != null && p.verdict === "keep" && <MatchParts score={p.match} parts={p.match_parts} />}
       <div className="tags">
         {Object.keys(p.matched).map(k => <span key={k} className="pill c">{k}</span>)}

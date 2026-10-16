@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ApiError, get } from "./api";
 import { appName, CONSENT_PATH, loadConfig, onChange, signOut, token, type Config } from "./auth";
 import type { Me, Overview } from "./types";
-import { ago, applyTheme, Icon, useDark, useRoute, type IconName } from "./ui";
+import { ago, applyTheme, day, Icon, useDark, useRoute, type IconName } from "./ui";
 import { SignIn, Join, Paused, Reconsent } from "./pages/SignIn";
 import { Today } from "./pages/Today";
 import { Jobs } from "./pages/Jobs";
@@ -83,6 +83,15 @@ export function App() {
 
 interface NavItem { hash: string; view: string; label: string; icon: IconName }
 
+/** When a future moment comes, in words: "in 20 min", "in 3 h", "on 17 Oct". */
+function inTime(iso: string): string {
+  const s = (new Date(iso).getTime() - Date.now()) / 1000;
+  if (s < 90) return "soon";
+  if (s < 5400) return `in ${Math.round(s / 60)} min`;
+  if (s < 43200) return `in ${Math.round(s / 3600)} h`;
+  return `on ${day(iso)}`;
+}
+
 function Shell({ me, onMe, onSignOut }: { me: Me; onMe: (m: Me) => void; onSignOut: () => void }) {
   const route = useRoute();
   const [count, setCount] = useState<number | null>(null);
@@ -91,12 +100,21 @@ function Shell({ me, onMe, onSignOut }: { me: Me; onMe: (m: Me) => void; onSignO
   const dark = useDark();
   useEffect(() => setMore(false), [route]);
 
+  // Every minute; every 20 seconds while the AI is reading, so its count moves.
+  const reading = health?.ai_queue?.state === "running";
   useEffect(() => {
     const load = () => get<Overview>("/api/overview").then(setHealth).catch(() => setHealth(null));
     load();
-    const t = window.setInterval(load, 60_000);
+    const t = window.setInterval(load, reading ? 20_000 : 60_000);
     return () => window.clearInterval(t);
-  }, []);
+  }, [reading]);
+  const q = health?.ai_queue;
+  const queueText = !q ? "" : q.state === "running"
+    ? `AI reading your jobs ${q.done ?? 0}/${q.total ?? 0}`
+    : `AI paused${q.until ? `, back ${inTime(q.until)}` : ""}`;
+  const queueTitle = !q ? "" : q.state === "running"
+    ? `The AI is reading your new jobs in the background, four at a time: ${q.done ?? 0} of ${q.total ?? 0} done. You can keep using the app.`
+    : `The AI stopped reading for now: ${q.why || "a limit was reached"}. It carries on by itself.`;
 
   const ready = me.profile_ready;
   const setupEtc: NavItem[] = [
@@ -163,6 +181,7 @@ function Shell({ me, onMe, onSignOut }: { me: Me; onMe: (m: Me) => void; onSignO
           <span className="health">
             <span className={`dot ${health?.busy ? "busy" : health?.last_cycle ? "ok" : ""}`} />
             <span>{health?.busy ? "Updating jobs…" : health?.last_cycle ? `Jobs updated ${ago(health.last_cycle.at)}` : "Jobs not updated yet"}</span>
+            {q && <span className="ai-queue" title={queueTitle} aria-live="polite"> · {queueText}</span>}
           </span>
           <div className="top-actions">
             {minor.length > 0 && (

@@ -131,27 +131,47 @@ re-read with the level-aware prompt.
 It's the same shape as the truncated profile: the model was confident because
 the information that would have stopped it never reached it.
 
-## In the cycle
+## The AI queue (`ai_queue.py`)
 
-`jobsearch cycle` reads, for each profile, every kept posting no model has
-judged yet, four to a request, and nothing when there are none.
+Every kept posting at or above the match bar (docs/triage.md) that no model has
+judged is read, four to a request, **until none are left** - not three minutes
+a cycle. It runs on its own:
 
-It reads for at most three minutes per cycle, shared between the profiles
-(`RANK_BUDGET` in `cycle.py`, with a floor per profile), saves after every
-answered request, and stops at the first rate limit or cap. What is left waits
-for the next cycle. The log line says how many were read, how many are left,
-and why it stopped early:
+- **On the hosted service**, in a thread of its own, started after each job
+  update (every two hours). The update itself never ranks, so the next one is
+  never held up.
+- **On a PC**, the scheduled `cycle` lets go of its lock first, then reads; a
+  click in the app is not refused meanwhile. The app's "Run a full cycle" still
+  ranks inside the cycle for at most three minutes (`RANK_BUDGET`), as before.
+- One person at a time for a minute of requests (`TURN`), then the next, so a
+  long list doesn't starve anyone else's.
+- While anyone's own action runs - a resume being built - it steps aside until
+  that ends. Building a resume no longer waits for a job update either: it
+  touches only the person's own files.
+- A rate limit that asks for 15 minutes or less is waited out. A longer one, a
+  daily or monthly cap, or AI paused on the admin page ends the run for that
+  person; the next job update starts it again. Three turns in a row with
+  nothing judged and no limit to blame end it too, rather than loop.
+- It saves after every answered request, and writes back only what ranking
+  owns (`ai`, `ai_tries`), under the same short lock as triage - a posting the
+  job update closed or re-scored meanwhile keeps that.
+- What it is doing is in `var/<id>/ai-queue.json`, and the app's top bar says
+  so: "AI reading your jobs 12/40", or "AI paused, back in 2 h". Nothing is
+  blocked while it reads.
 
-    sample-backend rank read=12 of=167 left=155 by=openai/gpt-oss-120b via groq stopped='time budget'
+On Render's free plan the service sleeps after 15 quiet minutes, even mid-read;
+what was read is saved, and the rest is read after the next wake.
 
-Why: a PC woke from a week asleep with 167 postings unread. The cycle tried to
-read them all at once, which held the watcher and the inbox for as long as
-that took, and wrote nothing until the end. When the PC slept again mid-run,
-everything it had read so far was at risk. A per-day limit is never waited
-out, even when Groq names a short wait (its day is a rolling window), because
-waiting one out after another would hold the cycle to the pace the day's
-budget frees up. `jobsearch rank` by hand has no time budget, but it also saves
-as it goes and stops at a limit.
+## The model checks place, level and skills first
+
+The filters pass postings on place, level and skills from keywords, and miss what
+a reader would not: "must relocate to Dublin", "8+ years" inside a sentence, a stack
+named once that is the whole job. So the model, before judging fit, returns
+`checks` - `place`, `level`, `skills`, each `ok`, `no` or `unsure` - read from the
+posting against the PLACE and LEVEL lines and the profile. A `no` on place or level
+makes the posting at most weak; a `no` on skills at most possible - enforced in
+code, as the years cap is. The posting's page shows the checks. `PROMPT_VERSION`
+is `checks-1`, so judgements made before are read again.
 
 ## Claude checks, Groq reads first
 

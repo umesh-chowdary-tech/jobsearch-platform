@@ -22,7 +22,7 @@ from typing import Any, Callable
 
 import yaml
 
-from .busy import stop_requested
+from .busy import editing, stop_requested
 from .llm import LLM, Answer
 from .pool import within_window
 from .profile import Profile
@@ -33,7 +33,7 @@ FIT_ORDER = {"strong": 3, "possible": 2, "weak": 1}
 # lost 52 requests to rate limits left dozens of "strong" fits judged without
 # knowing the engineer's level, and nothing marked which. Bump when the
 # prompt or the level line changes what a fit means.
-PROMPT_VERSION = "level-3"      # level-3: the level line and its limits come from the profile
+PROMPT_VERSION = "checks-1"     # checks-1: place, level and skills checked before the fit
 
 SYSTEM = """You triage job postings for one person looking for work.
 
@@ -43,10 +43,24 @@ profile - if a posting needs something the profile does not show, that counts
 against fit, it is not something to be generous about.
 
 For each posting return:
-  id    - exactly the id given
-  fit   - "strong" | "possible" | "weak"
-  why   - ONE sentence, under 25 words, naming something specific from THIS
-          posting and something specific from the profile. No generic praise.
+  id     - exactly the id given
+  checks - {"place": ..., "level": ..., "skills": ...}, each "ok" | "no" | "unsure"
+  fit    - "strong" | "possible" | "weak"
+  why    - ONE sentence, under 25 words, naming something specific from THIS
+           posting and something specific from the profile. No generic praise.
+
+CHECK FIRST. Keyword filters already passed these postings on place, level
+and skills, and filters miss what a reader would not: "must relocate to
+Dublin", "8+ years" inside a sentence, a stack named once that is the whole
+job. Read the posting and check, from its own words:
+  place  - "ok" when the job is in a place the PLACE line names, or remote for
+           someone there; "no" when it is only somewhere else.
+  level  - "ok" when the years asked and the title sit within the LEVEL line's
+           limits; "no" when they don't.
+  skills - "ok" when the core of what it asks is work the profile shows; "no"
+           when the core is something the profile does not back.
+"unsure" when the posting doesn't say. A "no" on place or level makes the
+posting at most "weak"; a "no" on skills at most "possible".
 
 "strong" means the posting's core work matches work the person has already
 done AND the level is within reach. "possible" means a real overlap with a
@@ -146,6 +160,35 @@ def candidate_level(prof: Profile, store: dict[str, Any]) -> tuple[str, int, int
     return line, years, cap
 
 
+def candidate_place(prof: Profile) -> str:
+    """The line the model reads about where the person can work - the same
+    places pass 1 filters on."""
+    path = prof.file("search-profile.yaml")
+    search = (yaml.safe_load(path.read_text(encoding="utf-8")) if path.exists() else None) or {}
+    loc = search.get("location") or {}
+    preferred = [str(x) for x in loc.get("preferred") or []]
+    acceptable = [str(x) for x in loc.get("acceptable") or []]
+    remote = bool(loc.get("remote_terms"))
+    if not preferred and not acceptable:
+        return "PLACE: anywhere." + (" Remote is fine." if remote else "")
+    return ("PLACE: " + ", ".join(preferred or acceptable)
+            + (f"; also fine: {', '.join(acceptable)}" if preferred and acceptable else "") + ". "
+            + ("Remote counts only when it is open to someone in those places, not remote from another country."
+               if remote else "Not remote."))
+
+
+CHECKS = ("place", "level", "skills")
+
+
+def _checks(r: dict[str, Any]) -> dict[str, str]:
+    raw = r.get("checks") if isinstance(r.get("checks"), dict) else {}
+    out = {}
+    for k in CHECKS:
+        v = str(raw.get(k, "")).lower().strip()
+        out[k] = v if v in ("ok", "no", "unsure") else "unsure"
+    return out
+
+
 def asked_years(p: dict[str, Any]) -> int | None:
     """The minimum years a posting asks, from its WHOLE description where
     triage recorded it. Recomputed from the stored excerpt, the head of an
@@ -189,7 +232,8 @@ def _rank_batch(
     prefix = "PROFILE - everything this engineer can defend:\n" + digest + "\n\nPOSTINGS:\n"
     user = (
         "\n".join(_posting_block(p) for p in batch)
-        + '\n\nReturn {"rankings": [{"id": "...", "fit": "...", "why": "..."}]} '
+        + '\n\nReturn {"rankings": [{"id": "...", "checks": {"place": "...", "level": "...", '
+          '"skills": "..."}, "fit": "...", "why": "..."}]} '
         f"with exactly {len(batch)} entries, one per id above."
     )
     # Reasoning models spend tokens before the answer, so the budget has to
@@ -220,7 +264,7 @@ def rank_shortlist(
         )
 
     level, years, cap = candidate_level(prof, store)
-    digest = level + "\n" + profile_digest(store)
+    digest = level + "\n" + candidate_place(prof) + "\n" + profile_digest(store)
     by_id = {str(p.get("id")): p for p in postings}
     combined = Answer(ok=False)
 
@@ -269,7 +313,14 @@ def rank_shortlist(
             asked = asked_years(p)
             if asked and asked > cap and FIT_ORDER[fit] > FIT_ORDER["weak"]:
                 fit, why = "weak", f"Asks for {asked}+ years against {years}. {why}"
-            p["ai"] = {"fit": fit, "why": why[:220], "by": ans.attribution, "prompt": PROMPT_VERSION}
+            # And its own checks bind it the same way.
+            checks = _checks(r)
+            if (checks["place"] == "no" or checks["level"] == "no") and FIT_ORDER[fit] > FIT_ORDER["weak"]:
+                fit = "weak"
+            elif checks["skills"] == "no" and FIT_ORDER[fit] > FIT_ORDER["possible"]:
+                fit = "possible"
+            p["ai"] = {"fit": fit, "why": why[:220], "by": ans.attribution, "prompt": PROMPT_VERSION,
+                       "checks": checks}
             judged.add(str(p.get("id")))
         # Seen and not judged - the model dropped it from its list. A failed
         # request is not counted: that was the key or the network, not it.
@@ -454,11 +505,21 @@ def _one_pass(prof: Profile, path: Path, top: list[dict[str, Any]], llm: LLM | N
     answered: set[str] = set()
 
     def save(batch: list[dict[str, Any]], judged: set[str]) -> None:
-        # Read again: the file is the one the watcher's triage writes too.
-        fresh = json.loads(path.read_text(encoding="utf-8"))
-        for p in batch:
-            fresh["postings"][str(p["id"])] = p      # a judgement, or a try counted
-        _write(path, fresh)
+        # Read again, under the edit lock: the job update's triage writes the
+        # same file, and may have closed or re-scored a posting since this
+        # run read it. Only what ranking owns is written back.
+        with editing(path.parent):
+            fresh = json.loads(path.read_text(encoding="utf-8"))
+            for p in batch:
+                rec = fresh["postings"].get(str(p["id"]))
+                if rec is None:
+                    continue                          # gone since: nothing to judge
+                for key in ("ai", "ai_tries"):
+                    if key in p:
+                        rec[key] = p[key]
+                    else:
+                        rec.pop(key, None)
+            _write(path, fresh)
         judged_now.update(judged)
         answered.update(str(p["id"]) for p in batch)
 
@@ -469,15 +530,16 @@ def _one_pass(prof: Profile, path: Path, top: list[dict[str, Any]], llm: LLM | N
     # among the postings this run reached, not the ones it never got to.
     missed = [f"{p.get('company')} — {p.get('title')}" for p in ranked
               if str(p.get("id")) in answered - judged_now]
-    blob = json.loads(path.read_text(encoding="utf-8"))
-    blob["ai"] = {
-        "attribution": ans.attribution,
-        "ranked": sum(1 for p in ranked if p.get("ai")),
-        "unranked": missed,
-        "failures": ans.failures,
-        "stopped": ans.stopped,
-    }
-    _write(path, blob)
+    with editing(path.parent):
+        blob = json.loads(path.read_text(encoding="utf-8"))
+        blob["ai"] = {
+            "attribution": ans.attribution,
+            "ranked": sum(1 for p in ranked if p.get("ai")),
+            "unranked": missed,
+            "failures": ans.failures,
+            "stopped": ans.stopped,
+        }
+        _write(path, blob)
     return {"ok": ans.ok, "attribution": ans.attribution, "ranked": len(judged_now),
             "unranked": missed, "failures": ans.failures, "stopped": ans.stopped}
 

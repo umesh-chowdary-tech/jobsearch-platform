@@ -12,8 +12,19 @@ import argparse
 import re
 from typing import Any, Callable
 
+import threading
+
 from ..busy import busy, holder
 from ..profile import Profile
+
+# How many people's actions are running in this process. The AI queue steps
+# aside while any is (ai_queue.drain): a resume being built goes first.
+_running = 0
+_running_lock = threading.Lock()
+
+
+def someone_working() -> bool:
+    return _running > 0
 
 
 def _ns(**kw: Any) -> argparse.Namespace:
@@ -55,6 +66,12 @@ def _triage(prof: Profile, o: dict) -> int:
 
 
 def _rank(prof: Profile, o: dict) -> int:
+    from ..ai_queue import view
+    q = view(prof)
+    if q and q.get("state") == "running" and not o.get("all"):
+        print(f"The AI is already reading your jobs in the background: {q.get('done') or 0} of "
+              f"{q.get('total') or 0} done. Nothing to start.")
+        return 0
     return _cli().cmd_rank(_ns(limit=int(o["limit"]) if o.get("limit") else None, all=bool(o.get("all")),
                                prof=prof))
 
@@ -112,12 +129,26 @@ ACTIONS: dict[str, tuple[str, Callable[[Profile, dict], int]]] = {
 HOSTED_ACTIONS = ("assemble", "rank")
 
 
+# Actions that touch only the person's own files, under the short edit lock
+# where they share one: a job update in progress must not refuse them.
+OWN_FILES = ("assemble",)
+
+
 def under_lock(name: str, fn: Callable[[Profile, dict], int]) -> Callable[[Profile, dict], int]:
     def run(prof: Profile, opts: dict) -> int:
-        with busy(prof.shared, f"app: {name}") as got:
-            if not got:
-                who = holder(prof.shared) or {}
-                print(f"busy: {who.get('what')} since {who.get('since')} - try again when it ends")
-                return 3
-            return fn(prof, opts)
+        global _running
+        with _running_lock:
+            _running += 1
+        try:
+            if name in OWN_FILES:
+                return fn(prof, opts)
+            with busy(prof.shared, f"app: {name}") as got:
+                if not got:
+                    who = holder(prof.shared) or {}
+                    print(f"busy: {who.get('what')} since {who.get('since')} - try again when it ends")
+                    return 3
+                return fn(prof, opts)
+        finally:
+            with _running_lock:
+                _running -= 1
     return run

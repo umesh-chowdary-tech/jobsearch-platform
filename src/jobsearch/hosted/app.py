@@ -150,6 +150,8 @@ class Service:
         self._runners: dict[str, Runner] = {}
         self._lock = threading.Lock()
         self.cycle: threading.Thread | None = None
+        self.queue: threading.Thread | None = None
+        self.stopping = threading.Event()
 
     def runner(self, prof: Profile) -> Runner:
         with self._lock:
@@ -300,16 +302,39 @@ class Service:
                     if forced:
                         with busy(self.shared, "job update started on the admin page") as got:
                             if got:
-                                run_cycle(self.root, quiet=True, lock=False)
+                                run_cycle(self.root, quiet=True, lock=False, rank="none")
                     else:
-                        run_cycle(self.root, quiet=True, lock=True)
+                        run_cycle(self.root, quiet=True, lock=True, rank="none")
                 except Exception:  # noqa: BLE001 - logged; the next tick tries again
                     log.exception("cycle failed")
                 if self.mirror:
                     self.mirror.touch()
+                self.start_queue()
             self.cycle = threading.Thread(target=run, name="cycle", daemon=True)
             self.cycle.start()
         return 202, {"started": True}
+
+    def start_queue(self) -> bool:
+        """The AI queue (ai_queue.py) in a thread of its own: it reads until
+        nothing is left, and steps aside while anyone's action runs. False
+        when it is already running."""
+        with self._lock:
+            if self.queue and self.queue.is_alive():
+                return False
+
+            def run() -> None:
+                from ..ai_queue import drain
+                from ..web.actions import someone_working
+                try:
+                    res = drain(self.root, should_stop=self.stopping.is_set, stepping_aside=someone_working)
+                    log.info("ai queue: %s", res)
+                except Exception:  # noqa: BLE001 - logged; the next job update starts it again
+                    log.exception("ai queue failed")
+                if self.mirror:
+                    self.mirror.touch()
+            self.queue = threading.Thread(target=run, name="ai-queue", daemon=True)
+            self.queue.start()
+            return True
 
 
 def _export(prof: Profile) -> Response:
@@ -351,6 +376,7 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
             await run_in_threadpool(mirror.start)
         async with (connector[0].session_manager.run() if connector else nullcontext()):
             yield
+        svc.stopping.set()                      # the AI queue ends after its request
         if mirror:
             await run_in_threadpool(mirror.stop)
 

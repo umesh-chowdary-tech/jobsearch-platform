@@ -125,6 +125,8 @@ pre.box { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-si
 .dot.ok { background: var(--good); box-shadow: 0 0 0 3px var(--accent-soft); }
 .dot.busy { background: var(--accent); animation: beat 1.4s ease-in-out infinite; }
 @keyframes beat { 50% { opacity: .35; } }
+.health > span:not(.dot) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.health .ai-queue { color: var(--accent); }
 .top-actions { display: flex; gap: 8px; align-items: center; margin-left: auto; }
 .view { padding: 28px 32px 120px; max-width: 1080px; }
 
