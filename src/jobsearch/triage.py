@@ -350,14 +350,7 @@ def triage_posting(index: SkillIndex, profile: dict, posting: dict[str, Any]) ->
 
     cov = score_posting(index, text, profile)
 
-    # A posting whose core ask is something nothing backs, and never will.
-    banned_core = set(profile.get("reject_if_core_requirement") or []) & cov.named
     required_text, nice_text = split_requirements(text)
-    core_banned = {b for b in banned_core if b.lower() in required_text.lower()}
-    if core_banned and len(cov.matched) < 3:
-        reasons.append(f"core requirement is {', '.join(sorted(core_banned))} - unbacked")
-        return Triaged(posting, REJECT, reasons, cov)
-
     req_named = index.detect(required_text)
     nice_named = index.detect(nice_text)
     gaps = cov.absent | cov.shallow
@@ -548,7 +541,7 @@ def recheck_record(rec: dict[str, Any], profile: dict) -> tuple[str, list[str], 
     Pass 1 only, from what the record kept. Pass 2 is not re-run: scoring an
     excerpt would under-count every posting and call that a change. The one
     pass-2 outcome a stored record can carry - nothing backed - is read from
-    its `matched`. A change to `reject_if_core_requirement` needs a re-triage.
+    its `matched`. A change to skills.yaml needs a re-triage.
 
     The excerpt can prove that a check passes, but not always that it fails.
     When it fails on text that may have been cut off, the verdict stays as it

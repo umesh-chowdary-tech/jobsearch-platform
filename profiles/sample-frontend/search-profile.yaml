@@ -15,8 +15,6 @@ seniority:
                   manager, lead, chief]
   flag_titles: [intern, internship, trainee]
 
-reject_if_core_requirement: [Angular]
-
 require_title_signal: [engineer, developer, frontend, "front-end", "front end",
                        "ui ", web, react, software, "full stack", "full-stack"]
 

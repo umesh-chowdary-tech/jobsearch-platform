@@ -14,8 +14,6 @@ seniority:
   reject_titles: [director, vp, vice president, head of, chief, distinguished, fellow]
   flag_titles: [intern, internship, trainee, fresher, junior, associate]
 
-reject_if_core_requirement: [Flutter]
-
 require_title_signal: [android, mobile, kotlin, engineer, developer]
 
 reject_function: [sales, marketing, recruiter, "customer success", finance, legal,

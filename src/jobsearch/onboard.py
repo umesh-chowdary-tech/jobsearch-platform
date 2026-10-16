@@ -1225,7 +1225,6 @@ def build(d: dict[str, Any], prefs: dict[str, Any]) -> tuple[dict, dict, dict]:
         "seniority": {"years_experience": years,
                       "max_years_required": int(prefs.get("max_years") or years + 2),
                       "level": words, "reject_titles": reject_titles, "flag_titles": flags},
-        "reject_if_core_requirement": [],
         "require_title_signal": TITLE_SIGNAL,
         "reject_function": ALWAYS_SKIP + [p for p in skip if p not in ALWAYS_SKIP],
         "companies_to_watch": _csv(prefs.get("watch")),

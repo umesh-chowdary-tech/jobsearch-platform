@@ -7,7 +7,7 @@
 name: cycle
 on:
   schedule:
-    - cron: "41 0-18/4 * * *"   # every 4 hours, 00:41-16:41 UTC (06:11-22:11 IST)
+    - cron: "41 */2 * * *"      # every 2 hours, around the clock (00:41 UTC = 06:11 IST)
   workflow_dispatch:
 permissions:
   contents: read
