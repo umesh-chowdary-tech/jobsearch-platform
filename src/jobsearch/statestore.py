@@ -17,8 +17,10 @@ only part that knows a database exists.
   - Both sides changed one file: the remote copy wins and the local copy is
     kept in var/sync-conflicts/, so nothing is lost silently.
   - A file deleted on one side is not deleted on the other: a missing file
-    must not wipe the other copy. The one deletion is `forget`, asked for by
-    name - a person deleting their account on the hosted service.
+    must not wipe the other copy. Two exceptions, both deliberate: `forget`,
+    asked for by name - a person deleting their account on the hosted
+    service - and the pool's descriptions (DELETE_FOLLOWS), written once and
+    removed only when a posting has been closed for 90 days (pool.shrink).
   - Pull and push take a Postgres advisory lock, so the PC and the server
     never interleave a sync.
 """
@@ -43,6 +45,10 @@ CONFLICTS = "sync-conflicts"
 SKIP_DIRS = ("discovery", "trials", CONFLICTS)
 SKIP_FILES = ("dashboard.html", MANIFEST, ".busy.lock", ".busy.json", ".edit.lock")
 LOCK_KEY = 0x6A6F6273        # "jobs" - one advisory lock for the whole of var/
+# Files that are written once and only ever removed on purpose, so a removal
+# on this side is a removal in the database. Only a path the last sync saw
+# here goes: a fresh disk has no manifest, so it pulls them all back instead.
+DELETE_FOLLOWS = ("_shared/pool/text/",)
 # Held for a whole cycle, separately from LOCK_KEY: a sync takes a second and a
 # cycle takes minutes, and a chat's tool call must not wait out a cycle. Two
 # cycles at once - the PC's schedule and a refresh from the chat - would both
@@ -88,9 +94,11 @@ class SyncReport:
     pulled: list[str] = field(default_factory=list)
     pushed: list[str] = field(default_factory=list)
     conflicts: list[str] = field(default_factory=list)
+    removed: list[str] = field(default_factory=list)
 
     def summary(self) -> str:
-        return f"pulled={len(self.pulled)} pushed={len(self.pushed)} conflicts={len(self.conflicts)}"
+        return (f"pulled={len(self.pulled)} pushed={len(self.pushed)} conflicts={len(self.conflicts)}"
+                + (f" removed={len(self.removed)}" if self.removed else ""))
 
 
 def _manifest(var: Path) -> dict[str, str]:
@@ -153,6 +161,18 @@ def _push(var: Path, remote: Remote, rep: SyncReport) -> None:
             m[rel] = h
             rep.pushed.append(rel)
         _save_manifest(var, m)
+    gone = [rel for rel in m if rel.startswith(DELETE_FOLLOWS) and not (var / rel).exists()]
+    if gone:
+        there = remote.hashes()
+        # Unless the other side wrote it again since: then it is theirs.
+        drop = [rel for rel in gone if there.get(rel) in (None, m[rel])]
+        if drop:
+            if any(rel in there for rel in drop):
+                remote.delete([rel for rel in drop if rel in there])
+            for rel in drop:
+                m.pop(rel)
+                rep.removed.append(rel)
+            _save_manifest(var, m)
 
 
 def pull(var: Path, remote: Remote) -> SyncReport:

@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from .models import utcnow
+from .pool import within_window
 from .profile import Profile
 from .rank import sort_key
 from .triage import top_gaps
@@ -330,7 +331,8 @@ def render(prof: Profile) -> Path:
     closed = [p for p in stored if p.get("closed_at")]
     rejected = [p for p in stored if p.get("verdict") == "reject" and not p.get("closed_at")]
     postings = sorted(
-        (p for p in stored if not p.get("closed_at") and p.get("verdict") != "reject"),
+        (p for p in stored if not p.get("closed_at") and p.get("verdict") != "reject"
+         and within_window(p)),
         key=sort_key,
     )
     keeps = [p for p in postings if p.get("verdict") == "keep"]

@@ -131,10 +131,12 @@ def get(prof: Profile, path: str, query: dict[str, list[str]], runner: Runner, s
         return routes[path]()
     m = re.fullmatch(rf"/api/postings/({_ID})", path)
     if m:
-        data = state.posting(prof, m.group(1))
-        if data is None:
+        if state.raw_posting(prof, m.group(1)) is None:
             raise ApiError(404, "no such posting")
-        return data
+        # Opened: ask its board, so a job that closed since the last poll
+        # says so here rather than after a resume is built for it.
+        state.check_open(prof, m.group(1))
+        return state.posting(prof, m.group(1))
     m = re.fullmatch(rf"/api/postings/({_ID})/leads", path)
     if m:
         return outreach.find_leads(prof, outreach.find_posting(prof, m.group(1)))

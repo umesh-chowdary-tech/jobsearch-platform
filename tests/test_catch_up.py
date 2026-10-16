@@ -1,5 +1,5 @@
-"""A profile made after the boards were first read catches up on what's
-open on them, once (cycle.py); and pass 1 runs on the title and location
+"""A profile made after the boards were first read reads what's open on them
+from the pool (cycle.py, pool.py); and pass 1 runs on the title and location
 before any description is fetched (triage.rejected_unread)."""
 from __future__ import annotations
 
@@ -48,9 +48,10 @@ def test_what_the_description_could_decide_waits_for_it(prof, location):
 
 
 def test_no_description_is_fetched_for_a_posting_already_rejected(prof, monkeypatch):
+    import jobsearch.providers
     fetched = []
-    monkeypatch.setattr(triage_cli, "default_fetcher", lambda var: None)
-    monkeypatch.setattr(triage_cli, "fetch_details",
+    monkeypatch.setattr(triage_cli, "default_fetcher", lambda var: object())
+    monkeypatch.setattr(jobsearch.providers, "fetch_details",
                         lambda f, provider, slug, p: fetched.append(p["id"]) or {"description": REMOTE_BODY})
     queue = [post("Sales Manager", pid="s", description="", board="greenhouse:acme"),
              post("Backend Engineer", pid="b", description="", board="greenhouse:acme")]
@@ -67,7 +68,6 @@ def _cycle(prof, monkeypatch, live):
     monkeypatch.setattr(C, "load_boards", lambda v: [{"provider": "lever", "slug": "acme"}])
     monkeypatch.setattr(C, "default_fetcher", lambda v: None)
     monkeypatch.setattr(C, "watch_all", lambda f, v, b: W.WatchRun(boards=[board]))
-    monkeypatch.setattr(C, "sync_closed", lambda v, live: ([], []))
     monkeypatch.setattr(C, "unread", lambda blob, lead="": [])
     def render(p):
         (p.var / "dashboard.html").write_text("x")
@@ -77,19 +77,31 @@ def _cycle(prof, monkeypatch, live):
     return next((prof.shared / "logs").glob("cycle-*.log")).read_text(encoding="utf-8")
 
 
-def test_a_new_profile_reads_whats_already_open_once(prof, monkeypatch):
+def _results(prof):
+    return json.loads((prof.var / "triage-results.json").read_text(encoding="utf-8"))["postings"]
+
+
+def test_a_new_profile_reads_whats_already_open_from_the_pool(prof, monkeypatch):
     assert not C.caught_up(prof)
     log = _cycle(prof, monkeypatch, [post(pid="old-1"), post("Sales Manager", pid="old-2")])
-    assert "catch-up read=2 kept=1" in log and C.caught_up(prof)
-    results = json.loads((prof.var / "triage-results.json").read_text(encoding="utf-8"))["postings"]
-    assert set(results) == {"old-1"} and results["old-1"]["first_seen"] is None
-    # Once: the next cycle reads only what's new, through the queue.
-    _cycle(prof, monkeypatch, [post(pid="old-3")])
-    results = json.loads((prof.var / "triage-results.json").read_text(encoding="utf-8"))["postings"]
-    assert "old-3" not in results
+    assert "triage kept=1" in log and C.caught_up(prof)
+    assert set(_results(prof)) == {"old-1"}
+    # The pool keeps what the list gave, so nobody fetches it again.
+    from jobsearch import pool
+    assert pool.load_text(prof.shared, "lever:acme", "old-1")["description"] == REMOTE_BODY
 
 
-def test_a_board_that_failed_this_run_adds_nothing_to_catch_up_on():
-    w = W.WatchRun(boards=[W.BoardWatch(provider="lever", slug="x", company="X", status=W.SKIPPED,
-                                        current=[Posting(id="1", title="t", location="", url="")])])
-    assert w.live() == []
+def test_a_posting_is_read_once_and_a_later_one_still_arrives(prof, monkeypatch):
+    _cycle(prof, monkeypatch, [post(pid="old-1")])
+    before = _results(prof)["old-1"]["triaged_at"]
+    _cycle(prof, monkeypatch, [post(pid="old-1"), post(pid="new-1")])
+    results = _results(prof)
+    assert set(results) == {"old-1", "new-1"}
+    assert results["old-1"]["triaged_at"] == before          # not read again
+
+
+def test_a_posting_that_leaves_the_board_is_closed_for_everyone(prof, monkeypatch):
+    _cycle(prof, monkeypatch, [post(pid="old-1")])
+    log = _cycle(prof, monkeypatch, [])
+    assert "closed marked=1" in log
+    assert _results(prof)["old-1"]["closed_at"]

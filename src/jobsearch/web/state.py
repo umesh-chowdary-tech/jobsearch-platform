@@ -23,6 +23,7 @@ from ..busy import holder, stop_requested
 from ..cycle import paused
 from ..dashboard import _gap_chart
 from ..latex import find_engine
+from ..pool import within_window
 from ..llm import LLM
 from ..rank import sort_key
 from ..profile import Profile
@@ -47,6 +48,26 @@ def _postings(prof: Profile) -> dict[str, dict[str, Any]]:
 def raw_posting(prof: Profile, pid: str) -> dict[str, Any] | None:
     """The posting as triage stored it."""
     return _postings(prof).get(str(pid))
+
+
+def check_open(prof: Profile, pid: str) -> bool | None:
+    """Ask the posting's board whether it is still open - the watcher's last
+    poll can be up to two hours old. A posting found closed is closed in the
+    pool and in this person's results, so no list shows it again. None when
+    the board can't say plainly; the watcher's word stands."""
+    from .. import pool
+    from ..triage import mark_closed
+    p = raw_posting(prof, pid)
+    if p is None:
+        return None
+    if p.get("closed_at"):
+        return False
+    board = str(p.get("board") or "")
+    live = pool.check_live(prof.shared, pool.quick_fetcher(prof.shared), board, str(pid),
+                           company=p.get("company"), last_poll=pool.last_poll(prof.shared))
+    if live is False:
+        mark_closed(prof.var, pid)
+    return live
 
 
 def _row(prof: Profile, p: dict[str, Any], pipe: dict, ledger: dict, variants: dict) -> dict:
@@ -106,10 +127,21 @@ def ats_for(prof: Profile, pid: str) -> dict[str, Any] | None:
     return best[1] if best else None
 
 
+def _touched(row: dict[str, Any]) -> bool:
+    """Something the person did with a posting: it stays listed at any age."""
+    return bool(row["status"] != "new" or row["favorite"] or row["later"] or row["variant"] or row["asks"])
+
+
 def postings(prof: Profile) -> list[dict[str, Any]]:
+    """Every posting listed for this person. One posted before the pool's
+    window (60 days) is left out unless they have done something with it;
+    its own page still opens."""
     pipe, ledger, variants = pipeline.load(prof), outreach.load_ledger(prof), _variants_by_posting(prof)
-    rows = [_row(prof, p, pipe, ledger, variants)
-            for p in sorted(_postings(prof).values(), key=sort_key)]
+    rows = []
+    for p in sorted(_postings(prof).values(), key=sort_key):
+        row = _row(prof, p, pipe, ledger, variants)
+        if within_window(p) or _touched(row):
+            rows.append(row)
     # Favorites first; within each group the model-then-keyword order stands.
     # sorted() is stable, so this only lifts favorites, never reshuffles.
     return sorted(rows, key=lambda r: not r["favorite"])
@@ -130,7 +162,9 @@ def posting(prof: Profile, pid: str) -> dict[str, Any] | None:
         "nice_gaps": p.get("nice_gaps") or [],
         "reasons": p.get("reasons") or [],
         "description": (p.get("description") or "").strip(),
-        "live": outreach.posting_live(prof, row["board"], row["id"]),
+        # Closed is closed, whoever found out: the watcher, or the board asked
+        # when the page was opened (check_open) before the next poll.
+        "live": False if p.get("closed_at") else outreach.posting_live(prof, row["board"], row["id"]),
         "history": (pipe.get(row["id"]) or {}).get("history", []),
         "drafts": [d for d in ledger.values() if str(d.get("posting_id")) == row["id"]],
         "files": resume_files(prof, row["variant"]) if row["variant"] else [],

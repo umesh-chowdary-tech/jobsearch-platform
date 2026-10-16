@@ -2,8 +2,9 @@
 what is new, rank it, read the inbox and regenerate the dashboard.
 
 Boards are shared and people are separate: one poll of each board serves every
-profile, and each profile keeps its own record of which postings it has
-triaged - so a profile added today reads the whole queue on its first cycle.
+profile, and fills the shared pool (pool.py) - each posting and its description
+kept once. Each profile keeps its own record of which postings it has triaged,
+so a profile added today reads everything open in the pool on its first cycle.
 
 Scheduled runs have nobody reading stdout, so this writes a one-line summary to
 `var/_shared/logs/` and keeps going when a step fails. A cycle that dies on a
@@ -20,6 +21,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from . import pool
 from .busy import busy, holder, stop_requested, write_atomic
 from .dashboard import render
 from .http import default_fetcher
@@ -27,7 +29,7 @@ from .llm import LLM
 from .models import utcnow
 from .profile import Profile, list_profiles, shared_var
 from .rank import apply_to_results, ranking_lead, unread
-from .triage import sync_closed
+from .triage import sync_closed, sync_pool
 from .triage_cli import run_triage
 from .watch import load_boards, posting_live, record_new, watch_all
 
@@ -141,7 +143,6 @@ def _cycle(root: Path, profiles: list[Profile], quiet: bool) -> int:
     run = _Run(var, quiet)
 
     # ── watch: once, for everyone ────────────────────────────────────────────
-    live: list[dict[str, Any]] = []
     try:
         boards = load_boards(var)
         if not boards:
@@ -149,8 +150,7 @@ def _cycle(root: Path, profiles: list[Profile], quiet: bool) -> int:
             run.say("no boards known - run `verify` first")
             return 1
         w = watch_all(default_fetcher(var), var, boards)
-        record_new(var, w)
-        live = w.live()
+        record_new(var, w)                      # the queue, and the pool
         s = w.summary()
         run.parts.append(
             f"watch boards={s['boards']} new={s['new_postings']} "
@@ -159,6 +159,15 @@ def _cycle(root: Path, profiles: list[Profile], quiet: bool) -> int:
         run.say(f"watch: {s}")
     except Exception as exc:  # noqa: BLE001 - a cycle must not die on one step
         run.failure("watch", exc)
+
+    # ── the pool: boards no longer watched, descriptions past keeping ───────
+    try:
+        retired = pool.retire(var, {f"{b.get('provider')}:{b.get('slug')}" for b in load_boards(var)})
+        gone = pool.shrink(var)
+        if retired or gone:
+            run.parts.append(f"pool retired={retired} shrunk={gone}")
+    except Exception as exc:  # noqa: BLE001
+        run.failure("pool", exc)
 
     if run.stopped("watch"):
         return run.end()
@@ -169,7 +178,7 @@ def _cycle(root: Path, profiles: list[Profile], quiet: bool) -> int:
     budget = max(RANK_FLOOR, RANK_BUDGET / len(profiles))
     keys: dict[str, tuple[bool, str]] = {}
     for prof in profiles:
-        if _for_profile(prof, run, budget, keys, live):
+        if _for_profile(prof, run, budget, keys):
             return run.end()
     return run.end()
 
@@ -178,26 +187,21 @@ CAUGHT_UP = "caught-up.json"
 
 
 def caught_up(prof: Profile) -> bool:
-    """Whether this profile has read what was already open on the boards. The
-    watcher's queue holds only what appeared after a board was first read, so
-    a profile made later sees nothing older until it catches up, once."""
+    """Whether this profile has had its first triage: everything open in the
+    pool, read once. Until then the service starts an update when the person
+    first saves their profile, rather than leaving them waiting."""
     return (prof.var / CAUGHT_UP).exists()
 
 
-def _catch_up(prof: Profile, run: _Run, live: list[dict[str, Any]]) -> None:
-    if caught_up(prof) or not live or not prof.exists():
-        return
-    try:
-        kept = run_triage(prof, argparse.Namespace(all=False, board=None, quiet=True, postings=live)) or 0
-        (prof.var / CAUGHT_UP).write_text(json.dumps({"at": utcnow(), "postings": len(live)}), encoding="utf-8")
-        run.parts.append(f"{prof.id} catch-up read={len(live)} kept={kept}")
-        run.say(f"{prof.id}: caught up on {len(live)} open posting(s), kept {kept}")
-    except Exception as exc:  # noqa: BLE001
-        run.failure(f"{prof.id} catch-up", exc)
+def _live(shared: Path):
+    """Open or closed, for sync_closed: the pool's word, else the watcher's."""
+    def live(board: str, pid: str, since: str | None) -> bool | None:
+        known = pool.is_open(shared, board, pid)
+        return known if known is not None else posting_live(shared, board, pid, since)
+    return live
 
 
-def _for_profile(prof: Profile, run: _Run, budget: float, keys: dict[str, tuple[bool, str]],
-                 live: list[dict[str, Any]] | None = None) -> bool:
+def _for_profile(prof: Profile, run: _Run, budget: float, keys: dict[str, tuple[bool, str]]) -> bool:
     """One person's share of the cycle. True when the run was stopped."""
     tag = prof.id
     shared = prof.shared
@@ -209,27 +213,34 @@ def _for_profile(prof: Profile, run: _Run, budget: float, keys: dict[str, tuple[
     # watcher will not speak for it until the next one - so a posting that came
     # back would stay marked closed for a whole cycle.
     try:
-        closed, reopened = sync_closed(
-            prof.var, lambda board, pid, since: posting_live(shared, board, pid, since))
+        closed, reopened = sync_closed(prof.var, _live(shared))
         if closed or reopened:
             run.parts.append(f"{tag} closed marked={len(closed)} reopened={len(reopened)}")
             run.say(f"{tag}: closed on the board: {len(closed)} marked, {len(reopened)} reopened")
+        # Posting dates from the pool, and long-closed postings shrunk.
+        boards: dict[str, dict[str, dict[str, Any]]] = {}
+
+        def posted(board: str, pid: str) -> str | None:
+            if board not in boards:
+                boards[board] = pool.load_board(shared, board)
+            return (boards[board].get(pid) or {}).get("posted_at")
+
+        done = sync_pool(prof.var, posted)
+        if done["dated"] or done["shrunk"]:
+            run.parts.append(f"{tag} pool dated={done['dated']} shrunk={done['shrunk']}")
     except Exception as exc:  # noqa: BLE001
         run.failure(f"{tag} closed", exc)
 
     if run.stopped(f"{tag} closed"):
         return True
 
-    # ── catching up: what was open before this profile existed, once ────────
-    _catch_up(prof, run, live or [])
-    if run.stopped(f"{tag} catch-up"):
-        return True
-
-    # ── triage: the shared queue, less what this profile has seen ────────────
+    # ── triage: the pool, less what this profile has read ────────────────────
     try:
         kept = run_triage(prof, argparse.Namespace(all=False, board=None, quiet=True)) or 0
         run.parts.append(f"{tag} triage kept={kept}")
         run.say(f"{tag}: triage kept {kept}")
+        if not caught_up(prof) and prof.exists():
+            (prof.var / CAUGHT_UP).write_text(json.dumps({"at": utcnow()}), encoding="utf-8")
     except Exception as exc:  # noqa: BLE001
         run.failure(f"{tag} triage", exc)
 
