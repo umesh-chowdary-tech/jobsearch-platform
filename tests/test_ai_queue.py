@@ -85,6 +85,7 @@ def test_a_short_rate_limit_is_waited_out(prof, monkeypatch, keyed):
 def test_a_long_limit_or_a_daily_cap_ends_the_run_and_says_until_when(prof, monkeypatch, keyed):
     _results(prof, 6)
     res, _, slept = _drain(prof, monkeypatch, [(4, "Groq: tokens per day (TPD) - try again in 2h3m")])
+    assert res["ended"] == "1 waiting for a limit"
     doc = Q.status(prof)
     assert doc["state"] == "waiting" and doc["left"] == 2 and not slept
     until = datetime.fromisoformat(doc["until"])

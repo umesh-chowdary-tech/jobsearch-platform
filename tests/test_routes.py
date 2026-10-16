@@ -79,7 +79,8 @@ def test_the_hosted_overview_has_no_pc_scheduler_and_no_one_elses_run(prof):
     run = Runner(prof)
     with busy(prof.shared, "app: assemble for someone else"):
         o = routes.get(prof, "/api/overview", {}, run, scope=HOSTED)
-    assert set(o) == {"busy", "last_cycle", "now"} and o["busy"]["what"] == "updating"
+    assert set(o) == {"busy", "last_cycle", "ai_queue", "now"} and o["busy"]["what"] == "updating"
+    assert o["ai_queue"] is None                         # this person's own queue only: nothing running
 
 
 def test_an_unexpected_error_on_the_hosted_service_says_nothing_about_the_server():

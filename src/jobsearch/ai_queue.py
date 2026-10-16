@@ -206,7 +206,8 @@ def drain(root: Path, profiles: Iterable[Profile] | None = None,
                 until = _later(wait) if wait is not None else (_tomorrow() if "daily" in stopped else None)
                 _save(prof, state="waiting", done=done, left=left, total=total, why=stopped, until=until)
                 active.remove(prof)
-        out["ended"] = out["ended"] or "all read"
+        waiting = sum(1 for p in people if (status(p) or {}).get("state") == "waiting")
+        out["ended"] = out["ended"] or (f"{waiting} waiting for a limit" if waiting else "all read")
         return out
     finally:
         _lock.release()

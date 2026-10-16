@@ -405,7 +405,7 @@ def test_a_cycle_that_ranks_runs_to_the_end(tmp_path, monkeypatch):
         (p.var / "dashboard.html").write_text("x")
         return p.var / "dashboard.html"
     monkeypatch.setattr(C, "render", render)
-    code = run_cycle(tmp_path, quiet=True)
+    code = run_cycle(tmp_path, quiet=True, rank="inline")         # the local app's way: inside the cycle
     log = next((var / "logs").glob("cycle-*.log")).read_text(encoding="utf-8")
     assert code == 0, log
     assert "rank read=1" in log and "stopped='time budget'" in log and "dashboard" in log

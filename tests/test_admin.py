@@ -212,7 +212,7 @@ def test_job_updates_can_be_paused_and_run_now(env, monkeypatch):
     client, root = env
     joined(client, root)
     ran = []
-    monkeypatch.setattr("jobsearch.cycle.run_cycle", lambda root, quiet, lock: ran.append(lock))
+    monkeypatch.setattr("jobsearch.cycle.run_cycle", lambda root, quiet, lock, rank=None: ran.append(lock))
     o = do(client, action="cycle_pause").json()["overview"]
     assert o["health"]["cycle_paused"] is not None
     assert do(client, action="cycle_run").json()["started"] is True        # someone asked: it runs anyway
