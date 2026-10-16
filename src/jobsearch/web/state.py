@@ -162,7 +162,9 @@ def posting(prof: Profile, pid: str) -> dict[str, Any] | None:
         "nice_gaps": p.get("nice_gaps") or [],
         "reasons": p.get("reasons") or [],
         "description": (p.get("description") or "").strip(),
-        "live": outreach.posting_live(prof, row["board"], row["id"]),
+        # Closed is closed, whoever found out: the watcher, or the board asked
+        # when the page was opened (check_open) before the next poll.
+        "live": False if p.get("closed_at") else outreach.posting_live(prof, row["board"], row["id"]),
         "history": (pipe.get(row["id"]) or {}).get("history", []),
         "drafts": [d for d in ledger.values() if str(d.get("posting_id")) == row["id"]],
         "files": resume_files(prof, row["variant"]) if row["variant"] else [],

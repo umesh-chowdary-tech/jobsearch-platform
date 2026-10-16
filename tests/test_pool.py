@@ -313,7 +313,7 @@ def test_opening_a_posting_the_board_has_closed_says_so_and_drops_it(tmp_path, m
     prof = _prof(tmp_path, **{"1000001": {"posted_at": "2026-10-10"}})
     monkeypatch.setattr(pool, "_ask_board", lambda f, b, pid, c: False)
     data = routes.get(prof, "/api/postings/1000001", {}, Runner(prof), scope=HOSTED)
-    assert data["closed"] is True
+    assert data["closed"] is True and data["live"] is False      # the page says "closed on the board"
     assert all(r["id"] != "1000001" or r["closed"] for r in state.postings(prof))
     assert not routes.get(prof, "/api/today", {}, Runner(prof), scope=HOSTED)["decide"]
 
