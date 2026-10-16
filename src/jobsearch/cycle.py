@@ -33,10 +33,11 @@ from .triage import sync_closed, sync_pool
 from .triage_cli import run_triage
 from .watch import load_boards, posting_live, record_new, watch_all
 
-# Seconds of model requests one cycle may start, shared between the profiles.
-# Groq's free tier allows 8,000 tokens a minute and a batch of four postings is
-# about 5,000, so this is a few batches a cycle; the daily caps are the real
-# limit. The watcher and the inbox are never held up for more than a few minutes.
+# Seconds of model requests a cycle may start inline, shared between the
+# profiles - only when the caller holds the lock and wants the ranking done
+# inside it (the local app's "Run a full cycle"). Otherwise the AI queue
+# (ai_queue.py) reads everything after the cycle, without a time limit, and
+# holds nothing else up.
 RANK_BUDGET = 180.0
 # The least any one profile gets, however many there are.
 RANK_FLOOR = 30.0
@@ -83,16 +84,23 @@ def paused(var: Path) -> dict[str, str | None] | None:
 
 
 def run_cycle(root: Path, quiet: bool = False, lock: bool = True,
-              profiles: list[Profile] | None = None) -> int:
+              profiles: list[Profile] | None = None, rank: str | None = None) -> int:
     """`profiles`: whom to triage and rank for - every profile by default.
     `lock=False` only for a caller that already holds `busy` - the app does,
-    and a second lock from the same process is refused on Windows."""
+    and a second lock from the same process is refused on Windows.
+
+    `rank`: "inline" ranks inside the cycle for at most RANK_BUDGET seconds;
+    "after" lets go of the lock first, then runs the AI queue until nothing
+    is left; "none" leaves it to the caller (the hosted service runs the
+    queue in a thread of its own). Default: "after" with the lock, "inline"
+    for a caller already holding it."""
     root = Path(root)
     var = shared_var(root)
+    rank = rank or ("after" if lock else "inline")
     if profiles is None:
         profiles = [Profile(root, pid) for pid in list_profiles(root)]
     if not lock:
-        return _cycle(root, profiles, quiet)
+        return _cycle(root, profiles, quiet, inline=rank == "inline")
     p = paused(var)
     if p:
         # Exit 0: a paused schedule is doing what it was told.
@@ -106,7 +114,18 @@ def run_cycle(root: Path, quiet: bool = False, lock: bool = True,
             who = holder(var) or {}
             _log(var, f"cycle SKIPPED busy: {who.get('what')} since {who.get('since')}")
             return 0
-        return _cycle(root, profiles, quiet)
+        code = _cycle(root, profiles, quiet, inline=rank == "inline")
+    if rank == "after":
+        # Outside the lock: the next cycle, or a click in the app, is not
+        # held up by a long read.
+        from .ai_queue import drain
+        try:
+            res = drain(root, profiles)
+            _log(var, f"ai-queue read={res['ranked']} people={res['people']} ended={res['ended']!r}")
+        except Exception as exc:  # noqa: BLE001
+            _log(var, f"ai-queue FAILED {type(exc).__name__}: {exc}\n{traceback.format_exc()}")
+            code = 1
+    return code
 
 
 class _Run:
@@ -138,7 +157,7 @@ class _Run:
         return 1 if self.failed else 0
 
 
-def _cycle(root: Path, profiles: list[Profile], quiet: bool) -> int:
+def _cycle(root: Path, profiles: list[Profile], quiet: bool, inline: bool = True) -> int:
     var = shared_var(root)
     run = _Run(var, quiet)
 
@@ -178,7 +197,7 @@ def _cycle(root: Path, profiles: list[Profile], quiet: bool) -> int:
     budget = max(RANK_FLOOR, RANK_BUDGET / len(profiles))
     keys: dict[str, tuple[bool, str]] = {}
     for prof in profiles:
-        if _for_profile(prof, run, budget, keys):
+        if _for_profile(prof, run, budget if inline else 0.0, keys):
             return run.end()
     return run.end()
 
@@ -261,6 +280,8 @@ def _for_profile(prof: Profile, run: _Run, budget: float, keys: dict[str, tuple[
                              lead=ranking_lead(prof), floor=floor_for(prof)))
         if not waiting:
             run.parts.append(f"{tag} rank skipped nothing-unread")
+        elif not budget:
+            run.parts.append(f"{tag} rank queued {waiting}")       # the AI queue reads them
         else:
             if "lead" not in keys:
                 keys["lead"] = LLM(prof).key_check()

@@ -125,6 +125,7 @@ export interface Feedback {
 export interface PostingDetail extends Row {
   why: string;
   judged_by: string;
+  checks?: Record<string, string> | null;
   matched: Record<string, string>;
   required_gaps: string[];
   reasons: string[];
@@ -148,9 +149,20 @@ export interface Me {
   consent_current?: boolean;
 }
 
+export interface AiQueue {
+  state: "running" | "waiting";
+  done: number | null;
+  total: number | null;
+  left: number | null;
+  why: string | null;
+  until: string | null;
+  by: string | null;
+}
+
 export interface Overview {
   busy: { what: string; since?: string } | null;
   last_cycle: { at: string; line: string } | null;
+  ai_queue?: AiQueue | null;
   now: string;
 }
 

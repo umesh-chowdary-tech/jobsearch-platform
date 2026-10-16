@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { get } from "../api";
 import { AskCompany } from "../companies";
-import { JobRow, roleLabel, STAGES } from "../jobs";
+import { JobRow, postedOn, roleLabel, STAGES } from "../jobs";
 import type { Row } from "../types";
 import { fresh, Icon } from "../ui";
 
@@ -49,7 +49,7 @@ function passes(r: Row, f: Filters, words: string[]): boolean {
   if (f.stage === "open" ? ["closed", "skipped"].includes(r.status) : f.stage !== "any" && r.status !== f.stage) return false;
   if (f.fav && !r.favorite) return false;
   if (f.later && !r.later) return false;
-  if (f.fresh && !fresh(r.first_seen)) return false;
+  if (f.fresh && !fresh(postedOn(r))) return false;
   if (f.role !== "any" && (r.role || "other") !== f.role) return false;
   if (words.length) {
     const text = `${r.title} ${r.company} ${r.location} ${r.skills.join(" ")}`.toLowerCase();
@@ -82,7 +82,7 @@ export function Jobs({ query }: { query: URLSearchParams }) {
   const posted = (r: Row) => String(r.posted_at || r.first_seen || "");
   if (f.sort === "newest") list = [...list].sort((a, b) => posted(b).localeCompare(posted(a)));
   const roles = [...new Set(kept.map(r => r.role || "other"))].sort((a, b) => roleLabel(a).localeCompare(roleLabel(b)));
-  const recent = kept.filter(r => fresh(r.first_seen) && !r.closed).length;
+  const recent = kept.filter(r => fresh(postedOn(r)) && !r.closed).length;
 
   if (!kept.length) {
     return (
@@ -104,7 +104,7 @@ export function Jobs({ query }: { query: URLSearchParams }) {
   return (
     <>
       <h1>Jobs</h1>
-      <p className="sub">Every job kept for you: {kept.length} in all{recent ? `, ${recent} new in the last 3 days` : ""}.</p>
+      <p className="sub">Every job kept for you: {kept.length} in all{recent ? `, ${recent} posted in the last 3 days` : ""}.</p>
       <div className="filters">
         <div className="search">
           <Icon name="search" />

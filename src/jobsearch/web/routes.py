@@ -95,10 +95,12 @@ def _overview(prof: Profile, scope: str) -> dict[str, Any]:
         return state.overview(prof)
     # No PC scheduler, pause or stop on the service; and whose run is going
     # on is nobody else's business.
+    from ..ai_queue import view
     log_ = state.cycle_log(prof, 1)
     who = holder(prof.shared)
     return {"busy": {"what": "updating", "since": who.get("since")} if who else None,
             "last_cycle": log_[0] if log_ else None,
+            "ai_queue": view(prof),
             "now": datetime.now(timezone.utc).isoformat(timespec="seconds")}
 
 

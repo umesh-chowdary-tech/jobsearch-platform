@@ -250,7 +250,7 @@ def test_only_admins_see_people_and_make_invites(env):
 def test_the_cycle_starts_only_for_the_cron_secret(env, monkeypatch):
     client, _ = env
     ran = []
-    monkeypatch.setattr("jobsearch.cycle.run_cycle", lambda root, quiet, lock: ran.append(lock))
+    monkeypatch.setattr("jobsearch.cycle.run_cycle", lambda root, quiet, lock, rank=None: ran.append(lock))
     assert client.post("/api/cron/cycle").status_code == 404
     assert client.post("/api/cron/cycle", headers={"X-Cron-Secret": "wrong"}).status_code == 404
     assert client.post("/api/cron/cycle", headers={"X-Cron-Secret": "cron-test-secret"}).status_code == 202

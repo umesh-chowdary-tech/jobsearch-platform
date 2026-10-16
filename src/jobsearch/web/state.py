@@ -23,6 +23,7 @@ from ..busy import holder, stop_requested
 from ..cycle import paused
 from ..dashboard import _gap_chart
 from ..latex import find_engine
+from ..ai_queue import view as ai_queue_view
 from ..pool import within_window
 from ..llm import LLM
 from ..rank import sort_key
@@ -160,6 +161,7 @@ def posting(prof: Profile, pid: str) -> dict[str, Any] | None:
     row.update({
         "why": ai.get("why") or "",
         "judged_by": ai.get("by") or "",
+        "checks": ai.get("checks"),
         "matched": p.get("matched") or {},
         "required_gaps": [g for g in p.get("required_gaps") or [] if g not in (p.get("matched") or {})],
         "nice_gaps": p.get("nice_gaps") or [],
@@ -275,6 +277,7 @@ def overview(prof: Profile) -> dict[str, Any]:
         "stopping": stop_requested(prof.shared),
         "paused": paused(prof.shared),
         "last_cycle": log[0] if log else None,
+        "ai_queue": ai_queue_view(prof),
         "scheduler": scheduler(),
         "now": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }

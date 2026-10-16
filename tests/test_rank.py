@@ -497,3 +497,21 @@ def test_the_first_pass_gets_half_the_time(results, monkeypatch):
     apply_to_results(root, llm=claude, first_llm=groq, budget=120)
     # Groq starts at 0 and 50, not at 100 (its half is 60); Claude at 100, not at 150.
     assert len(groq.prompts) == 2 and len(claude.prompts) == 1
+
+
+def test_when_groq_is_capped_claude_reads_what_it_never_got_to(results):
+    """Groq's free tokens run out after a few dozen postings a day; the rest
+    would wait for tomorrow while Claude's own budget sat unused."""
+    root, path = results
+
+    class Capped(JudgeAs):
+        def ask_json(self, *a, **k):
+            return Answer(ok=False, limited="Groq: sample-backend's daily token limit reached")
+
+    groq, claude = Capped("groq"), JudgeAs("claude", fit="possible")
+    res = apply_to_results(root, llm=claude, first_llm=groq)
+    assert sorted(claude.seen) == sorted(str(i) for i in range(9))         # the never-read, by Claude
+    assert res["stopped"] == "" and "daily token limit" in res["first_stopped"]
+    assert res["left"] == 0
+    after = json.loads(path.read_text())["postings"]
+    assert all(after[str(i)]["ai"]["by"] == "claude-model via claude" for i in range(9))

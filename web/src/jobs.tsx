@@ -16,6 +16,8 @@ export const ROLE_LABEL: Record<string, string> = {
   design: "Design", product: "Product", program: "Program", "non-tech": "Non-tech", other: "Other",
 };
 export const roleLabel = (r?: string) => ROLE_LABEL[r || "other"] || r || "Other";
+/** When the board says it was posted, else when it was first seen: "new" means newly posted. */
+export const postedOn = (r: Pick<Row, "posted_at" | "first_seen">) => r.posted_at || r.first_seen;
 
 function laterText(l: Later | null): string {
   if (!l) return "";
@@ -61,7 +63,7 @@ export function JobRow({ row, actions, onChange, stagePicker }: {
           <div className="t">
             <a href={`#/p/${encodeURIComponent(row.id)}`}>{row.title}</a>
             <FitBadge fit={row.fit} />
-            {fresh(row.first_seen) && !row.closed && <span className="badge new" title={`First seen ${ago(row.first_seen)}`}>new</span>}
+            {fresh(postedOn(row)) && !row.closed && <span className="badge new" title={row.posted_at ? `Posted ${day(row.posted_at)}` : `First seen ${ago(row.first_seen)}`}>new</span>}
             {row.closed && <span className="badge closed">closed</span>}
             {row.match != null && row.verdict === "keep" && (
               <span className="badge" title="How well it matches your profile, worked out before any AI reads it">{row.match}% match</span>

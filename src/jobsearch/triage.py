@@ -18,6 +18,7 @@ from typing import Any, Callable, Iterable
 
 import yaml
 
+from .busy import editing
 from .models import utcnow
 from .pool import SHRINK_DAYS, posted_day
 from .skills import CORE, INCIDENTAL, SCOPED, UNBACKED, WORKING, SkillIndex
@@ -419,6 +420,11 @@ def update_gap_ledger(var_dir: Path, index: SkillIndex, results: Iterable[Triage
 
 
 def write_results(var_dir: Path, results: Iterable[Triaged], fresh_tally: bool = False) -> Path:
+    with editing(Path(var_dir)):
+        return _write_results(var_dir, list(results), fresh_tally)
+
+
+def _write_results(var_dir: Path, results: list[Triaged], fresh_tally: bool) -> Path:
     """Persist triaged postings for the dashboard.
 
     Merged by posting id, not replaced: `triage --board lever:meesho` looks at
@@ -691,6 +697,11 @@ def sync_closed(
     ones it lists again. Returns (closed, reopened) ids. A posting the watcher
     cannot speak for is left as it is, and nothing is written when nothing
     changed."""
+    with editing(Path(var_dir)):
+        return _sync_closed(var_dir, live)
+
+
+def _sync_closed(var_dir: Path, live: Callable[[str, str, str | None], bool | None]) -> tuple[list[str], list[str]]:
     path = Path(var_dir) / "triage-results.json"
     if not path.exists():
         return [], []
@@ -718,13 +729,14 @@ def mark_closed(var_dir: Path, pid: str) -> bool:
     path = Path(var_dir) / "triage-results.json"
     if not path.exists():
         return False
-    blob = json.loads(path.read_text(encoding="utf-8"))
-    rec = (blob.get("postings") or {}).get(str(pid))
-    if rec is None or rec.get("closed_at"):
-        return False
-    rec["closed_at"] = utcnow()
-    _write_json_atomic(path, blob)
-    return True
+    with editing(Path(var_dir)):
+        blob = json.loads(path.read_text(encoding="utf-8"))
+        rec = (blob.get("postings") or {}).get(str(pid))
+        if rec is None or rec.get("closed_at"):
+            return False
+        rec["closed_at"] = utcnow()
+        _write_json_atomic(path, blob)
+        return True
 
 
 def sync_pool(var_dir: Path, posted: Callable[[str, str], str | None],
@@ -733,6 +745,12 @@ def sync_pool(var_dir: Path, posted: Callable[[str, str], str | None],
     the pool kept dates takes its posting date from the pool. A posting closed
     more than `days` ago keeps its verdict and the model's judgement, and
     loses its description excerpt - the pool drops its own copy then too."""
+    with editing(Path(var_dir)):
+        return _sync_pool(var_dir, posted, now, days)
+
+
+def _sync_pool(var_dir: Path, posted: Callable[[str, str], str | None],
+               now: datetime | None, days: int) -> dict[str, int]:
     path = Path(var_dir) / "triage-results.json"
     if not path.exists():
         return {"dated": 0, "shrunk": 0}
