@@ -4,7 +4,7 @@ descriptions dropped 90 days after a posting closes."""
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 
 import pytest
 

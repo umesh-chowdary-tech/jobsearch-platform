@@ -49,14 +49,14 @@ def _board_name(board: str) -> str:
     name = f"{provider}__{slug}"
     if len(name) <= 60:
         return name
-    return f"{name[:48]}-{hashlib.sha1(name.encode()).hexdigest()[:10]}"
+    return f"{name[:48]}-{hashlib.sha1(name.encode(), usedforsecurity=False).hexdigest()[:10]}"
 
 
 def _safe(pid: str) -> str:
     """A file name for an id. Ids are the boards' own, so most are digits;
     anything else gets a short hash so two ids never share a file."""
     s = re.sub(r"[^A-Za-z0-9_-]", "_", str(pid))
-    return s if s == str(pid) else f"{s[:80]}-{hashlib.sha1(str(pid).encode()).hexdigest()[:8]}"
+    return s if s == str(pid) else f"{s[:80]}-{hashlib.sha1(str(pid).encode(), usedforsecurity=False).hexdigest()[:8]}"
 
 
 def pool_dir(shared: Path) -> Path:
