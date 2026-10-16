@@ -153,6 +153,16 @@ def test_a_failed_fetch_is_not_kept(shared, monkeypatch):
     assert pool.load_text(shared, "greenhouse:acme", "5") is None
 
 
+def test_a_long_board_name_is_shortened_and_stays_distinct(shared):
+    a = "amazon:IND@software-development+machine-learning-science+data-science+solutions-architect"
+    b = "amazon:IND@software-development+machine-learning-science+data-science+business-intelligence"
+    assert len(pool.board_path(shared, a).name) <= 65
+    assert pool.board_path(shared, a) != pool.board_path(shared, b)
+    assert pool.board_path(shared, "lever:acme").name == "lever__acme.json"
+    pool.save_text(shared, a, "1", {"description": "d"})
+    assert pool.load_text(shared, a, "1")["description"] == "d"
+
+
 def test_an_id_that_is_no_file_name_gets_one(shared):
     pool.save_text(shared, "workday:x.wd1.Site", "../../etc/passwd", {"description": "d"})
     path = pool.text_path(shared, "workday:x.wd1.Site", "../../etc/passwd")

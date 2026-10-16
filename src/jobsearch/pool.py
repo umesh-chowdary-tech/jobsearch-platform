@@ -42,8 +42,14 @@ _write_lock = threading.Lock()
 # ── where things live ────────────────────────────────────────────────────────
 
 def _board_name(board: str) -> str:
+    """provider__slug, as the watcher's seen/ files are named - shortened with
+    a hash when long: an Amazon or Microsoft slug names a whole search, and on
+    Windows a path past 260 characters can't be written."""
     provider, _, slug = board.partition(":")
-    return f"{provider}__{slug}"
+    name = f"{provider}__{slug}"
+    if len(name) <= 60:
+        return name
+    return f"{name[:48]}-{hashlib.sha1(name.encode()).hexdigest()[:10]}"
 
 
 def _safe(pid: str) -> str:
