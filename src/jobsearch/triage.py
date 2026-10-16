@@ -295,6 +295,9 @@ class Triaged:
     coverage: Coverage | None = None
     required_gaps: set[str] = field(default_factory=set)
     nice_gaps: set[str] = field(default_factory=set)
+    # The offline match score (scoring.py), set after triage.
+    match: int = 0
+    match_parts: dict[str, int] = field(default_factory=dict)
 
     @property
     def title(self) -> str:
@@ -415,12 +418,14 @@ def update_gap_ledger(var_dir: Path, index: SkillIndex, results: Iterable[Triage
     return path
 
 
-def write_results(var_dir: Path, results: Iterable[Triaged]) -> Path:
+def write_results(var_dir: Path, results: Iterable[Triaged], fresh_tally: bool = False) -> Path:
     """Persist triaged postings for the dashboard.
 
     Merged by posting id, not replaced: `triage --board lever:meesho` looks at
     five boards' worth of nothing and would otherwise wipe what the queue run
-    found. Same lesson as boards.json in Module 1.
+    found. Same lesson as boards.json in Module 1. `fresh_tally` starts the
+    rejection counts again - for a re-read of everything after the profile
+    changed, which would otherwise count every posting twice.
     """
     path = Path(var_dir) / "triage-results.json"
     blob: dict[str, Any] = {"postings": {}, "reject_reasons": {}, "last_run": None}
@@ -431,6 +436,8 @@ def write_results(var_dir: Path, results: Iterable[Triaged]) -> Path:
             pass
     blob.setdefault("postings", {})
     blob.setdefault("reject_reasons", {})
+    if fresh_tally:
+        blob["reject_reasons"] = {}
     now = utcnow()
 
     for t in results:
@@ -444,7 +451,12 @@ def write_results(var_dir: Path, results: Iterable[Triaged]) -> Path:
             reason = t.reasons[-1] if t.reasons else "unknown"
             key = reason.split(" - ")[0][:60]
             blob["reject_reasons"][key] = blob["reject_reasons"].get(key, 0) + 1
-            blob["postings"].pop(pid, None)
+            kept = blob["postings"].get(pid)
+            if kept is not None:
+                # Read before and kept then: the person may have acted on it,
+                # and outreach refers to it by id. Marked, as the recheck does.
+                kept.update({"verdict": REJECT, "reasons": t.reasons, "triaged_at": now,
+                             "match": 0, "match_parts": {}})
             continue
         cov = t.coverage
         description = t.posting.get("description") or ""
@@ -479,6 +491,9 @@ def write_results(var_dir: Path, results: Iterable[Triaged]) -> Path:
             "triaged_at": now,
             "verdict": t.verdict,
             "score": t.score,
+            "role": t.posting.get("role") or "",
+            "match": t.match,
+            "match_parts": t.match_parts,
             "coverage": cov.fraction if cov else "0/0",
             "matched": cov.matched if cov else {},
             "required_gaps": sorted(t.required_gaps),

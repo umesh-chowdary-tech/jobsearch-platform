@@ -321,10 +321,24 @@ def superseded(ai: dict[str, Any], lead: str) -> bool:
             and ai.get("fit") in REREAD)
 
 
-def unread(blob: dict[str, Any], lead: str = "") -> list[dict[str, Any]]:
-    """Kept, still open, posted in the pool's window, and not judged under the
-    current rules - never, under an older PROMPT_VERSION, or by a model less
-    trusted than `lead`, the one ranking now.
+def floor_for(prof: Profile) -> int:
+    """The offline match score a posting needs for a model to read it
+    (scoring.AI_MIN, or the profile's scoring.ai_min)."""
+    from .scoring import ai_min
+    from .triage import load_profile
+    try:
+        return ai_min(load_profile(prof.dir))
+    except (OSError, ValueError):
+        from .scoring import AI_MIN
+        return AI_MIN
+
+
+def unread(blob: dict[str, Any], lead: str = "", floor: int = 0) -> list[dict[str, Any]]:
+    """Kept, still open, posted in the pool's window, at or above `floor` on
+    the offline match score, and not judged under the current rules - never,
+    under an older PROMPT_VERSION, or by a model less trusted than `lead`, the
+    one ranking now. A posting scored before the match score existed has none,
+    and is read.
 
     Order: what the weaker model called "strong" first - those are the ones
     acted on - then the never-read, then its "possible". Its "weak" stands
@@ -333,29 +347,31 @@ def unread(blob: dict[str, Any], lead: str = "") -> list[dict[str, Any]]:
         ai = p.get("ai") or {}
         return ai.get("prompt") != PROMPT_VERSION or (bool(lead) and superseded(ai, lead))
 
-    def order(p: dict[str, Any]) -> tuple[int, int]:
+    def order(p: dict[str, Any]) -> tuple[int, int, int]:
         ai = p.get("ai") or {}
         rank = 1
         if ai and lead and superseded(ai, lead):
             rank = {"strong": 0, "possible": 2}.get(ai.get("fit", ""), 1)
         elif ai.get("fit") == "weak":
             rank = 3                     # judged weak under older rules: last
-        return rank, -int(p.get("score", 0))
+        return rank, -int(p.get("match") or 0), -int(p.get("score", 0))
 
     out = [p for p in (blob.get("postings") or {}).values()
            if p.get("verdict") == "keep" and not p.get("closed_at") and within_window(p)
+           and (p.get("match") is None or int(p["match"]) >= floor)
            and stale(p) and int(p.get("ai_tries") or 0) < MAX_TRIES]
     return sorted(out, key=order)
 
 
-def sort_key(p: dict[str, Any]) -> tuple[int, int]:
-    """Model judgement first, keyword score as the tiebreak.
+def sort_key(p: dict[str, Any]) -> tuple[int, int, int]:
+    """Model judgement first, then the offline match score, then the keyword
+    score.
 
-    Postings the model never saw keep their keyword rank rather than sinking -
+    Postings the model never saw keep their offline rank rather than sinking -
     an un-ranked posting is not a bad posting.
     """
     ai = p.get("ai") or {}
-    return (-FIT_ORDER.get(ai.get("fit", ""), 0), -int(p.get("score", 0)))
+    return (-FIT_ORDER.get(ai.get("fit", ""), 0), -int(p.get("match") or 0), -int(p.get("score", 0)))
 
 
 def apply_to_results(prof: Profile, limit: int | None = None, llm: LLM | None = None,
@@ -393,7 +409,8 @@ def apply_to_results(prof: Profile, limit: int | None = None, llm: LLM | None = 
                                 and within_window(p)),
                                key=lambda p: -int(p.get("score", 0))))]
     else:
-        todo = unread(blob, lead=lead)
+        floor = floor_for(prof)
+        todo = unread(blob, lead=lead, floor=floor)
         first = first_llm or (_first_pass(prof, lead) if llm is None else None)
         if first is not None:
             passes = [(first, [p for p in todo if not superseded(p.get("ai") or {}, lead)]), (llm, None)]
@@ -405,7 +422,8 @@ def apply_to_results(prof: Profile, limit: int | None = None, llm: LLM | None = 
     for n, (model, top) in enumerate(passes):
         if top is None:                          # what the first pass left for the paid one
             blob = json.loads(path.read_text(encoding="utf-8"))
-            top = [p for p in unread(blob, lead=lead) if superseded(p.get("ai") or {}, lead)]
+            top = [p for p in unread(blob, lead=lead, floor=floor_for(prof))
+                   if superseded(p.get("ai") or {}, lead)]
         top = top[:limit] if limit else top
         if not top:
             continue
@@ -426,7 +444,7 @@ def apply_to_results(prof: Profile, limit: int | None = None, llm: LLM | None = 
         out["ok"] = True
     out["attribution"] = " + ".join(out["attribution"]) or "No AI involved"
     out["stopped"] = "; ".join(out["stopped"])
-    out["left"] = len(unread(json.loads(path.read_text(encoding="utf-8")), lead=lead))
+    out["left"] = len(unread(json.loads(path.read_text(encoding="utf-8")), lead=lead, floor=floor_for(prof)))
     return out
 
 

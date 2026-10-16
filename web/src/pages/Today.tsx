@@ -74,7 +74,7 @@ export function Today({ onCount }: { onCount: (n: number) => void }) {
         : t.caught_up === false
           ? <p className="empty">SwitchKaro is reading every job already open on the company boards it watches, against your
               profile. That takes a few minutes after you first save your profile; the matches show here, then ranked.</p>
-          : <p className="empty">Nothing strong or possible is waiting on you. New postings are checked a few times a day;
+          : <p className="empty">Nothing strong or possible is waiting on you. New postings are checked every two hours;
             every job kept for you is under <a href="#/jobs">Jobs</a>.</p>}
       {t.unread > 0 && (
         <p className="muted">

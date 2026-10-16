@@ -397,7 +397,7 @@ def test_a_cycle_that_ranks_runs_to_the_end(tmp_path, monkeypatch):
     monkeypatch.setattr(C, "default_fetcher", lambda v: None)
     monkeypatch.setattr(C, "watch_all", lambda f, v, b: W.WatchRun())
     monkeypatch.setattr(C, "sync_closed", lambda v, live: ([], []))
-    monkeypatch.setattr(C, "unread", lambda blob, lead="": [{"id": "1"}])
+    monkeypatch.setattr(C, "unread", lambda blob, lead="", floor=0: [{"id": "1"}])
     monkeypatch.setattr(C, "LLM", Key)
     monkeypatch.setattr(C, "apply_to_results", lambda prof, budget=None: {
         "ranked": 1, "left": 0, "attribution": "x via groq", "stopped": "time budget"})

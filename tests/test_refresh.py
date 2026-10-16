@@ -58,7 +58,7 @@ def test_refresh_re_triages_from_the_whole_text_and_leaves_what_it_cannot_fetch(
     report = triage_cli.refresh_results(root, fetcher=object(), say=lambda *_: None)
     stored = json.loads((root.var / "triage-results.json").read_text())["postings"]
     assert report["skipped"] == 1 and stored["gone-2"]["ai"]["fit"] == "strong"      # untouched
-    assert "zoho-1" not in stored                                                     # 10+ years: rejected
+    assert stored["zoho-1"]["verdict"] == "reject"          # 10+ years: rejected, kept as a marked record
     amazon = stored["amazon-3"]
     assert amazon["years_required"] == 3 and amazon["requirements"].startswith("Basic qualifications")
     assert amazon["ai"]["fit"] == "strong"            # carried over; the new prompt version re-reads it

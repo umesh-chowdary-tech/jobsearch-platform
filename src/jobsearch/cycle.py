@@ -28,7 +28,7 @@ from .http import default_fetcher
 from .llm import LLM
 from .models import utcnow
 from .profile import Profile, list_profiles, shared_var
-from .rank import apply_to_results, ranking_lead, unread
+from .rank import apply_to_results, floor_for, ranking_lead, unread
 from .triage import sync_closed, sync_pool
 from .triage_cli import run_triage
 from .watch import load_boards, posting_live, record_new, watch_all
@@ -258,7 +258,7 @@ def _for_profile(prof: Profile, run: _Run, budget: float, keys: dict[str, tuple[
     try:
         path = prof.var / "triage-results.json"
         waiting = len(unread(json.loads(path.read_text(encoding="utf-8")) if path.exists() else {},
-                             lead=ranking_lead(prof)))
+                             lead=ranking_lead(prof), floor=floor_for(prof)))
         if not waiting:
             run.parts.append(f"{tag} rank skipped nothing-unread")
         else:

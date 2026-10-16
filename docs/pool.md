@@ -16,7 +16,7 @@ simply reads everything open in the pool.
 
 | Path | What |
 |---|---|
-| `var/_shared/pool/<provider>__<slug>.json` | One file per board: a record per posting - title, place, link, `posted_at`, `first_seen`, `closed_at`. Written only when something on that board changed, so a quiet poll costs the database nothing. |
+| `var/_shared/pool/<provider>__<slug>.json` | One file per board: a record per posting - title, place, link, `role` (its kind of work, roles.py), `posted_at`, `first_seen`, `closed_at`. Written only when something on that board changed, so a quiet poll costs the database nothing. A long board name is shortened with a hash. |
 | `var/_shared/pool/text/<provider>__<slug>/<id>.json` | One description per file, written once. |
 
 Lever, Ashby, Amazon and Atlassian send descriptions with their lists, so those

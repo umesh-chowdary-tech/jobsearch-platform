@@ -18,6 +18,28 @@ interface Kit {
   links: string[];
 }
 
+const PART_LABEL: [string, string, number][] = [
+  ["skills", "Skills you can back", 45], ["gaps", "Required skills missing", 0], ["role", "Kind of work", 15],
+  ["place", "Place", 15], ["level", "Level", 15], ["fresh", "How new", 10],
+];
+
+/** The offline match score, and what made it - worked out before any AI. */
+function MatchParts({ score, parts }: { score: number; parts: Record<string, number> }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="small" style={{ marginTop: 8 }}>
+      <button className="quiet" aria-expanded={open} onClick={() => setOpen(!open)}>{score}% match {open ? "▴" : "▾"}</button>
+      {open && (
+        <ul className="muted" style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+          {PART_LABEL.filter(([k]) => k in parts).map(([k, label, max]) => (
+            <li key={k}>{label}: {parts[k]}{max ? ` of ${max}` : ""}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function CopyRow({ label, value }: { label: string; value: string }) {
   const toast = useToast();
   if (!value) return null;
@@ -122,6 +144,7 @@ export function Posting({ id }: { id: string }) {
       </div>
 
       {p.why && <div className="why">{p.why} <span className="muted">— {p.judged_by}</span></div>}
+      {p.match != null && p.verdict === "keep" && <MatchParts score={p.match} parts={p.match_parts} />}
       <div className="tags">
         {Object.keys(p.matched).map(k => <span key={k} className="pill c">{k}</span>)}
         {p.required_gaps.map(g => <span key={g} className="pill g" title="asked for, not backed">{g}</span>)}

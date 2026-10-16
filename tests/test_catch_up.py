@@ -68,7 +68,7 @@ def _cycle(prof, monkeypatch, live):
     monkeypatch.setattr(C, "load_boards", lambda v: [{"provider": "lever", "slug": "acme"}])
     monkeypatch.setattr(C, "default_fetcher", lambda v: None)
     monkeypatch.setattr(C, "watch_all", lambda f, v, b: W.WatchRun(boards=[board]))
-    monkeypatch.setattr(C, "unread", lambda blob, lead="": [])
+    monkeypatch.setattr(C, "unread", lambda blob, lead="", floor=0: [])
     def render(p):
         (p.var / "dashboard.html").write_text("x")
         return p.var / "dashboard.html"

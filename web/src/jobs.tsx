@@ -8,6 +8,15 @@ import { ago, Avatar, day, FitBadge, fresh, Icon, JobTags, useToast } from "./ui
 
 export const STAGES = ["new", "shortlisted", "applied", "interviewing", "offer", "closed", "skipped"];
 
+// The kinds of work a job title names (roles.py).
+export const ROLE_LABEL: Record<string, string> = {
+  backend: "Backend", frontend: "Frontend", fullstack: "Full stack", mobile: "Mobile", software: "Software",
+  ml: "ML / AI", data: "Data", devops: "DevOps / SRE", security: "Security", qa: "QA / Testing",
+  embedded: "Embedded", solutions: "Solutions / DevRel", support: "Support", management: "Management",
+  design: "Design", product: "Product", program: "Program", "non-tech": "Non-tech", other: "Other",
+};
+export const roleLabel = (r?: string) => ROLE_LABEL[r || "other"] || r || "Other";
+
 function laterText(l: Later | null): string {
   if (!l) return "";
   if (l.state === "someday") return "saved for later, no date";
@@ -41,7 +50,8 @@ export function JobRow({ row, actions, onChange, stagePicker }: {
     try { await post(`/api/postings/${encodeURIComponent(row.id)}/${path}`, body); toast(done); onChange(); }
     catch (e) { toast((e as Error).message); }
   };
-  const meta = [row.location, row.variant && "resume ready", laterText(row.later)].filter(Boolean).join(" · ");
+  const meta = [row.location, row.role && roleLabel(row.role), row.variant && "resume ready", laterText(row.later)]
+    .filter(Boolean).join(" · ");
   return (
     <div className="item">
       <div className="job-main">
@@ -53,6 +63,9 @@ export function JobRow({ row, actions, onChange, stagePicker }: {
             <FitBadge fit={row.fit} />
             {fresh(row.first_seen) && !row.closed && <span className="badge new" title={`First seen ${ago(row.first_seen)}`}>new</span>}
             {row.closed && <span className="badge closed">closed</span>}
+            {row.match != null && row.verdict === "keep" && (
+              <span className="badge" title="How well it matches your profile, worked out before any AI reads it">{row.match}% match</span>
+            )}
           </div>
           <div className="co">{row.company}{meta && <span className="muted"> · {meta}</span>}</div>
           <JobTags row={row} />

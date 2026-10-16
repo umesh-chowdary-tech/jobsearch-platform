@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { get } from "../api";
 import { AskCompany } from "../companies";
-import { JobRow, STAGES } from "../jobs";
+import { JobRow, roleLabel, STAGES } from "../jobs";
 import type { Row } from "../types";
 import { fresh, Icon } from "../ui";
 
@@ -16,13 +16,14 @@ const PAGE = 50;
 
 interface Filters {
   fit: string; stage: string; q: string; fav: boolean; later: boolean; fresh: boolean; closed: boolean;
-  sort: "match" | "newest";
+  sort: "match" | "newest"; role: string;
 }
 
 function fromQuery(q: URLSearchParams): Filters {
   return { fit: q.get("fit") || "any", stage: q.get("stage") || "open", q: q.get("q") || "",
            fav: q.get("fav") === "1", later: q.get("later") === "1", fresh: q.get("new") === "1",
-           closed: q.get("closed") === "1", sort: q.get("sort") === "newest" ? "newest" : "match" };
+           closed: q.get("closed") === "1", sort: q.get("sort") === "newest" ? "newest" : "match",
+           role: q.get("role") || "any" };
 }
 
 function toHash(f: Filters): string {
@@ -35,6 +36,7 @@ function toHash(f: Filters): string {
   if (f.fresh) p.set("new", "1");
   if (f.closed) p.set("closed", "1");
   if (f.sort !== "match") p.set("sort", f.sort);
+  if (f.role !== "any") p.set("role", f.role);
   const s = p.toString();
   return `#/jobs${s ? `?${s}` : ""}`;
 }
@@ -48,6 +50,7 @@ function passes(r: Row, f: Filters, words: string[]): boolean {
   if (f.fav && !r.favorite) return false;
   if (f.later && !r.later) return false;
   if (f.fresh && !fresh(r.first_seen)) return false;
+  if (f.role !== "any" && (r.role || "other") !== f.role) return false;
   if (words.length) {
     const text = `${r.title} ${r.company} ${r.location} ${r.skills.join(" ")}`.toLowerCase();
     if (!words.every(w => text.includes(w))) return false;
@@ -76,7 +79,9 @@ export function Jobs({ query }: { query: URLSearchParams }) {
   const base = kept.filter(r => passes(r, f, words));
   const count = (fit: string) => (fit === "any" ? base : base.filter(r => fitOf(r) === fit)).length;
   let list = f.fit === "any" ? base : base.filter(r => fitOf(r) === f.fit);
-  if (f.sort === "newest") list = [...list].sort((a, b) => String(b.first_seen || "").localeCompare(String(a.first_seen || "")));
+  const posted = (r: Row) => String(r.posted_at || r.first_seen || "");
+  if (f.sort === "newest") list = [...list].sort((a, b) => posted(b).localeCompare(posted(a)));
+  const roles = [...new Set(kept.map(r => r.role || "other"))].sort((a, b) => roleLabel(a).localeCompare(roleLabel(b)));
   const recent = kept.filter(r => fresh(r.first_seen) && !r.closed).length;
 
   if (!kept.length) {
@@ -86,7 +91,7 @@ export function Jobs({ query }: { query: URLSearchParams }) {
         <div className="card stack">
           <p><b>No jobs kept for you yet.</b> If you saved your profile in the last few minutes, SwitchKaro is still reading
             what's open on the company boards - check back shortly.</p>
-          <p className="small muted">Company job boards are checked a few times a day. A job is kept for you when it's in a city
+          <p className="small muted">Company job boards are checked every two hours. A job is kept for you when it's in a city
             you chose (or remote), at your level, and asks for skills your profile backs. If nothing shows up within a day,
             check what you're looking for on your <a href="#/profile">Profile</a>.</p>
         </div>
@@ -117,6 +122,12 @@ export function Jobs({ query }: { query: URLSearchParams }) {
           <select aria-label="Stage" value={f.stage} onChange={e => set({ stage: e.target.value })}>
             {STAGE_CHOICES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
+          {roles.length > 1 && (
+            <select aria-label="Kind of work" value={f.role} onChange={e => set({ role: e.target.value })}>
+              <option value="any">Any kind of work</option>
+              {roles.map(r => <option key={r} value={r}>{roleLabel(r)}</option>)}
+            </select>
+          )}
           <select aria-label="Order" value={f.sort} onChange={e => set({ sort: e.target.value as Filters["sort"] })}>
             <option value="match">Best match first</option>
             <option value="newest">Newest first</option>

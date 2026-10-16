@@ -1,6 +1,7 @@
 """The `triage` subcommand. Kept out of cli.py so that file stays readable."""
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -12,6 +13,8 @@ from dataclasses import dataclass
 from . import pool
 from .http import default_fetcher
 from .profile import Profile
+from .roles import role_of, skipped_families
+from .scoring import match, person_roles
 from .providers import DETAIL_PROVIDERS, fetch_details, probe
 from .skills import load_index
 from .triage import (
@@ -36,6 +39,15 @@ class _Ephemeral:
     """A one-off run: results are shown, but nothing is marked as triaged."""
 
     all: bool = True
+
+
+@dataclass
+class _Refresh:
+    """Every open posting again, after the profile changed: what is read is
+    remembered afresh, and the gap ledger and the tallies are counted anew."""
+
+    all: bool = True
+    quiet: bool = False
 
 
 def _load_new_postings(var: Path) -> list[dict[str, Any]]:
@@ -71,6 +83,36 @@ def _remember(var: Path, ids: set[str]) -> None:
     _seen_path(var).write_text(json.dumps(sorted(ids), indent=0), encoding="utf-8")
 
 
+# What a verdict depends on. When any of these files changes, every open
+# posting in the pool is read again for this person - their own cache of
+# verdicts no longer says what they would get today.
+PROFILE_FILES = ("search-profile.yaml", "skills.yaml", "master-store.yaml")
+FINGERPRINT = "triage-profile.json"
+
+
+def profile_fingerprint(prof: Profile) -> str:
+    h = hashlib.sha256()
+    for name in PROFILE_FILES:
+        f = prof.file(name)
+        h.update(name.encode())
+        h.update(f.read_bytes() if f.exists() else b"")
+    return h.hexdigest()[:16]
+
+
+def _fingerprint_changed(prof: Profile) -> bool:
+    try:
+        was = json.loads((prof.var / FINGERPRINT).read_text(encoding="utf-8")).get("fp")
+    except (OSError, json.JSONDecodeError, AttributeError):
+        was = None
+    return was != profile_fingerprint(prof)
+
+
+def _save_fingerprint(prof: Profile) -> None:
+    from .models import utcnow
+    (prof.var / FINGERPRINT).write_text(json.dumps({"fp": profile_fingerprint(prof), "at": utcnow()}),
+                                        encoding="utf-8")
+
+
 def _board_postings(var: Path, board: str) -> list[dict[str, Any]]:
     """Every posting live on one board, right now. `var` is the shared state.
 
@@ -87,6 +129,14 @@ def _board_postings(var: Path, board: str) -> list[dict[str, Any]]:
         {"board": board, "company": company, "first_seen": None, **post.to_dict()}
         for post in p.postings
     ]
+
+
+def _score(profile: dict[str, Any], store: dict[str, Any], results: list) -> None:
+    """The role and the offline match score (scoring.py), on each result."""
+    mine, skipped = person_roles(store), skipped_families(profile)
+    for t in results:
+        t.posting["role"] = t.posting.get("role") or role_of(t.title)
+        t.match, t.match_parts = match(t, profile, mine, skipped=skipped)
 
 
 def refresh_results(prof: Profile, fetcher: Any = None, say=print) -> dict[str, int]:
@@ -125,6 +175,7 @@ def refresh_results(prof: Profile, fetcher: Any = None, say=print) -> dict[str, 
         fresh.append({k: rec.get(k) for k in ("id", "title", "company", "location", "url", "board")}
                      | {"description": text})
     results = [triage_posting(index, profile, p) for p in fresh]
+    _score(profile, yaml.safe_load(prof.file("master-store.yaml").read_text(encoding="utf-8")) or {}, results)
     write_results(var, results)
     report = {"refreshed": len(results), "skipped": skipped,
               "kept": sum(1 for t in results if t.verdict not in (REJECT, NO_MATCH)),
@@ -218,6 +269,7 @@ def run_triage(prof: Profile, args) -> int:
     profile = load_profile(prof.dir)
     store = yaml.safe_load(prof.file("master-store.yaml").read_text(encoding="utf-8")) or {}
 
+    from_pool = False
     if getattr(args, "postings", None) is not None:
         postings = args.postings
     elif getattr(args, "board", None):
@@ -231,6 +283,12 @@ def run_triage(prof: Profile, args) -> int:
         # Everything open on the boards and posted in the window - the pool
         # has it all, so a person who joins today reads what is already open.
         postings = pool.open_postings(prof.shared)
+        from_pool = True
+        if _fingerprint_changed(prof) and _already(var):
+            # The profile changed since the last read: read it all again.
+            if not getattr(args, "quiet", False):
+                print("profile changed since the last triage - reading every open posting again")
+            args = _Refresh(all=True, quiet=getattr(args, "quiet", False))
     else:
         postings = _load_new_postings(prof.shared)      # before the pool existed
     if not postings:
@@ -272,13 +330,19 @@ def run_triage(prof: Profile, args) -> int:
             p.update(pool.details(prof.shared, fetcher, p))
 
     results = early + [triage_posting(index, profile, p) for p in rest]
+    _score(profile, store, results)
     kept = [t for t in results if t.verdict not in (REJECT, NO_MATCH)]
-    kept.sort(key=lambda t: -t.score)
+    kept.sort(key=lambda t: (-t.match, -t.score))
 
+    refresh = isinstance(args, _Refresh)
+    if refresh:
+        (var / "skill-gaps.json").unlink(missing_ok=True)      # counted again, from all of it
     path = update_gap_ledger(var, index, results)
-    write_results(var, results)
-    if not args.all:
-        _remember(var, done | {p.get("id") for p in queue if p.get("id")})
+    write_results(var, results, fresh_tally=refresh)
+    if refresh or not args.all:
+        _remember(var, (set() if refresh else done) | {p.get("id") for p in queue if p.get("id")})
+    if from_pool:
+        _save_fingerprint(prof)
 
     # A scheduled run has no one reading stdout. It returns the count instead,
     # and the cycle logs one line.
