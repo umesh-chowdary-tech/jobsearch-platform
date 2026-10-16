@@ -196,6 +196,17 @@ def test_within_the_cap_is_kept(profile):
     assert seniority_verdict("Engineer", "4+ years of experience", profile)[0] == KEEP
 
 
+def test_a_skill_the_person_lacks_never_rejects_on_its_own(index, profile):
+    """Banned core requirements are gone from pass 1: a posting that mainly
+    asks for something the person can't claim is a gap to rank, not a reject.
+    A profile saved before then may still carry the old list; it is ignored."""
+    old = dict(profile, reject_if_core_requirement=["Kafka", "Angular"])
+    t = triage_posting(index, old, posting(
+        description="Requirements:\n- Kafka and Angular in production\n- Python"))
+    assert t.verdict != REJECT
+    assert not any("core requirement" in r for r in t.reasons)
+
+
 @pytest.mark.parametrize("title", ["Account Executive, LATAM", "Sales Development Rep",
                                    "Senior Recruiter", "Data Operations Specialist"])
 def test_non_engineering_titles_are_rejected(title, profile):

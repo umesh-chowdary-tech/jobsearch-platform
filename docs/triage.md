@@ -19,8 +19,6 @@ Kills most postings at zero cost:
   is out.
 - **Seniority** — `years_experience` and `max_years_required` from the profile: anything
   asking for more years than the cap, or with a title in `reject_titles`, is out.
-- **Banned core requirements** — a posting whose *primary* ask is in the profile's
-  `reject_if_core_requirement` is out. Nothing backs it and nothing honestly will.
 
 ### Pass 2 — coverage scoring. Deterministic, free.
 
@@ -94,8 +92,8 @@ no gap ledger, no tallies. It is a dry run that lists what would change until it
 `--write`. It changes `verdict` and `reasons` and nothing else, so the `ai` judgement
 survives. A posting that now fails is marked `reject` rather than deleted, because
 outreach may still refer to it by id. Pass 2 is not re-run: scoring a 2000-character
-excerpt would under-count every posting, so a change to `reject_if_core_requirement`
-still needs a re-triage.
+excerpt would under-count every posting, so a change to `skills.yaml` still needs a
+re-triage.
 
 **The excerpt can prove a pass, not always a fail.** Pass 1 read the whole description.
 A stored record keeps an excerpt, plus the years pass 1 found in the full text. When a

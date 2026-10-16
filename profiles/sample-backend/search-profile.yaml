@@ -32,10 +32,6 @@ seniority:
   # flagged.
   flag_titles: [intern, internship, trainee, fresher, graduate, apprentice]
 
-# A posting whose PRIMARY ask is one of these is rejected outright - nothing in
-# the store backs them. See skills.yaml `banned`.
-reject_if_core_requirement: [Kafka, Angular, Salesforce]
-
 # An ALLOWLIST on the title, checked after the blocklist below. Every entry
 # names the CRAFT, not a function or a domain: "analyst" or "platform" alone
 # would let in Credit Risk Analyst and Platform Partnerships Manager.
