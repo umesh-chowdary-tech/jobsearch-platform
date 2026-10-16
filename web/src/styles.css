@@ -127,6 +127,7 @@ pre.box { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-si
 @keyframes beat { 50% { opacity: .35; } }
 .health > span:not(.dot) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .health .ai-queue { color: var(--accent); }
+.health .ai-queue .short { display: none; }
 .top-actions { display: flex; gap: 8px; align-items: center; margin-left: auto; }
 .view { padding: 28px 32px 120px; max-width: 1080px; }
 
@@ -377,6 +378,10 @@ code.addr { font-size: 13px; padding: 6px 10px; border-radius: 8px; background: 
 
 /* ── phones: the sidebar becomes a tab bar along the bottom ────────────── */
 @media (max-width: 760px) {
+  /* The AI's count, whole, ahead of a cut-short "Jobs updated". */
+  .health .ai-queue { flex-shrink: 0; }
+  .health .ai-queue .long { display: none; }
+  .health .ai-queue .short { display: inline; }
   .shell { grid-template-columns: 1fr; }
   .side { position: fixed; top: auto; left: 0; right: 0; bottom: 0; height: auto; z-index: 6; flex-direction: row;
           overflow-x: auto; padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); }
