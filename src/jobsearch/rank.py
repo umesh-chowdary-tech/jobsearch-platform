@@ -470,11 +470,15 @@ def apply_to_results(prof: Profile, limit: int | None = None, llm: LLM | None = 
     start = time.monotonic()
     out: dict[str, Any] = {"ok": False, "attribution": [], "ranked": 0, "considered": 0,
                            "unranked": [], "failures": [], "stopped": [], "left": 0}
+    first_capped = False
     for n, (model, top) in enumerate(passes):
         if top is None:                          # what the first pass left for the paid one
             blob = json.loads(path.read_text(encoding="utf-8"))
+            # When the free model hit its limit, the lead reads the ones it
+            # never got to as well, within its own caps - otherwise a day's
+            # postings wait for tomorrow's free tokens.
             top = [p for p in unread(blob, lead=lead, floor=floor_for(prof))
-                   if superseded(p.get("ai") or {}, lead)]
+                   if first_capped or superseded(p.get("ai") or {}, lead)]
         top = top[:limit] if limit else top
         if not top:
             continue
@@ -490,7 +494,13 @@ def apply_to_results(prof: Profile, limit: int | None = None, llm: LLM | None = 
         if res["ranked"] and res["attribution"] not in out["attribution"]:
             out["attribution"].append(res["attribution"])
         if res["stopped"]:
-            out["stopped"].append(res["stopped"])
+            capped = res["stopped"] != "time budget" and "stopped by you" not in res["stopped"]
+            if n == 0 and len(passes) > 1 and capped:
+                # Not the run's reason to stop: the lead carries on. Kept as a note.
+                first_capped = True
+                out["first_stopped"] = res["stopped"]
+            else:
+                out["stopped"].append(res["stopped"])
     if not out["considered"]:
         out["ok"] = True
     out["attribution"] = " + ".join(out["attribution"]) or "No AI involved"
