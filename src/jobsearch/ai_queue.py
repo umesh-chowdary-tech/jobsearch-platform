@@ -173,7 +173,13 @@ def drain(root: Path, profiles: Iterable[Profile] | None = None,
                 out["ranked"] += ranked
                 left = int(res.get("left") or 0)
                 done = int(doc.get("done") or 0) + ranked
-                stopped = str(res.get("stopped") or "")
+                # Two passes (Groq first, then the lead) each give their own
+                # reason, joined with "; ". Only a limit among them ends a turn
+                # early; "time budget" alone just means the turn is over.
+                reasons = [x.strip() for x in str(res.get("stopped") or "").split(";") if x.strip()]
+                stopped = "; ".join(x for x in reasons if x != "time budget")
+                if reasons and not stopped:
+                    stopped = "time budget"
                 if not left or (not res.get("considered") and not stopped):
                     _save(prof, state="done", done=done, left=0, total=max(int(doc.get("total") or 0), done),
                           by=res.get("attribution"), why="", until=None)
