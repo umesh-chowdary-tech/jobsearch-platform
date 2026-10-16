@@ -8,6 +8,7 @@ from .assemble import build, load_library, load_store, save_library
 from .latex import (compile_pdf, latex_to_text, pdf_pages, pdf_text, render_latex,
                     text_layer_problems)
 from .llm import LLM
+from .pool import within_window
 from .profile import Profile
 from .render import (check_text, parse_check, posting_spelling, render_html,
                      render_text, write_outputs)
@@ -42,7 +43,7 @@ def run_assemble(prof: Profile, args) -> int:
     else:
         from .rank import sort_key
         keeps = [p for p in postings.values()
-                 if p.get("verdict") == "keep" and not p.get("closed_at")]
+                 if p.get("verdict") == "keep" and not p.get("closed_at") and within_window(p)]
         keeps.sort(key=sort_key)
         chosen = keeps[: args.top]
 

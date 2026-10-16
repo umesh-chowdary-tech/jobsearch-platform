@@ -1,7 +1,8 @@
 # Triage — ranking postings, and counting what's missing
 
 Between the watcher and the assembler. It runs once per profile, against that person's
-`search-profile.yaml` and `skills.yaml`, over the shared queue of new postings.
+`search-profile.yaml` and `skills.yaml`, over the shared pool (docs/pool.md): every open
+posting from the last 60 days that this profile has not read yet.
 
 Not every new posting deserves a tailored resume. Most will be in the wrong city, at the
 wrong level, or on the wrong stack. Triage ranks, explains itself, and stops — **it never

@@ -107,8 +107,8 @@ class BoardWatch:
     added: list[Posting] = field(default_factory=list)
     removed: list[str] = field(default_factory=list)
     total: int = 0
-    # Everything open on the board this run - in memory only, for a profile
-    # catching up (cycle.py). The baseline file keeps ids, nothing more.
+    # Everything open on the board this run, for the pool (pool.update).
+    # The baseline file keeps ids, nothing more.
     current: list[Posting] = field(default_factory=list, repr=False)
     error: str | None = None
 
@@ -167,12 +167,6 @@ class WatchRun:
     def added(self) -> list[tuple[BoardWatch, Posting]]:
         return [(b, post) for b in self.boards for post in b.added]
 
-    def live(self) -> list[dict[str, Any]]:
-        """Every posting open on the boards this run read, shaped like the
-        queue's records. No first_seen: when it was posted isn't known."""
-        return [{"first_seen": None, "board": b.key, "company": b.company, **post.to_dict()}
-                for b in self.boards if b.status in (SEEDED, POLLED) for post in b.current]
-
     def summary(self) -> dict[str, int]:
         return {
             "boards": len(self.boards),
@@ -222,8 +216,12 @@ def watch_all(
 
 
 def record_new(var_dir: Path, run: WatchRun) -> Path:
-    """Append new postings for triage to consume. Append-only: a posting appears
-    here once, the run it was first seen."""
+    """Fold the run into the shared pool (pool.py), and append what is new to
+    the queue - a log of arrivals, one line each, the run a posting was first
+    seen. Descriptions live in the pool, not here: the queue is never pruned,
+    and it is copied to the database whole."""
+    from .pool import update
+    update(var_dir, run.boards)
     path = Path(var_dir) / "new-postings.jsonl"
     path.parent.mkdir(parents=True, exist_ok=True)
     stamp = utcnow()
@@ -233,6 +231,6 @@ def record_new(var_dir: Path, run: WatchRun) -> Path:
                 "first_seen": stamp,
                 "board": board.key,
                 "company": board.company,
-                **post.to_dict(),
+                **{k: v for k, v in post.to_dict().items() if k != "description"},
             }) + "\n")
     return path

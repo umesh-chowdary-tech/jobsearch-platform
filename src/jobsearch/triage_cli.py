@@ -9,6 +9,7 @@ import yaml
 
 from dataclasses import dataclass
 
+from . import pool
 from .http import default_fetcher
 from .profile import Profile
 from .providers import DETAIL_PROVIDERS, fetch_details, probe
@@ -226,8 +227,12 @@ def run_triage(prof: Profile, args) -> int:
         postings = _board_postings(prof.shared, args.board)
         print(f"{len(postings)} posting(s) live on {args.board}")
         args = _Ephemeral(all=True)          # never touch the triaged-ids state
+    elif pool.exists(prof.shared):
+        # Everything open on the boards and posted in the window - the pool
+        # has it all, so a person who joins today reads what is already open.
+        postings = pool.open_postings(prof.shared)
     else:
-        postings = _load_new_postings(prof.shared)
+        postings = _load_new_postings(prof.shared)      # before the pool existed
     if not postings:
         if getattr(args, "quiet", False):
             return 0
@@ -252,18 +257,19 @@ def run_triage(prof: Profile, args) -> int:
     gone = {id(r.posting) for r in early}
     rest = [p for p in queue if id(p) not in gone]
 
-    # Greenhouse and Workday withhold descriptions from their list endpoints
-    # (Workday the full location list too), so fetch them here - once, for new
-    # postings that could still pass.
-    need = [p for p in rest if not p.get("description")
-            and str(p.get("board", "")).split(":", 1)[0] in DETAIL_PROVIDERS]
+    # The pool keeps each description once, for everyone. Greenhouse and
+    # Workday withhold theirs from the list (Workday the full location list
+    # too), so the first person whose filters let a posting through has it
+    # fetched; everyone after reads the pool's copy.
+    need = [p for p in rest if not p.get("description")]
     if need:
-        if not getattr(args, "quiet", False):
-            print(f"fetching {len(need)} description(s) ...")
-        fetcher = default_fetcher(prof.shared)
+        fetches = sum(1 for p in need if str(p.get("board", "")).split(":", 1)[0] in DETAIL_PROVIDERS
+                      and not pool.load_text(prof.shared, str(p.get("board")), str(p.get("id"))))
+        if fetches and not getattr(args, "quiet", False):
+            print(f"fetching {fetches} description(s) ...")
+        fetcher = default_fetcher(prof.shared) if fetches else None
         for p in need:
-            provider, slug = p["board"].split(":", 1)
-            p.update(fetch_details(fetcher, provider, slug, p))
+            p.update(pool.details(prof.shared, fetcher, p))
 
     results = early + [triage_posting(index, profile, p) for p in rest]
     kept = [t for t in results if t.verdict not in (REJECT, NO_MATCH)]

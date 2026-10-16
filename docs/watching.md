@@ -59,7 +59,8 @@ same bug that bit `boards.json` in Module 1 and had to be fixed there by merging
 |---|---|
 | `var/_shared/boards.json` | Read. Written by discovery. |
 | `var/_shared/seen/<provider>__<slug>.json` | The baseline: IDs, `poll_count`, `seeded_at`, `last_poll` |
-| `var/_shared/new-postings.jsonl` | Append-only. What triage consumes, for every profile. A posting appears once; each profile records in its own `triaged.json` which ones it has read. |
+| `var/_shared/new-postings.jsonl` | Append-only log of arrivals, one line per posting the run it was first seen - no descriptions. |
+| `var/_shared/pool/` | Every open and closed posting, and descriptions kept once - what triage reads (docs/pool.md). Each profile records in its own `triaged.json` which postings it has read. |
 
 Resetting one board is `rm var/_shared/seen/lever__cred.json` — it re-seeds on the next
 poll and reports nothing.

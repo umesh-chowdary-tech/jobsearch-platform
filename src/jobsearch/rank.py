@@ -24,6 +24,7 @@ import yaml
 
 from .busy import stop_requested
 from .llm import LLM, Answer
+from .pool import within_window
 from .profile import Profile
 
 FIT_ORDER = {"strong": 3, "possible": 2, "weak": 1}
@@ -321,9 +322,9 @@ def superseded(ai: dict[str, Any], lead: str) -> bool:
 
 
 def unread(blob: dict[str, Any], lead: str = "") -> list[dict[str, Any]]:
-    """Kept, still open, and not judged under the current rules - never, under
-    an older PROMPT_VERSION, or by a model less trusted than `lead`, the one
-    ranking now.
+    """Kept, still open, posted in the pool's window, and not judged under the
+    current rules - never, under an older PROMPT_VERSION, or by a model less
+    trusted than `lead`, the one ranking now.
 
     Order: what the weaker model called "strong" first - those are the ones
     acted on - then the never-read, then its "possible". Its "weak" stands
@@ -342,7 +343,7 @@ def unread(blob: dict[str, Any], lead: str = "") -> list[dict[str, Any]]:
         return rank, -int(p.get("score", 0))
 
     out = [p for p in (blob.get("postings") or {}).values()
-           if p.get("verdict") == "keep" and not p.get("closed_at")
+           if p.get("verdict") == "keep" and not p.get("closed_at") and within_window(p)
            and stale(p) and int(p.get("ai_tries") or 0) < MAX_TRIES]
     return sorted(out, key=order)
 
@@ -388,7 +389,8 @@ def apply_to_results(prof: Profile, limit: int | None = None, llm: LLM | None = 
     if reread:
         # A closed posting is not worth a model call, however well it fits.
         passes = [(llm, sorted((p for p in (blob.get("postings") or {}).values()
-                                if p.get("verdict") == "keep" and not p.get("closed_at")),
+                                if p.get("verdict") == "keep" and not p.get("closed_at")
+                                and within_window(p)),
                                key=lambda p: -int(p.get("score", 0))))]
     else:
         todo = unread(blob, lead=lead)

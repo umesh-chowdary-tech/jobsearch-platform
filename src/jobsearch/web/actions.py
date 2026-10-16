@@ -61,9 +61,13 @@ def _rank(prof: Profile, o: dict) -> int:
 
 def _assemble(prof: Profile, o: dict) -> int:
     from ..assemble_cli import run_assemble
+    from .state import check_open
     if not o.get("posting"):
         print("assemble needs a posting")
         return 2
+    if check_open(prof, str(o["posting"])) is False:
+        print("This job has closed on the company's board - no resume built for it.")
+        return 1
     return run_assemble(prof, _ns(posting=str(o["posting"]), top=1,
                                   no_model=bool(o.get("no_model")), no_pdf=False))
 

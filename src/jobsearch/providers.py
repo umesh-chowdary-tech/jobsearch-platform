@@ -43,7 +43,9 @@ def parse_greenhouse(payload: Any) -> list[Posting]:
                 title=_s(j.get("title")),
                 location=_s((j.get("location") or {}).get("name")),
                 url=_s(j.get("absolute_url")),
-                updated_at=j.get("updated_at"),
+                # updated_at moves whenever the company touches its board -
+                # every posting at once - so it says nothing about age.
+                updated_at=j.get("first_published") or j.get("updated_at"),
             )
         )
     return out

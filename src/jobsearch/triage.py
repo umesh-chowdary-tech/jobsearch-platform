@@ -12,12 +12,14 @@ import re
 import tempfile
 from collections import Counter
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
 import yaml
 
 from .models import utcnow
+from .pool import SHRINK_DAYS, posted_day
 from .skills import CORE, INCIDENTAL, SCOPED, UNBACKED, WORKING, SkillIndex
 
 REJECT = "reject"     # failed a hard filter: wrong function, place or level
@@ -452,6 +454,9 @@ def write_results(var_dir: Path, results: Iterable[Triaged]) -> Path:
             # When the watcher first saw it, kept across re-triage: a recheck
             # reads the board again and has no stamp of its own.
             "first_seen": t.posting.get("first_seen") or previous.get("first_seen"),
+            # What the board says; the pool's age window counts from it.
+            "posted_at": (posted_day(t.posting.get("posted_at")) or posted_day(t.posting.get("updated_at"))
+                          or previous.get("posted_at")),
             "title": t.title,
             "company": t.company,
             "location": t.posting.get("location", ""),
@@ -691,6 +696,47 @@ def sync_closed(
     if closed or reopened:
         _write_json_atomic(path, blob)
     return closed, reopened
+
+
+def mark_closed(var_dir: Path, pid: str) -> bool:
+    """One posting its board has just said is gone (pool.check_live)."""
+    path = Path(var_dir) / "triage-results.json"
+    if not path.exists():
+        return False
+    blob = json.loads(path.read_text(encoding="utf-8"))
+    rec = (blob.get("postings") or {}).get(str(pid))
+    if rec is None or rec.get("closed_at"):
+        return False
+    rec["closed_at"] = utcnow()
+    _write_json_atomic(path, blob)
+    return True
+
+
+def sync_pool(var_dir: Path, posted: Callable[[str, str], str | None],
+              now: datetime | None = None, days: int = SHRINK_DAYS) -> dict[str, int]:
+    """Two chores against the shared pool, in one write. A record made before
+    the pool kept dates takes its posting date from the pool. A posting closed
+    more than `days` ago keeps its verdict and the model's judgement, and
+    loses its description excerpt - the pool drops its own copy then too."""
+    path = Path(var_dir) / "triage-results.json"
+    if not path.exists():
+        return {"dated": 0, "shrunk": 0}
+    blob = json.loads(path.read_text(encoding="utf-8"))
+    cut = ((now or datetime.now(timezone.utc)) - timedelta(days=days)).isoformat(timespec="seconds")
+    dated = shrunk = 0
+    for pid, rec in (blob.get("postings") or {}).items():
+        if not rec.get("posted_at"):
+            day = posted(str(rec.get("board") or ""), pid)
+            if day:
+                rec["posted_at"] = day
+                dated += 1
+        if rec.get("closed_at") and rec["closed_at"] <= cut and ("description" in rec or "requirements" in rec):
+            rec.pop("description", None)
+            rec.pop("requirements", None)
+            shrunk += 1
+    if dated or shrunk:
+        _write_json_atomic(path, blob)
+    return {"dated": dated, "shrunk": shrunk}
 
 
 def _write_json_atomic(path: Path, blob: Any) -> None:
