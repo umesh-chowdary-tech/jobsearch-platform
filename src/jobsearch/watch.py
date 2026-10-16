@@ -215,6 +215,30 @@ def watch_all(
     return run
 
 
+def _compact_queue(path: Path) -> None:
+    """Once: drop the descriptions a queue written before the pool still
+    carries - megabytes copied to the database whole on every cycle. The
+    pool keeps them now. A marker says it is done, so the file is not read
+    whole on every run after."""
+    marker = path.with_name(".queue-compacted")
+    if marker.exists() or not path.exists():
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text(utcnow(), encoding="utf-8")
+        return
+    lines = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        try:
+            rec = json.loads(line)
+        except json.JSONDecodeError:
+            continue                      # a torn line: nothing to keep
+        rec.pop("description", None)
+        lines.append(json.dumps(rec))
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text("".join(f"{x}\n" for x in lines), encoding="utf-8")
+    os.replace(tmp, path)
+    marker.write_text(utcnow(), encoding="utf-8")
+
+
 def record_new(var_dir: Path, run: WatchRun) -> Path:
     """Fold the run into the shared pool (pool.py), and append what is new to
     the queue - a log of arrivals, one line each, the run a posting was first
@@ -224,6 +248,7 @@ def record_new(var_dir: Path, run: WatchRun) -> Path:
     update(var_dir, run.boards)
     path = Path(var_dir) / "new-postings.jsonl"
     path.parent.mkdir(parents=True, exist_ok=True)
+    _compact_queue(path)
     stamp = utcnow()
     with path.open("a", encoding="utf-8") as fh:
         for board, post in run.added:

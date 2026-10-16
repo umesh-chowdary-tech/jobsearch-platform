@@ -131,6 +131,21 @@ def test_the_queue_no_longer_carries_descriptions(shared):
     assert pool.load_text(shared, "lever:acme", "1")["description"] == "long text"
 
 
+def test_a_queue_from_before_the_pool_loses_its_descriptions_once(shared):
+    q = shared / "new-postings.jsonl"
+    q.write_text(json.dumps({"id": "1", "board": "lever:acme", "description": "x" * 5000}) + "\n"
+                 + '{"id": "2", "board": "lever:ac' + "\n", encoding="utf-8")          # a torn line
+    W.record_new(shared, W.WatchRun(boards=[board(W.POLLED, [P("3")], added=[P("3")])]))
+    lines = [json.loads(x) for x in q.read_text(encoding="utf-8").splitlines()]
+    assert [x["id"] for x in lines] == ["1", "3"] and not any("description" in x for x in lines)
+    assert (shared / ".queue-compacted").exists()
+    # Done once: a line written later by an old copy is left alone.
+    with q.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps({"id": "4", "description": "y"}) + "\n")
+    W.record_new(shared, W.WatchRun(boards=[]))
+    assert "description" in q.read_text(encoding="utf-8")
+
+
 # ── descriptions, fetched once ───────────────────────────────────────────────
 
 def test_a_description_is_fetched_once_for_everyone(shared, monkeypatch):
