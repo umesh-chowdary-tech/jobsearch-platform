@@ -75,6 +75,21 @@ def test_it_reads_until_nothing_is_left(prof, monkeypatch, keyed):
     assert Q.pending(prof) == 0
 
 
+def test_two_passes_out_of_time_is_a_turn_over_not_a_pause(prof, monkeypatch, keyed):
+    """On the service Groq reads first and Claude second; both out of time for
+    the turn came back as "time budget; time budget", and the queue paused
+    for the day after one turn."""
+    _results(prof, 8)
+    res, fake, slept = _drain(prof, monkeypatch, [(4, "time budget; time budget"), (4, "")])
+    assert res["ranked"] == 8 and fake.calls == 2 and not slept and Q.status(prof)["state"] == "done"
+
+
+def test_a_limit_among_two_reasons_still_counts(prof, monkeypatch, keyed):
+    _results(prof, 8)
+    res, fake, _ = _drain(prof, monkeypatch, [(4, "time budget; Claude: AI is paused on the admin page")])
+    assert fake.calls == 1 and Q.status(prof)["why"] == "Claude: AI is paused on the admin page"
+
+
 def test_a_short_rate_limit_is_waited_out(prof, monkeypatch, keyed):
     _results(prof, 6)
     res, fake, slept = _drain(prof, monkeypatch,

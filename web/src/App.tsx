@@ -112,6 +112,8 @@ function Shell({ me, onMe, onSignOut }: { me: Me; onMe: (m: Me) => void; onSignO
   const queueText = !q ? "" : q.state === "running"
     ? `AI reading your jobs ${q.done ?? 0}/${q.total ?? 0}`
     : `AI paused${q.until ? `, back ${inTime(q.until)}` : ""}`;
+  // On a phone the bar has room for a few characters only.
+  const queueShort = !q ? "" : q.state === "running" ? `AI ${q.done ?? 0}/${q.total ?? 0}` : "AI paused";
   const queueTitle = !q ? "" : q.state === "running"
     ? `The AI is reading your new jobs in the background, four at a time: ${q.done ?? 0} of ${q.total ?? 0} done. You can keep using the app.`
     : `The AI stopped reading for now: ${q.why || "a limit was reached"}. It carries on by itself.`;
@@ -181,7 +183,11 @@ function Shell({ me, onMe, onSignOut }: { me: Me; onMe: (m: Me) => void; onSignO
           <span className="health">
             <span className={`dot ${health?.busy ? "busy" : health?.last_cycle ? "ok" : ""}`} />
             <span>{health?.busy ? "Updating jobs…" : health?.last_cycle ? `Jobs updated ${ago(health.last_cycle.at)}` : "Jobs not updated yet"}</span>
-            {q && <span className="ai-queue" title={queueTitle} aria-live="polite"> · {queueText}</span>}
+            {q && (
+              <span className="ai-queue" title={queueTitle} aria-live="polite">
+                <span className="long"> · {queueText}</span><span className="short">{queueShort}</span>
+              </span>
+            )}
           </span>
           <div className="top-actions">
             {minor.length > 0 && (
