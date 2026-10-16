@@ -160,11 +160,12 @@ class Tools:
     def jobs_to_rank(self, limit: int = 8) -> dict[str, Any]:
         self.pull()
         blob = {"postings": self._blob()}
-        todo = rank.unread(blob, lead="claude")[:max(1, min(limit, 12))]
+        floor = rank.floor_for(self.prof)
+        todo = rank.unread(blob, lead="claude", floor=floor)[:max(1, min(limit, 12))]
         store = self._store()
         level, _, _ = rank.candidate_level(self.prof, store)
         return {
-            "left_after_these": max(0, len(rank.unread(blob, lead="claude")) - len(todo)),
+            "left_after_these": max(0, len(rank.unread(blob, lead="claude", floor=floor)) - len(todo)),
             "rules": rank.SYSTEM,
             "level": level,
             "profile": rank.profile_digest(store),

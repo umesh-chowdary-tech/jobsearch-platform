@@ -100,6 +100,9 @@ def _row(prof: Profile, p: dict[str, Any], pipe: dict, ledger: dict, variants: d
         "gaps": [g for g in p.get("required_gaps") or [] if g not in matched][:3],
         "closed": bool(p.get("closed_at")),
         "first_seen": p.get("first_seen"),
+        "posted_at": p.get("posted_at"),
+        "role": p.get("role") or "",
+        "match": p.get("match"),
         "status": pipeline.status(pipe, pid),
         "variant": variants.get(pid),
         "asks": [{"to": d["to"], "status": d["status"]} for d in asks],
@@ -161,6 +164,7 @@ def posting(prof: Profile, pid: str) -> dict[str, Any] | None:
         "required_gaps": [g for g in p.get("required_gaps") or [] if g not in (p.get("matched") or {})],
         "nice_gaps": p.get("nice_gaps") or [],
         "reasons": p.get("reasons") or [],
+        "match_parts": p.get("match_parts") or {},
         "description": (p.get("description") or "").strip(),
         # Closed is closed, whoever found out: the watcher, or the board asked
         # when the page was opened (check_open) before the next poll.

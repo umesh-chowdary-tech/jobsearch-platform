@@ -23,6 +23,9 @@ export interface Row {
   gaps: string[];
   closed: boolean;
   first_seen?: string | null;
+  posted_at?: string | null;
+  role?: string;
+  match?: number | null;
   status: string;
   favorite: boolean;
   later: Later | null;
@@ -125,6 +128,7 @@ export interface PostingDetail extends Row {
   matched: Record<string, string>;
   required_gaps: string[];
   reasons: string[];
+  match_parts: Record<string, number>;
   description: string;
   live: boolean | null;
   history: { status: string; note?: string; at: string; variant?: string }[];

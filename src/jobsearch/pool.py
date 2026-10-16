@@ -6,8 +6,9 @@ posted, when it closed - and its description, fetched once however many people
 triage it. Each person keeps only their own verdicts (triage-results.json).
 
   - `var/_shared/pool/<provider>__<slug>.json`: one file per board, a record
-    per posting. Written only when something on the board changed, so a quiet
-    poll costs the database nothing.
+    per posting, with its role family (roles.py) worked out once from the
+    title. Written only when something on the board changed, so a quiet poll
+    costs the database nothing.
   - `var/_shared/pool/text/<provider>__<slug>/<id>.json`: one description per
     file. Written once; removed SHRINK_DAYS after the posting closes, when the
     record alone is kept. statestore deletes these from the database too.
@@ -192,6 +193,7 @@ def update(shared: Path, boards: Iterable[Any], now: str | None = None) -> dict[
     A posting new to the pool is first seen now - unless its board was being
     watched before the pool existed: then the queue's date, or the day the
     board was first read, which is the most the watcher can vouch for."""
+    from .roles import role_of
     from .watch import load_seen, seen_path       # watch calls this; no cycle at import
 
     now = now or utcnow()
@@ -217,7 +219,7 @@ def update(shared: Path, boards: Iterable[Any], now: str | None = None) -> dict[
                 if rec is None:
                     first = now if pid in fresh else (queue or {}).get(f"{board}|{pid}") or fallback
                     rec = {"id": pid, "board": board, "company": b.company, "title": post.title,
-                           "location": post.location, "url": post.url,
+                           "location": post.location, "url": post.url, "role": role_of(post.title),
                            "posted_at": posted_day(post.updated_at), "first_seen": first}
                     recs[pid] = rec
                     counts["added"] += 1
@@ -231,7 +233,8 @@ def update(shared: Path, boards: Iterable[Any], now: str | None = None) -> dict[
                 if rec.pop("closed_at", None):
                     counts["reopened"] += 1
                     changed = True
-                for key, value in (("title", post.title), ("url", post.url), ("company", b.company)):
+                for key, value in (("title", post.title), ("url", post.url), ("company", b.company),
+                                   ("role", role_of(post.title or rec.get("title")))):
                     if value and rec.get(key) != value:
                         rec[key] = value
                         changed = True
