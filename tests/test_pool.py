@@ -285,6 +285,18 @@ def test_asking_greenhouse_and_lever_about_one_posting(monkeypatch, status, answ
     assert REAL_ASK(Fetch(status), "lever:acme", "ab-1", None) is answer
 
 
+@pytest.mark.parametrize("board, pid", [
+    ("greenhouse:acme", "5/../../admin"),
+    ("greenhouse:acme", "5?per_page=1000"),
+    ("lever:acme", "ab-1/../x"),
+    ("greenhouse:acme/../x", "5"),
+])
+def test_an_id_or_slug_that_isnt_plain_never_reaches_a_url(board, pid):
+    # Only plain ids and slugs go into a board's URL (CodeQL py/partial-ssrf).
+    f = Fetch(200)
+    assert REAL_ASK(f, board, pid, None) is None and f.urls == []
+
+
 def test_a_board_that_cant_answer_plainly_is_not_asked(monkeypatch):
     f = Fetch(404)
     assert REAL_ASK(f, "workday:x.wd1.Site", "1", None) is None and f.urls == []

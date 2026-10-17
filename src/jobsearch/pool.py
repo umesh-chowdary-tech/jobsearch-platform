@@ -370,6 +370,10 @@ def last_poll(shared: Path) -> Callable[[str], str | None]:
 
 
 _checked: dict[tuple[str, str], tuple[float, bool | None]] = {}
+# What may go into a board's URL: a posting id and a slug as boards make them.
+# Anything else - a "/", "?" or ".." - is not asked about at all.
+_PLAIN_ID = re.compile(r"[\w-]{1,100}")
+_PLAIN_SLUG = re.compile(r"[\w.-]{1,100}")
 
 
 def _ask_board(fetcher: Any, board: str, pid: str, company: str | None) -> bool | None:
@@ -377,6 +381,8 @@ def _ask_board(fetcher: Any, board: str, pid: str, company: str | None) -> bool 
     from .providers import probe
 
     provider, slug = board.split(":", 1)
+    if not (_PLAIN_ID.fullmatch(pid) and _PLAIN_SLUG.fullmatch(slug)):
+        return None
     if provider == "greenhouse":
         res = fetcher.get(f"https://boards-api.greenhouse.io/v1/boards/{slug}/jobs/{pid}")
     elif provider == "lever":
