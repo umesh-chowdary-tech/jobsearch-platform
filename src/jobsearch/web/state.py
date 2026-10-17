@@ -63,11 +63,16 @@ def check_open(prof: Profile, pid: str) -> bool | None:
         return None
     if p.get("closed_at"):
         return False
+    # The stored posting's own id, not the request's: the same value, but only
+    # what the watcher stored goes into a board's URL.
+    own = str(p.get("id") or "")
+    if not own:
+        return None
     board = str(p.get("board") or "")
-    live = pool.check_live(prof.shared, pool.quick_fetcher(prof.shared), board, str(pid),
+    live = pool.check_live(prof.shared, pool.quick_fetcher(prof.shared), board, own,
                            company=p.get("company"), last_poll=pool.last_poll(prof.shared))
     if live is False:
-        mark_closed(prof.var, pid)
+        mark_closed(prof.var, own)
     return live
 
 
