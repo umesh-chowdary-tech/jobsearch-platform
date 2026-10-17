@@ -205,6 +205,39 @@ def test_the_compiled_pdf_reads_back_clean(doc, store, tmp_path):
     assert pdf_pages(pdf) <= 2
 
 
+# ── a profile with no headline title ─────────────────────────────────────────
+
+@pytest.fixture(scope="module")
+def untitled(store, index):
+    """A profile saved by setup can have no title: no official one, no descriptor."""
+    identity = {k: v for k, v in store["identity"].items() if k != "title"}
+    wanted = {"Python", "PostgreSQL", "AWS"}
+    entries = select_entries(store, index, wanted)
+    skills = surfaced_skills(entries, index, wanted)
+    v = Variant(id="untitled", angle="backend", emits=[e["id"] for e in entries], surfaces=skills)
+    return render_latex(identity, v, entries, skills, index), identity, entries, skills
+
+
+def test_no_title_leaves_no_empty_line_to_end(untitled):
+    # "{\large }\\[4pt]" ends a line with nothing on it: XeTeX stops with
+    # "There's no line here to end", and the live site made no PDF.
+    src = untitled[0]
+    head = src[src.index(r"\begin{center}"):src.index(r"\end{center}")]
+    assert r"{\large }" not in head
+    assert head.count("\\\\") == 1                       # only the name's line ends
+
+
+@pytest.mark.skipif(find_engine() is None, reason="no TeX engine installed")
+def test_no_title_still_compiles(untitled, tmp_path):
+    src, identity, entries, skills = untitled
+    tex_path = tmp_path / "resume.tex"
+    tex_path.write_text(src, encoding="utf-8")
+    pdf, msg = compile_pdf(tex_path)
+    if pdf is None and any(t in msg for t in ("fetch", "internet", "request")):
+        pytest.skip(f"package download failed, not a LaTeX error: {msg}")
+    assert pdf, msg
+
+
 # ── the copy scripts/install-tectonic.sh puts in the checkout (the hosted build) ─
 
 @pytest.fixture
