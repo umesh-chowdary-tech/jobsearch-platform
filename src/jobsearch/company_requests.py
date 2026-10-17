@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
@@ -42,11 +43,22 @@ def _read(path: Path, default: Any) -> Any:
 
 
 def _write(path: Path, data: Any) -> None:
+    """Whole or not at all. Windows refuses to replace a file another thread
+    has open - the admin page reading the list - so a reader caught mid-read
+    gets a moment to finish, then a plain write (as rank._write does)."""
     path.parent.mkdir(parents=True, exist_ok=True)
+    text = json.dumps(data, indent=1, sort_keys=True)
     fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
     with os.fdopen(fd, "w", encoding="utf-8") as fh:
-        json.dump(data, fh, indent=1, sort_keys=True)
-    os.replace(tmp, path)
+        fh.write(text)
+    for _ in range(5):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            time.sleep(0.05)
+    path.write_text(text, encoding="utf-8")
+    Path(tmp).unlink(missing_ok=True)
 
 
 def load(shared: Path) -> dict[str, dict[str, Any]]:
