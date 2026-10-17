@@ -115,7 +115,11 @@ def render_latex(identity: dict[str, Any], variant, entries: list[dict[str, Any]
     # ── header ───────────────────────────────────────────────────────────────
     L.append(r"\begin{center}")
     L.append(r"{\LARGE\bfseries " + tex(identity["name"]) + r"}\\[3pt]")
-    L.append("{\\large " + tex(position_title(identity, variant.title_descriptor)) + "}\\\\[4pt]")
+    # No title, no title line: "\\" after nothing stops XeTeX with "There's
+    # no line here to end", and a profile saved by setup can have no title.
+    title = position_title(identity, variant.title_descriptor)
+    if title:
+        L.append("{\\large " + tex(title) + "}\\\\[4pt]")
     L.append("{\\small " + r" $\cdot$ ".join(tex(b) for b in contact_bits(identity)) + "}")
     L.append(r"\end{center}")
     L.append(r"\vspace{2pt}")
