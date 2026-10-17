@@ -191,6 +191,24 @@ def test_contact_details_are_found_here_and_never_sent(new):
     assert "[email]" in sent and "[phone]" in sent and "1| Neha Example" in sent
 
 
+def test_a_long_run_with_no_at_sign_is_read_quickly():
+    # The email pattern was tried from every position of a run with no "@",
+    # so its cost grew with the square of the length: 7.5 s for 30,000
+    # characters, days for a 5 MB upload (CodeQL py/polynomial-redos).
+    import time
+    line = "+" * 30_000
+    t = time.perf_counter()
+    O.contacts([line])
+    O.redact(line)
+    assert time.perf_counter() - t < 1.0
+
+
+def test_an_address_as_long_as_one_can_be_is_still_found():
+    email = "a" * 64 + "@" + "b" * 63 + ".example.com"
+    assert O.contacts([f"Email: {email}"])["email"]["value"] == email
+    assert O.redact(f"Email: {email}") == "Email: [email]"
+
+
 # ── drafting and checking ────────────────────────────────────────────────────
 
 def _drafted(new, data=ANSWER):
