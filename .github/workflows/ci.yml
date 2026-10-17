@@ -34,6 +34,25 @@ jobs:
         # No network and no keys: every model and board is faked in the tests.
         run: python -m pytest -o addopts="" -q
 
+  pdf:
+    # Render's build installs Tectonic with this script; here it runs the same
+    # way, then the PDF tests run against it instead of skipping.
+    name: PDF (Tectonic, installed as on Render)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: python -m pip install -e ".[dev]"
+      - name: Install Tectonic and compile a sample resume
+        run: bash scripts/install-tectonic.sh
+      - name: Test the PDFs
+        run: python -m pytest -o addopts="" -q tests/test_latex.py
+
   lint:
     name: lint (ruff, bandit)
     runs-on: ubuntu-latest

@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import json
+import tempfile
+from pathlib import Path
 from typing import Any
 
-from .assemble import build, load_library, load_store, save_library
-from .latex import (compile_pdf, latex_to_text, pdf_pages, pdf_text, render_latex,
-                    text_layer_problems)
+from .assemble import (Variant, build, load_library, load_store, save_library,
+                       select_entries, surfaced_skills)
+from .latex import (compile_pdf, find_engine, latex_to_text, pdf_pages, pdf_text,
+                    render_latex, text_layer_problems)
 from .llm import LLM
 from .pool import within_window
 from .profile import Profile
@@ -23,6 +26,61 @@ def _load_postings(prof: Profile) -> dict[str, dict[str, Any]]:
         return json.loads(p.read_text(encoding="utf-8")).get("postings") or {}
     except (json.JSONDecodeError, OSError):
         return {}
+
+
+def check_pdf(tex_path: Path, identity: dict[str, Any], entries: list[dict[str, Any]],
+              skills: list[str]) -> tuple[Path | None, str, bool]:
+    """Compile, then check: (pdf, one line for the report, passed).
+
+    The PDF is what gets uploaded, so the PDF is what gets checked: its own
+    text layer, through the same assertions, plus the problems only a compiled
+    page has (ligature glyphs, words split across lines).
+    """
+    pdf, msg = compile_pdf(tex_path)
+    if not pdf:
+        return None, f"pdf not built ({msg})", False
+    ptext = pdf_text(pdf)
+    pdf_check = check_text(ptext, identity, entries, skills)
+    problems = text_layer_problems(ptext)
+    ok = sum(c["ok"] for c in pdf_check["checks"])
+    total = len(pdf_check["checks"])
+    if ok < total or problems:
+        bad = [c["check"] for c in pdf_check["checks"] if not c["ok"]]
+        return pdf, "PDF FAILED: " + "; ".join(bad + problems), False
+    return pdf, f"pdf {ok}/{total} pass, {pdf_pages(pdf)} page(s)", True
+
+
+class _Committed(Profile):
+    """A sample profile read from the checkout, wherever JOBSEARCH_PROFILES points."""
+
+    @property
+    def dir(self) -> Path:
+        return self.root / "profiles" / self.id
+
+
+def run_tex_check(root: Path) -> int:
+    """Compile a sample person's resume and check the PDF it makes.
+
+    Says whether the TeX engine works here. The first compile also fetches the
+    packages every resume uses, which takes minutes - so the hosted build runs
+    this (scripts/install-tectonic.sh) and no one waits on their first PDF.
+    """
+    prof = _Committed(root, "sample-backend")
+    index = load_index(prof)
+    store = load_store(prof)
+    identity = store.get("identity") or {}
+    wanted = {"Python", "PostgreSQL", "AWS", "React", "TypeScript"}
+    entries = select_entries(store, index, wanted)
+    skills = surfaced_skills(entries, index, wanted)
+    variant = Variant(id="tex-check", angle="fullstack", emits=[e["id"] for e in entries],
+                      surfaces=skills, summary="A sample resume, compiled to check the TeX engine.")
+    print(f"engine  {find_engine() or 'none'}", flush=True)
+    with tempfile.TemporaryDirectory(prefix="tex-check-", ignore_cleanup_errors=True) as d:
+        tex_path = Path(d) / "resume.tex"
+        tex_path.write_text(render_latex(identity, variant, entries, skills, index), encoding="utf-8")
+        _, line, passed = check_pdf(tex_path, identity, entries, skills)
+    print(line)
+    return 0 if passed else 1
 
 
 def run_assemble(prof: Profile, args) -> int:
@@ -80,26 +138,13 @@ def run_assemble(prof: Profile, args) -> int:
         tex_path.write_text(tex_src, encoding="utf-8")
         paths["tex"] = tex_path
 
-        # The PDF is what gets uploaded, so the PDF is what gets checked: its
-        # own text layer, through the same assertions, plus the problems only
-        # a compiled page has (ligature glyphs, words split across lines).
         pdf_line = ""
         if not args.no_pdf:
-            pdf, msg = compile_pdf(tex_path)
+            pdf, pdf_line, passed = check_pdf(tex_path, identity, entries, skills)
             if pdf:
-                ptext = pdf_text(pdf)
-                pdf_check = check_text(ptext, identity, entries, skills)
-                problems = text_layer_problems(ptext)
-                ok = sum(c["ok"] for c in pdf_check["checks"])
-                total = len(pdf_check["checks"])
                 paths["pdf"] = pdf
-                pdf_line = f"pdf {ok}/{total} pass, {pdf_pages(pdf)} page(s)"
-                if ok < total or problems:
+                if not passed:
                     failures += 1
-                    bad_pdf = [c["check"] for c in pdf_check["checks"] if not c["ok"]]
-                    pdf_line = "PDF FAILED: " + "; ".join(bad_pdf + problems)
-            else:
-                pdf_line = f"pdf not built ({msg})"
 
         # build() saved the library before this check existed, and it holds its
         # own objects - so write the result back by id rather than assuming

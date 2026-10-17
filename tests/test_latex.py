@@ -203,3 +203,111 @@ def test_the_compiled_pdf_reads_back_clean(doc, store, tmp_path):
     res = check_text(text, store["identity"], entries, skills)
     assert res["ok"], [c for c in res["checks"] if not c["ok"]]
     assert pdf_pages(pdf) <= 2
+
+
+# ── the copy scripts/install-tectonic.sh puts in the checkout (the hosted build) ─
+
+@pytest.fixture
+def bundled(tmp_path, monkeypatch):
+    """Only the checkout's copy: no $TECTONIC, nothing on PATH."""
+    import jobsearch.latex as latex
+    engine = tmp_path / ".tectonic" / "bin" / "tectonic"
+    engine.parent.mkdir(parents=True)
+    engine.write_bytes(b"")
+    monkeypatch.setattr(latex, "BUNDLED", tmp_path / ".tectonic")
+    monkeypatch.delenv("TECTONIC", raising=False)
+    monkeypatch.delenv("TECTONIC_CACHE_DIR", raising=False)
+    monkeypatch.setattr(latex.shutil, "which", lambda _name: None)
+    return engine
+
+
+def test_the_checkouts_own_tectonic_is_found(bundled):
+    # Render had no TeX engine, so every hosted resume came without a PDF.
+    assert find_engine() == str(bundled)
+
+
+def _env_of_compile(monkeypatch, tmp_path):
+    import subprocess
+
+    import jobsearch.latex as latex
+    seen = {}
+
+    def run(cmd, **kw):
+        seen.update(kw)
+        return subprocess.CompletedProcess(cmd, 1, "", "error: stop here")
+    monkeypatch.setattr(latex.subprocess, "run", run)
+    (tmp_path / "r.tex").write_text("x", encoding="utf-8")
+    compile_pdf(tmp_path / "r.tex", attempts=1)
+    return seen.get("env")
+
+
+def test_the_checkouts_tectonic_reads_the_packages_fetched_at_build_time(bundled, tmp_path, monkeypatch):
+    # Its default cache is under the home folder, which Render does not keep
+    # from the build: every first PDF would wait minutes on the download.
+    env = _env_of_compile(monkeypatch, tmp_path)
+    assert env["TECTONIC_CACHE_DIR"] == str(tmp_path / ".tectonic" / "cache")
+
+
+def test_a_cache_dir_someone_set_is_kept(bundled, tmp_path, monkeypatch):
+    monkeypatch.setenv("TECTONIC_CACHE_DIR", str(tmp_path / "mine"))
+    env = _env_of_compile(monkeypatch, tmp_path)
+    assert env is None or env["TECTONIC_CACHE_DIR"] == str(tmp_path / "mine")
+
+
+def test_another_tectonic_keeps_its_own_cache(tmp_path, monkeypatch):
+    import jobsearch.latex as latex
+    other = tmp_path / "tectonic.exe"
+    other.write_bytes(b"")
+    monkeypatch.setenv("TECTONIC", str(other))
+    monkeypatch.delenv("TECTONIC_CACHE_DIR", raising=False)
+    monkeypatch.setattr(latex, "BUNDLED", tmp_path / ".tectonic")
+    assert _env_of_compile(monkeypatch, tmp_path) is None
+
+
+# ── tex-check: the hosted build's warm-up, and anyone's "does my TeX work?" ───
+
+def test_tex_check_says_when_there_is_no_engine(monkeypatch, capsys):
+    import jobsearch.latex as latex
+    from jobsearch.assemble_cli import run_tex_check
+    from samples import ROOT
+    import jobsearch.assemble_cli as cli
+    monkeypatch.setattr(latex, "find_engine", lambda: None)
+    monkeypatch.setattr(cli, "find_engine", lambda: None)
+    assert run_tex_check(ROOT) == 1
+    assert "no TeX engine" in capsys.readouterr().out
+
+
+def test_tex_check_reads_the_committed_sample_wherever_profiles_point(monkeypatch, tmp_path, capsys):
+    # A local .env points JOBSEARCH_PROFILES at a private folder, which has no samples.
+    import jobsearch.latex as latex
+    from jobsearch.assemble_cli import run_tex_check
+    from samples import ROOT
+    monkeypatch.setenv("JOBSEARCH_PROFILES", str(tmp_path))
+    import jobsearch.assemble_cli as cli
+    monkeypatch.setattr(latex, "find_engine", lambda: None)
+    monkeypatch.setattr(cli, "find_engine", lambda: None)
+    assert run_tex_check(ROOT) == 1
+    assert "no TeX engine" in capsys.readouterr().out
+
+
+@pytest.mark.skipif(find_engine() is None, reason="no TeX engine installed")
+def test_tex_check_compiles_and_reads_back_a_sample(capsys):
+    from jobsearch.assemble_cli import run_tex_check
+    from samples import ROOT
+    code = run_tex_check(ROOT)
+    out = capsys.readouterr().out
+    if code and any(t in out for t in ("fetch", "internet", "request")):
+        pytest.skip(f"package download failed, not a LaTeX error: {out}")
+    assert code == 0, out
+    assert re.search(r"pdf \d+/\d+ pass, [12] page", out), out
+
+
+def test_the_hosted_build_installs_a_pinned_tectonic():
+    import yaml
+    from samples import ROOT
+    build = yaml.safe_load((ROOT / "render.yaml").read_text(encoding="utf-8"))["services"][0]["buildCommand"]
+    assert "scripts/install-tectonic.sh" in build
+    script = (ROOT / "scripts" / "install-tectonic.sh").read_text(encoding="utf-8")
+    assert re.search(r"^VERSION=\d+\.\d+\.\d+$", script, re.M)
+    assert re.search(r"^SHA256=[0-9a-f]{64}$", script, re.M)
+    assert "sha256sum -c" in script

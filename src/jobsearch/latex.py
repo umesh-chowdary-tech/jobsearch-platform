@@ -220,8 +220,15 @@ def render_latex(identity: dict[str, Any], variant, entries: list[dict[str, Any]
 
 # ── compiling, and reading the result back ───────────────────────────────────
 
+# Where scripts/install-tectonic.sh puts Tectonic (bin/) and the packages it
+# fetches (cache/): inside the checkout, because Render keeps the checkout from
+# the build but not the home folder, where Tectonic caches by default.
+BUNDLED = Path(__file__).resolve().parents[2] / ".tectonic"
+
+
 def find_engine() -> str | None:
-    """Tectonic: $TECTONIC, then PATH, then the per-user install location.
+    """Tectonic: $TECTONIC, then PATH, then the checkout's own copy (the
+    hosted build installs it), then the per-user install location.
 
     Tectonic rather than MiKTeX or TeX Live: one 20 MB binary, no installer,
     and it never stops to ask a question - MiKTeX's default of prompting before
@@ -233,6 +240,9 @@ def find_engine() -> str | None:
     found = shutil.which("tectonic")
     if found:
         return found
+    bundled = BUNDLED / "bin" / "tectonic"
+    if bundled.is_file():
+        return str(bundled)
     local = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "tectonic" / "tectonic.exe"
     return str(local) if local.is_file() else None
 
@@ -253,13 +263,16 @@ def compile_pdf(tex_path: Path, timeout: int = 300, attempts: int = 3
     # attempt here had a captured error message in it - is read as LaTeX and
     # fails the build with "Undefined control sequence".
     tex_path.with_suffix(".out").unlink(missing_ok=True)
+    env = None
+    if engine == str(BUNDLED / "bin" / "tectonic") and "TECTONIC_CACHE_DIR" not in os.environ:
+        env = {**os.environ, "TECTONIC_CACHE_DIR": str(BUNDLED / "cache")}
     detail = ""
     for _ in range(attempts):
         try:
             r = subprocess.run([engine, "-X", "compile", tex_path.name],
                                cwd=tex_path.parent, capture_output=True,
                                text=True, encoding="utf-8", errors="replace",
-                               timeout=timeout)
+                               timeout=timeout, env=env)
         except subprocess.TimeoutExpired:
             return None, f"timed out after {timeout}s"
         pdf = tex_path.with_suffix(".pdf")
