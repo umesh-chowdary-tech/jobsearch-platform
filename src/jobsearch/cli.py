@@ -47,7 +47,7 @@ from .providers import ALL_PROVIDERS
 from .models import BLOCKED, EMPTY, ERROR, NOT_FOUND, OK
 from .profile import Profile, ProfileError, list_profiles, profiles_dir, resolve, shared_var, var_dir
 from .watch import SEEDED, SKIPPED, load_boards, record_new, watch_all
-from .assemble_cli import run_assemble
+from .assemble_cli import run_assemble, run_tex_check
 from .outreach_cli import add_parser as add_outreach
 from .cycle import run_cycle
 from .rank import apply_to_results
@@ -493,6 +493,9 @@ def main(argv: list[str] | None = None) -> int:
     asm.add_argument("--no-pdf", action="store_true",
                      help="skip compiling the .tex (the PDF is checked when it is built)")
     asm.set_defaults(fn=lambda a: run_assemble(_prof(a), a))
+
+    tc = sub.add_parser("tex-check", help="compile a sample resume: checks the TeX engine and fetches its packages")
+    tc.set_defaults(fn=lambda a: run_tex_check(_root(a)))
 
     add_outreach(sub, _prof)
 

@@ -11,7 +11,8 @@ services:
     plan: free
     region: singapore            # nearest to Supabase's Mumbai region; keep the two close
     branch: main
-    buildCommand: pip install -e ".[hosted]" && cd web && npm ci && npm run build
+    # Tectonic makes the resumes' PDFs; the script also fetches its TeX packages.
+    buildCommand: pip install -e ".[hosted]" && bash scripts/install-tectonic.sh && cd web && npm ci && npm run build
     startCommand: python -m jobsearch.cli hosted --host 0.0.0.0
     healthCheckPath: /api/health
     envVars:

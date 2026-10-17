@@ -117,7 +117,15 @@ on Overleaf.
 project's GitHub releases, check its SHA-256 against the release page, and put
 the binary on `PATH` (or set `$TECTONIC`). The first compile fetches the
 packages it needs, then works offline; the package server fails
-intermittently, so `compile_pdf` retries those failures.
+intermittently, so `compile_pdf` retries those failures. `python -m
+jobsearch.cli tex-check` compiles a sample resume and checks the PDF, so you
+know the engine works before a real resume needs it.
+
+**On Render** the build does this itself (`render.yaml`):
+`scripts/install-tectonic.sh` puts a pinned, checksum-checked Tectonic in
+`.tectonic/bin/` and runs `tex-check`, so the packages are fetched into
+`.tectonic/cache/` before anyone builds a resume. Both stay inside the
+checkout, the part of the build Render keeps.
 
 ## What Workday found
 

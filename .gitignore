@@ -4,6 +4,8 @@ __pycache__/
 var/
 web/node_modules/
 web/dist/
+# Tectonic and its packages, from scripts/install-tectonic.sh
+.tectonic/
 .pytest_cache/
 .env
 .env.*
