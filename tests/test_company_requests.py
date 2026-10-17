@@ -3,6 +3,7 @@ page's side of it: discovery looks for the board, a found one is watched."""
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -39,6 +40,35 @@ def test_asking_twice_or_together_is_one_request(prof):
     cr.ask(_other(prof), "GLOBEX")                             # someone else: one more asking
     req = cr.load(prof.shared)["globex"]
     assert req["asked"] == 2 and req["url"] == "https://globex.example/careers"
+
+
+def test_a_reader_holding_the_list_open_doesnt_lose_the_change(prof, monkeypatch):
+    # Windows refuses to replace a file another thread has open: the admin page
+    # reading the list made a board search fail with "Access is denied" (seen
+    # on the windows-latest runner). The write waits a moment, then still lands.
+    real, tries = cr.os.replace, []
+
+    def busy_twice(src, dst):
+        if Path(dst).name == cr.FILE:
+            tries.append(dst)
+            if len(tries) <= 2:
+                raise PermissionError(13, "Access is denied", str(dst))
+        return real(src, dst)
+    monkeypatch.setattr(cr.os, "replace", busy_twice)
+    cr.ask(prof, "Globex")
+    assert cr.load(prof.shared)["globex"]["asked"] == 1
+    assert len(tries) == 3
+    assert not list(prof.shared.glob("*.tmp"))
+
+
+def test_a_reader_that_never_lets_go_still_gets_the_change(prof, monkeypatch):
+    def always_busy(src, dst):
+        raise PermissionError(13, "Access is denied", str(dst))
+    monkeypatch.setattr(cr.os, "replace", always_busy)
+    monkeypatch.setattr(cr.time, "sleep", lambda _s: None)
+    cr.ask(prof, "Globex")
+    assert cr.load(prof.shared)["globex"]["asked"] == 1
+    assert not list(prof.shared.glob("*.tmp"))
 
 
 def test_the_shared_list_names_no_one(prof):
