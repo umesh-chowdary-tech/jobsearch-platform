@@ -82,7 +82,10 @@ def _now() -> str:
 
 # ── what is sent ─────────────────────────────────────────────────────────────
 
-_EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+# Bounded as an address is (64 before the "@", 63 to a label): unbounded, a
+# long run with no "@" was tried from every position, at a cost growing
+# with the square of its length.
+_EMAIL = re.compile(r"[\w.+-]{1,64}@[\w-]{1,63}(?:\.[\w-]{1,63}){1,8}")
 _LINK = re.compile(r"(?:https?://|www\.)\S+", re.I)
 _MONEY = re.compile(r"(?:₹|\brs\.?|\binr\b|\$|\busd\b)\s*\d[\d,.]*(?:\s*(?:lpa|lakhs?|crores?|k)\b)?|"
                     r"\b\d[\d,.]*\s*(?:lpa|lakhs?|crores?)\b", re.I)

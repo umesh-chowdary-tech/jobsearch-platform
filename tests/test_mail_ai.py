@@ -31,6 +31,14 @@ def test_personal_details_are_removed(text, gone, kept):
     assert gone not in out and out == kept
 
 
+def test_a_long_run_with_no_at_sign_is_redacted_quickly():
+    # Its cost grew with the square of the length (CodeQL py/polynomial-redos).
+    import time
+    t = time.perf_counter()
+    M.redact("+" * 30_000, ME)
+    assert time.perf_counter() - t < 1.0
+
+
 @pytest.mark.parametrize("text", [
     "Thank you for applying for the position of R-123456 Software Engineer - AI Engineer.",
     "Your job application status (Job number: 210000001)",
