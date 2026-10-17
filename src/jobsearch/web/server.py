@@ -11,6 +11,8 @@ One person, one machine, and the process holds API keys and personal data, so:
   - keys never leave the process: the browser gets provider names, not keys
   - an uploaded resume must come from this page (its Origin), as a PDF, Word
     or text file, at most 5 MB
+  - a refusal reads and drops a small unread body first (DRAIN_LIMIT), so the
+    reply is not lost to a connection reset; anything larger stays unread
 
 The routes themselves are in web/routes.py, shared with the hosted service;
 this module is the HTTP around them. Every action is the same function the CLI
@@ -60,6 +62,12 @@ CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';
        "form-action 'none'")
 # A resume's HTML carries its own inline <style> and no script.
 FILE_CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; frame-ancestors 'self'"
+# Closing a socket that still holds unread request bytes makes the OS reset
+# the connection, and the reset can reach the client before it reads the reply
+# (seen on Windows as WinError 10053). So before refusing, a body this small is
+# read and dropped, for at most DRAIN_SECONDS; a larger one is refused unread.
+DRAIN_LIMIT = 64_000
+DRAIN_SECONDS = 5
 
 
 def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
@@ -73,8 +81,10 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
 
         # ── plumbing ────────────────────────────────────────────────────────
         def _send(self, status: int, body: bytes, ctype: str, csp: str = CSP,
-                  cache: str = "no-store") -> None:
+                  cache: str = "no-store", close: bool = False) -> None:
             self.send_response(status)
+            if close:
+                self.send_header("Connection", "close")
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", cache)
@@ -85,9 +95,9 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
             if self.command != "HEAD":
                 self.wfile.write(body)
 
-        def _json(self, status: int, data: Any) -> None:
+        def _json(self, status: int, data: Any, close: bool = False) -> None:
             self._send(status, json.dumps(data, ensure_ascii=False, default=str).encode("utf-8"),
-                       "application/json; charset=utf-8")
+                       "application/json; charset=utf-8", close=close)
 
         def _host_ok(self) -> bool:
             return self.headers.get("Host", "") in app.hosts
@@ -102,7 +112,7 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
             if n > 64_000:
                 raise ApiError(413, "request too large")
             try:
-                data = json.loads(self.rfile.read(n) or b"{}")
+                data = json.loads(self._read(n) or b"{}")
             except json.JSONDecodeError:
                 raise ApiError(400, "bad JSON") from None
             if not isinstance(data, dict):
@@ -117,17 +127,41 @@ def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
             n = int(self.headers.get("Content-Length") or 0)
             if n > onboard.MAX_BYTES:
                 raise ApiError(413, "that file is larger than 5 MB")
-            return routes.upload(app.prof, self.headers.get("Content-Type", ""), self.rfile.read(n) if n > 0 else b"",
+            return routes.upload(app.prof, self.headers.get("Content-Type", ""), self._read(n),
                                  self.headers.get("X-Filename", ""))
 
+        def _read(self, n: int) -> bytes:
+            self.body_read = True
+            return self.rfile.read(n) if n > 0 else b""
+
+        def _drain(self) -> None:
+            """Before a refusal: read and drop a body nothing has read, if it
+            is at most DRAIN_LIMIT. Never kept; a larger one stays unread."""
+            if self.body_read:
+                return
+            self.body_read = True
+            try:
+                n = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                return
+            if 0 < n <= DRAIN_LIMIT:
+                try:
+                    self.connection.settimeout(DRAIN_SECONDS)
+                    self.rfile.read(n)
+                except OSError:
+                    pass            # gone quiet or gone away: refuse anyway
+
         def _guard(self, fn: Callable[[], None]) -> None:
+            self.body_read = False
             if not self._host_ok():
-                self._send(421, b"wrong host", "text/plain; charset=utf-8")
+                self._drain()
+                self._send(421, b"wrong host", "text/plain; charset=utf-8", close=True)
                 return
             try:
                 fn()
             except Exception as e:  # noqa: BLE001 - a screen, not a crash
-                self._json(*routes.as_error(e))
+                self._drain()
+                self._json(*routes.as_error(e), close=True)
 
         # ── GET ─────────────────────────────────────────────────────────────
         def do_GET(self) -> None:
