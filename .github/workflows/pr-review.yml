@@ -40,7 +40,7 @@ jobs:
       - name: PR-Agent
         if: env.HAS_KEY == 'true'
         # v0.46.0, pinned by commit so a moved tag can't change what runs here.
-        uses: The-PR-Agent/pr-agent@1d01f24f455bb879c1d9c557ad7de3d72dcc7975
+        uses: The-PR-Agent/pr-agent@981344be2755e303df501e18e3f60b848a188a80
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ANTHROPIC.KEY: ${{ secrets.ANTHROPIC_API_KEY }}
