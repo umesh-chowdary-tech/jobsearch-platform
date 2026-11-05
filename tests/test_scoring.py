@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from datetime import date
 
 import pytest
 
@@ -86,7 +87,9 @@ def _t(prof, title="Backend Engineer", location="Pune, India", description="Pyth
 def test_the_parts_add_up_and_stay_in_range(prof):
     t, profile = _t(prof)
     assert t.verdict == KEEP
-    score, parts = match(t, profile, ["backend"])
+    # Scored on the day it was posted. Against the real date the posting aged,
+    # and "fresh" fell from 10 to 4 three weeks after this test was written.
+    score, parts = match(t, profile, ["backend"], today=date(2026, 10, 14))
     assert set(parts) == {"skills", "gaps", "role", "place", "level", "fresh"}
     assert score == max(0, min(100, sum(parts.values()))) and 0 < score <= 100
     assert parts["role"] == 15 and parts["place"] == 15 and parts["fresh"] == 10
