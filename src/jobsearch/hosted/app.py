@@ -606,11 +606,20 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
     return app
 
 
+def use_hosted_layout(root: Path) -> None:
+    """Profiles live inside var/ on the service (var/_profiles/), so mirroring
+    var/ keeps everything."""
+    os.environ.setdefault("JOBSEARCH_PROFILES", str(var_dir(root) / "_profiles"))
+
+
 def serve(host: str = "127.0.0.1", port: int = 8000, dev: bool = False) -> None:
-    """`jobsearch hosted` - run the service. Profiles live inside var/ there
-    (var/_profiles/), so mirroring var/ keeps everything."""
+    """`jobsearch hosted` - run the service."""
     import uvicorn
-    os.environ.setdefault("JOBSEARCH_PROFILES", str(var_dir(ROOT) / "_profiles"))
+    use_hosted_layout(ROOT)
+    if dev and statestore.env_url():
+        # Dev sign-in lets anyone be anyone: never against the real database,
+        # where it would read and overwrite real people's data.
+        raise SystemExit("dev sign-in never runs against a database: unset DATABASE_URL first")
     if dev:
         if host not in ("127.0.0.1", "localhost", "::1"):
             raise SystemExit("dev sign-in works only on this machine (--host 127.0.0.1)")
