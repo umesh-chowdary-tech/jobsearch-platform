@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from datetime import date
 
 import pytest
 
@@ -15,6 +16,10 @@ from jobsearch.scoring import AI_MIN, ai_min, match, person_roles
 from jobsearch.skills import load_index
 from jobsearch.triage import FLAG, KEEP, NO_MATCH, REJECT, Triaged, load_profile, triage_posting
 from samples import make_root
+
+# The freshness part counts days from "today", so the score tests fix the day
+# rather than drifting with the calendar: 2 days after the sample posting.
+TODAY = date(2026, 10, 16)
 
 
 @pytest.mark.parametrize("title, role", [
@@ -86,7 +91,7 @@ def _t(prof, title="Backend Engineer", location="Pune, India", description="Pyth
 def test_the_parts_add_up_and_stay_in_range(prof):
     t, profile = _t(prof)
     assert t.verdict == KEEP
-    score, parts = match(t, profile, ["backend"])
+    score, parts = match(t, profile, ["backend"], today=TODAY)
     assert set(parts) == {"skills", "gaps", "role", "place", "level", "fresh"}
     assert score == max(0, min(100, sum(parts.values()))) and 0 < score <= 100
     assert parts["role"] == 15 and parts["place"] == 15 and parts["fresh"] == 10
@@ -96,7 +101,7 @@ def test_a_better_fit_scores_higher(prof):
     good, profile = _t(prof)
     worse, _ = _t(prof, location="Remote", description="Python. Rust, Haskell, Erlang and Elixir required. 3+ years.",
                   posted="2026-09-01")
-    assert match(good, profile, ["backend"])[0] > match(worse, profile, ["backend"])[0]
+    assert match(good, profile, ["backend"], today=TODAY)[0] > match(worse, profile, ["backend"], today=TODAY)[0]
 
 
 def test_rejected_and_unmatched_score_nothing(prof):
