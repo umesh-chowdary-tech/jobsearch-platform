@@ -200,7 +200,7 @@ function SkillsPart({ v, ed }: { v: ProfileView; ed: Ed | null }) {
         <h2>Skills</h2>
         {ed && open !== "skills" && open !== "add-skill" && (
           <div className="row">
-            {works.length > 0 && <button className="quiet" onClick={() => ed.open("add-skill")}><Icon name="plus" />Add a skill</button>}
+            <button className="quiet" onClick={() => ed.open("add-skill")}><Icon name="plus" />Add a skill</button>
             {ed.s.skills.length > 0 && <EditButton onClick={() => ed.open("skills")} />}
           </div>
         )}
@@ -211,23 +211,30 @@ function SkillsPart({ v, ed }: { v: ProfileView; ed: Ed | null }) {
   );
 }
 
-/** A skill added straight from Skills. It still goes under the work it was
- *  used in - one add per piece of work - because a resume lists a skill only
- *  with work behind it. */
+/** A skill added straight from Skills: just its name. Ticking the work it
+ *  was used in is optional - one add per piece of work - and only then can a
+ *  resume list it, since a resume lists a skill only under work. On its own
+ *  it still counts when jobs are matched. */
 function AddSkill({ ed, works }: { ed: Ed; works: SetupItem[] }) {
   const { s, step } = ed;
   const [name, setName] = useState("");
-  const [picked, setPicked] = useState<string[]>(() => (works.length === 1 ? [works[0].id] : []));
+  const [picked, setPicked] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const typed = name.trim().toLowerCase();
   const known = typed ? s.skills.find(k => k.name.toLowerCase() === typed) : undefined;
   const listed = new Set(s.items.filter(i => i.kind === "tech" && i.state === "confirmed" && typed
                                         && String(i.name || "").toLowerCase() === typed).map(i => i.entry));
   const todo = picked.filter(id => !listed.has(id));
-  const ready = !busy && !!typed && todo.length > 0;
+  // Nothing ticked adds the skill on its own - unless you have it already.
+  const ready = !busy && !!typed && (todo.length > 0 || (!picked.length && !known));
   useUnsaved(!!typed);
   const add = async () => {
     setBusy(true);
+    if (!todo.length) {
+      if (await step("add", { kind: "skill", fields: { name: name.trim() } })) ed.go("");
+      setBusy(false);
+      return;
+    }
     for (const id of todo) {
       if (!await step("add", { kind: "tech", entry: id, fields: { name: name.trim() } })) { setBusy(false); return; }
     }
@@ -241,8 +248,9 @@ function AddSkill({ ed, works }: { ed: Ed; works: SetupItem[] }) {
         <input type="text" value={name} placeholder="The skill, like “PostgreSQL”" aria-label="The skill"
                onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && ready) add(); }} />
       </div>
-      <div>
-        <div className="small muted">Where you used it. A resume lists a skill only with the work behind it.</div>
+      {works.length > 0 && <div>
+        <div className="small muted">Where you used it - optional. Resumes list a skill only under work you tick; with
+          none ticked, it still counts when jobs are matched to you.</div>
         {works.map(w => (
           <label key={w.id} className="pick">
             <input type="checkbox" checked={listed.has(w.id) || picked.includes(w.id)} disabled={listed.has(w.id)}
@@ -251,8 +259,8 @@ function AddSkill({ ed, works }: { ed: Ed; works: SetupItem[] }) {
               {listed.has(w.id) && <span className="muted"> · already listed</span>}</span>
           </label>
         ))}
-      </div>
-      {known && <p className="small muted">You have {known.name} already. This adds the work you tick to it.</p>}
+      </div>}
+      {known && <p className="small muted">You have {known.name} already.{works.length > 0 && " Tick work to add it to."}</p>}
       <div className="row">
         <button className="primary" disabled={!ready} onClick={add}><Icon name="plus" />Add the skill</button>
         <button className="quiet" onClick={() => ed.go("")}>Cancel</button>
@@ -302,11 +310,11 @@ function Skills({ v, editable }: { v: ProfileView; editable: boolean }) {
             {behind.map(e => (
               <button key={e.id} type="button" className="quiet" onClick={() => showWork(e.id)}>{e.title || e.headline || e.id}</button>
             ))}
-          </> : <span><b>{picked}</b> · no work on this page lists it.</span>}
+          </> : <span><b>{picked}</b> · no work lists it, so resumes leave it out. It still counts when jobs are matched.</span>}
         </div>
       )}
-      <p className="small muted tier">Skills come only from work you added. Click one to see the work behind it. {editable
-        ? "Add a skill asks which work you used it in."
+      <p className="small muted tier">Click a skill to see the work behind it. Resumes list a skill only under work. {editable
+        ? "Add a skill needs just its name."
         : <>To change one, <a href="#/setup">update it in Setup</a>.</>}</p>
     </div>
   );
@@ -325,7 +333,7 @@ function SkillsEditor({ ed }: { ed: Ed }) {
         {s.skills.map(k => (
           <tr key={k.name}>
             <td>{k.name}</td>
-            <td className="muted small">{k.backed_by === 1 ? "1 piece of work" : `${k.backed_by} pieces of work`}</td>
+            <td className="muted small">{k.backed_by === 0 ? "No work - not on resumes" : k.backed_by === 1 ? "1 piece of work" : `${k.backed_by} pieces of work`}</td>
             <td><select aria-label={`How well you know ${k.name}`} value={tiers[k.name]}
                         onChange={e => setTiers({ ...tiers, [k.name]: e.target.value })}>
               {TIER_PICK.map(([val, l]) => <option key={val} value={val}>{l}</option>)}
