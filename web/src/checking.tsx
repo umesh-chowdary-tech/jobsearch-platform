@@ -3,13 +3,24 @@
 // guess?". Only a yes puts something in the profile (docs/setup.md). Also
 // the editing pieces the profile page shares.
 
-import { useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import type { SetupItem, SetupState } from "./types";
 import { Icon } from "./ui";
 
 /** One setup step; the new state, or null when it failed (a toast says why). */
 export type Step = (step: string, body?: unknown) => Promise<SetupState | null>;
 export type Names = Record<string, string>;
+
+/** Where editors say they hold typing not saved yet: the profile page asks
+ * before dropping it. Without a provider (Setup) it does nothing. */
+export const Unsaved = createContext<((who: object, dirty: boolean) => void) | null>(null);
+
+export function useUnsaved(dirty: boolean) {
+  const report = useContext(Unsaved);
+  const [who] = useState(() => ({}));
+  useEffect(() => { report?.(who, dirty); }, [report, who, dirty]);
+  useEffect(() => () => report?.(who, false), [report, who]);
+}
 
 export const IDENTITY: Record<string, string> = { name: "Name", location: "Location", email: "Email", phone: "Phone",
   linkedin: "LinkedIn", github: "GitHub", portfolio: "Portfolio" };
@@ -64,6 +75,7 @@ export function EditItem({ it, step, done, add, label, onRemove }: {
   const [vals, setVals] = useState<Record<string, string>>(() => Object.fromEntries(fields.map(([k]) => [k, shown(it, k)])));
   const [busy, setBusy] = useState(false);
   const changed = Object.fromEntries(Object.entries(vals).filter(([k, v]) => v.trim() !== shown(it, k)));
+  useUnsaved(Object.keys(changed).length > 0);
   const save = async () => {
     setBusy(true);
     const ok = await step("item", { id: it.id, fields: changed, ...(add ? { state: "confirmed" } : {}) });
@@ -94,11 +106,13 @@ export function PrefsForm({ s, label, onSave, onCancel }: {
   s: SetupState; label: string; onSave: (v: PrefsDraft) => Promise<unknown>; onCancel?: () => void;
 }) {
   const p = s.prefs;
-  const [v, setV] = useState<PrefsDraft>({
+  const [start] = useState<PrefsDraft>(() => ({
     preferred: (p.preferred || []).join(", "), acceptable: (p.acceptable || []).join(", "), remote: p.remote !== false,
     years: p.years ?? 0, max_years: p.max_years ?? 2, level: p.level, skip: p.skip || [], watch: (p.watch || []).join(", "),
-  });
+  }));
+  const [v, setV] = useState<PrefsDraft>(start);
   const [busy, setBusy] = useState(false);
+  useUnsaved(JSON.stringify(v) !== JSON.stringify(start));
   return (
     <div className="stack">
       <label className="field">Cities you'd most like (comma-separated)
