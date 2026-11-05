@@ -249,6 +249,39 @@ def test_saved_for_later_leaves_today_and_comes_back(live):
     assert today["saved_for_later"] == 0
 
 
+def test_today_counts_only_what_was_fetched_since_the_day_began(live):
+    """The headline count is today's arrivals, split by fit - not every live
+    posting ever kept."""
+    def p(pid, first_seen, fit=None, verdict="keep", closed=False):
+        rec = {"id": pid, "title": "Engineer", "company": "stripe", "board": "greenhouse:stripe",
+               "verdict": verdict, "first_seen": first_seen}
+        if fit:
+            rec["ai"] = {"fit": fit, "why": "x"}
+        if closed:
+            rec["closed_at"] = "2026-11-05T09:00:00+00:00"
+        return rec
+    rows = [p("1", "2026-11-04T10:00:00+00:00", "strong"),        # yesterday
+            p("2", "2026-11-04T19:00:00+00:00", "strong"),        # today in India
+            p("3", "2026-11-05T02:00:00+00:00", "possible"),
+            p("4", "2026-11-05T03:00:00+00:00", "possible"),
+            p("5", "2026-11-05T04:00:00+00:00", "weak"),
+            p("6", "2026-11-05T05:00:00+00:00"),                  # not read yet
+            p("7", "2026-11-05T05:00:00+00:00", "strong", verdict="drop"),
+            p("8", "2026-11-05T05:00:00+00:00", "strong", closed=True)]
+    (live.prof.var / "triage-results.json").write_text(
+        json.dumps({"postings": {r["id"]: r for r in rows}}), encoding="utf-8")
+
+    # Midnight in India, as the browser sends it.
+    _, today = jget(live, "/api/today?since=2026-11-04T18:30:00.000Z")
+    assert today["fetched_today"] == {"total": 5, "strong": 1, "possible": 2, "weak": 1, "unread": 1}
+
+    # Without a usable start of day, it counts from midnight UTC.
+    for q in ("", "?since=nonsense"):
+        status, today = jget(live, f"/api/today{q}")
+        assert status == 200
+        assert set(today["fetched_today"]) == {"total", "strong", "possible", "weak", "unread"}
+
+
 def test_later_can_be_undone_and_rejects_nonsense(live):
     req(live, "POST", "/api/postings/1000001/later", {"days": None})
     assert jget(live, "/api/postings/1000001")[1]["later"]["state"] == "someday"
