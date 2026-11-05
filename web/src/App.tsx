@@ -175,7 +175,7 @@ function Shell({ me, onMe, onSignOut }: { me: Me; onMe: (m: Me) => void; onSignO
             <Icon name={n.icon} /><span>{n.label}</span>
           </a>
         ))}
-        <div className="who">{me.email}</div>
+        <div className="who" title={me.email}>{me.email}</div>
       </nav>
       <div className="main">
         <header className="top">
