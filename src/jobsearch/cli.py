@@ -389,6 +389,21 @@ def _hosted(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_dev_import(args: argparse.Namespace) -> int:
+    from .hosted.app import use_hosted_layout
+    from .hosted.devimport import DevImportError, import_export
+    root = _root(args)
+    use_hosted_layout(root)
+    try:
+        prof = import_export(root, Path(args.zip), args.email, replace=args.replace)
+    except DevImportError as exc:
+        print(exc, file=sys.stderr)
+        return 2
+    print(f"imported for {args.email.strip().lower()}: {prof.dir} and {prof.var}")
+    print("start it with: python -m jobsearch.cli hosted --dev, then sign in with that email")
+    return 0
+
+
 def cmd_invites(args: argparse.Namespace) -> int:
     from .hosted import accounts
     shared = shared_var(_root(args))
@@ -529,6 +544,12 @@ def main(argv: list[str] | None = None) -> int:
     hs.add_argument("--dev", action="store_true",
                     help="sign in as any email, no Supabase project - this machine only")
     hs.set_defaults(fn=_hosted)
+
+    di = sub.add_parser("dev-import", help="your SwitchKaro export zip, for hosted --dev on this machine")
+    di.add_argument("zip", help="the zip from SwitchKaro Settings > Download everything")
+    di.add_argument("--email", required=True, help="the email you sign in to SwitchKaro with")
+    di.add_argument("--replace", action="store_true", help="swap out data already imported for this email")
+    di.set_defaults(fn=cmd_dev_import)
 
     iv = sub.add_parser("invites", help="invite codes for the hosted service")
     iv.add_argument("action", choices=("create", "list"))

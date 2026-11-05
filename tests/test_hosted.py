@@ -218,6 +218,68 @@ def test_export_holds_everything_kept_for_that_person_and_nothing_else(env):
     assert "4000001" not in zipfile.ZipFile(io.BytesIO(r.content)).read("data/triage-results.json").decode()
 
 
+def _zip(entries):
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        for name, data in entries.items():
+            z.writestr(name, data)
+    return buf.getvalue()
+
+
+def test_an_export_imported_for_dev_signs_in_to_the_same_jobs(env, tmp_path, monkeypatch):
+    """Download from the service, import on your own machine, sign in to the
+    dev service with the same email: the same jobs."""
+    from jobsearch.hosted.devimport import import_export
+    client, root = env
+    alice = joined(client, root)
+    shutil.copytree(ROOT / "profiles" / "sample-backend", alice.dir, dirs_exist_ok=True)
+    _postings(alice)
+    zpath = tmp_path / "jobsearch-export.zip"
+    zpath.write_bytes(client.get("/api/account/export", headers=auth(token())).content)
+
+    mine = tmp_path / "mine"
+    shutil.copytree(ROOT / "data", mine / "data")
+    monkeypatch.setenv("JOBSEARCH_PROFILES", str(mine / "var" / "_profiles"))
+    prof = import_export(mine, zpath, "Alice@Example.com")
+    assert any(prof.dir.iterdir()) and (prof.var / "triage-results.json").exists()
+    dev = TestClient(create_app(mine, Verifier(dev=True), static_dir=tmp_path / "none"))
+    tok = dev.post("/api/dev/sign-in", json={"email": "alice@example.com"}).json()["token"]
+    assert dev.get("/api/me", headers=auth(tok)).json()["member"] is True    # no invite asked
+    today = dev.get("/api/today", headers=auth(tok)).json()
+    assert [r["id"] for r in today["decide"]] == ["3000001"]
+
+    # Once only, unless asked to replace.
+    from jobsearch.hosted.devimport import DevImportError
+    with pytest.raises(DevImportError, match="--replace"):
+        import_export(mine, zpath, "alice@example.com")
+    import_export(mine, zpath, "alice@example.com", replace=True)
+
+
+@pytest.mark.parametrize("entries", [
+    {"profile/../../evil.txt": "x"},
+    {"/etc/evil": "x"},
+    {"profile/a.yaml": "x", "elsewhere/b.txt": "x"},
+    {"data/triage-results.json": "{}"},                 # no profile/
+    {"profile\\..\\evil.txt": "x"},
+    {"profile/C:/evil.txt": "x"},
+])
+def test_dev_import_refuses_anything_but_an_export(tmp_path, entries):
+    from jobsearch.hosted.devimport import DevImportError, import_export
+    z = tmp_path / "bad.zip"
+    z.write_bytes(_zip(entries))
+    with pytest.raises(DevImportError):
+        import_export(tmp_path / "root", z, "a@example.com")
+    assert not (tmp_path / "evil.txt").exists() and not (tmp_path / "root").exists()
+
+
+def test_dev_mode_never_runs_against_the_database(monkeypatch):
+    from jobsearch.hosted import app as hosted_app
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user:pw@db.example.test/real")
+    monkeypatch.setenv("JOBSEARCH_PROFILES", "unused")
+    with pytest.raises(SystemExit, match="DATABASE_URL"):
+        hosted_app.serve(dev=True)
+
+
 def test_delete_removes_the_person_and_everything_kept_for_them(env):
     client, root = env
     alice = joined(client, root)

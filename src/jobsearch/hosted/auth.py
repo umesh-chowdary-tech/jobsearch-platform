@@ -40,6 +40,12 @@ class Who:
     email: str
 
 
+def dev_sub(email: str) -> str:
+    """The user id dev sign-in gives `email`: the same every time, so an
+    account imported for an email (devimport.py) is the one it signs into."""
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"jobsearch-dev:{email.strip().lower()}"))
+
+
 class Verifier:
     def __init__(self, supabase_url: str = "", jwt_secret: str = "", dev: bool = False,
                  jwks_client: Any = None) -> None:
@@ -97,6 +103,6 @@ class Verifier:
             raise AuthError("dev sign-in is off")
         email = email.strip().lower()
         now = int(time.time())
-        return jwt.encode({"sub": str(uuid.uuid5(uuid.NAMESPACE_URL, f"jobsearch-dev:{email}")), "email": email,
+        return jwt.encode({"sub": dev_sub(email), "email": email,
                            "aud": AUDIENCE, "iss": self.issuer, "iat": now, "exp": now + DEV_TOKEN_HOURS * 3600,
                            "role": "authenticated"}, self.secret, algorithm="HS256")

@@ -15,7 +15,38 @@ python -m jobsearch.cli hosted --dev               # http://127.0.0.1:8000, sign
 machine and refuses to start alongside a Supabase project. Without `--dev`
 the service needs `SUPABASE_URL` (docs below). For the web app with live
 reload, run `npm run dev` in `web/` too and open http://localhost:5173; it
-passes `/api` to the service.
+passes `/api` to the service. `--dev` also refuses to start while
+`DATABASE_URL` is set: with anyone able to sign in as anyone, it must never
+read or write the service's real data.
+
+## Environments
+
+| | Where | Who | Data |
+|---|---|---|---|
+| **local** | `hosted --dev` on your own machine | you, while building | fictional, or your own export (below) |
+| **staging** | the current Render service | you and your inner circle | real, so treated with the same care as prod |
+| **prod** | a new Render service and database, later | real users, once the legal pages are reviewed | real |
+
+A separate testers' environment (between staging and prod) is added only if
+testers and real users ever need to be kept apart.
+
+### Your own data on your machine
+
+Each person brings only their own data, from the service's own export, so no
+machine holds anyone else's and nobody needs the database password:
+
+```bash
+# 1. SwitchKaro > Settings > Your data > Download everything (zip)
+# 2. Unpack it as your dev account - keep var/ outside the repo for real data:
+export JOBSEARCH_VAR="$HOME/switchkaro-data/var"
+python -m jobsearch.cli dev-import jobsearch-export.zip --email you@example.com
+# 3. Start the dev service and sign in with the same email - no invite code
+python -m jobsearch.cli hosted --dev
+```
+
+`--replace` swaps in a newer export. The import only accepts what an export
+holds (`profile/` and `data/`); a zip with anything else is refused whole.
+For a demo instead, sign in with any made-up email.
 
 ## How it fits together
 
