@@ -482,8 +482,12 @@ async function viewToday() {
       el("a", { href: "#/applications" }, "Open Applications")));
   }
 
-  parts.push(el("h2", {}, `Needs a decision · ${t.decide.length}`));
-  if (!t.decide.length) parts.push(el("p", { class: "empty" }, "Nothing strong or possible is waiting on you."));
+  parts.push(el("h2", {}, `Fetched today, needs a decision · ${t.decide.length}`));
+  if (!t.decide.length) parts.push(el("p", { class: "empty" }, "Nothing strong or possible came in today."));
+  if (t.older_waiting) {
+    parts.push(el("p", { class: "muted" }, `${t.older_waiting} older job${t.older_waiting > 1 ? "s" : ""} still need${t.older_waiting > 1 ? "" : "s"} a decision: `,
+      el("a", { href: "#/postings" }, "see them under Postings"), "."));
+  }
   for (const [fit, label] of [["strong", "Strong fits"], ["possible", "Possible fits"]]) {
     const rows = t.decide.filter(r => r.fit === fit);
     if (!rows.length) continue;
@@ -491,7 +495,7 @@ async function viewToday() {
     parts.push(el("div", { class: "list" }, rows.map(r => postingItem(r, true))));
   }
   if (t.unread) {
-    parts.push(el("p", { class: "muted" }, `${t.unread} more kept postings haven't been read by a model yet. `,
+    parts.push(el("p", { class: "muted" }, `${t.unread} more posting${t.unread > 1 ? "s" : ""} fetched today ${t.unread > 1 ? "haven't" : "hasn't"} been read by a model yet. `,
       el("button", { type: "button", class: "quiet", onclick: () => run("rank") }, "Have a model read them")));
   }
   if (t.outreach_due.length) {

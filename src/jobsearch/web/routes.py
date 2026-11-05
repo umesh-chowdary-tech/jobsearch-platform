@@ -115,7 +115,7 @@ def get(prof: Profile, path: str, query: dict[str, list[str]], runner: Runner, s
         names = ACTIONS if scope == LOCAL else {k: ACTIONS[k] for k in HOSTED_ACTIONS}
         return {k: v[0] for k, v in names.items()}
     routes = {
-        "/api/today": lambda: state.today(prof, (query.get("since") or [""])[0][:40] or None),
+        "/api/today": lambda: state.today(prof, (query.get("since") or [""])[0][:40] or None, only_today=True),
         "/api/postings": lambda: state.postings(prof),
         "/api/resumes": lambda: state.resumes(prof),
         "/api/outreach": lambda: state.outreach_view(prof),

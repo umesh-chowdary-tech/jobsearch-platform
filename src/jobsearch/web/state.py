@@ -201,21 +201,30 @@ def _when(stamp: Any) -> datetime | None:
     return t if t.tzinfo else t.replace(tzinfo=timezone.utc)
 
 
+def _seen_since(r: dict[str, Any], since: datetime) -> bool:
+    """First fetched at or after `since`. Undated is not: nothing says it's new."""
+    seen = _when(r["first_seen"]) if r["first_seen"] else None
+    return seen is not None and seen >= since
+
+
 def fetched_since(rows: list[dict[str, Any]], since: datetime) -> dict[str, int]:
     """Live kept postings first fetched at or after `since`, by the model's fit."""
     out = {"total": 0, "strong": 0, "possible": 0, "weak": 0, "unread": 0}
     for r in rows:
-        seen = _when(r["first_seen"]) if r["first_seen"] else None
-        if seen is None or seen < since:
+        if not _seen_since(r, since):
             continue
         out["total"] += 1
         out[r["fit"] if r["fit"] in ("strong", "possible", "weak") else "unread"] += 1
     return out
 
 
-def today(prof: Profile, since: str | None = None) -> dict[str, Any]:
+def today(prof: Profile, since: str | None = None, only_today: bool = False) -> dict[str, Any]:
     """`since` is when the person's day began, from their browser - the
-    server's own clock is UTC. Missing or unreadable, midnight UTC stands."""
+    server's own clock is UTC. Missing or unreadable, midnight UTC stands.
+
+    `only_today` (the Today screen): the postings to decide are only those
+    fetched since then; older undecided ones wait under Jobs and are counted
+    in `older_waiting`. Off (the connector): every undecided one."""
     rows = postings(prof)
     live = [r for r in rows if r["verdict"] == "keep" and not r["closed"]]
     start = _when(since) if since else None
@@ -232,8 +241,12 @@ def today(prof: Profile, since: str | None = None) -> dict[str, Any]:
     back = [r for r in undecided if later(r) == "due"]
     waiting = [r for r in undecided if later(r) in ("waiting", "someday")]
     fresh = [r for r in undecided if later(r) is None]
-    decide = [r for r in fresh if r["fit"] in ("strong", "possible")]
-    unread = [r for r in fresh if not r["fit"]]
+    worth = [r for r in fresh if r["fit"] in ("strong", "possible")]
+    if only_today:
+        decide = [r for r in worth if _seen_since(r, start)]
+        unread = [r for r in fresh if not r["fit"] and _seen_since(r, start)]
+    else:
+        decide, unread = worth, [r for r in fresh if not r["fit"]]
     ledger = outreach.load_ledger(prof)
     due = []
     for d in ledger.values():
@@ -246,6 +259,7 @@ def today(prof: Profile, since: str | None = None) -> dict[str, Any]:
         "first_name": name.split()[0] if name.split() else "",
         "decide": decide,
         "fetched_today": fetched_since(live, start),
+        "older_waiting": len(worth) - len(decide),
         "back_from_later": back,
         "saved_for_later": len(waiting),
         "favorites": sum(1 for r in live if r["favorite"] and r["status"] not in pipeline.DONE),

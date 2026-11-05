@@ -275,6 +275,10 @@ def test_today_counts_only_what_was_fetched_since_the_day_began(live):
     _, today = jget(live, "/api/today?since=2026-11-04T18:30:00.000Z")
     assert today["fetched_today"] == {"total": 5, "strong": 1, "possible": 2, "weak": 1, "unread": 1}
 
+    # Only today's go on Today; the older one waits under Jobs, and is counted.
+    assert sorted(r["id"] for r in today["decide"]) == ["2", "3", "4"]
+    assert today["unread"] == 1 and today["older_waiting"] == 1
+
     # Without a usable start of day, it counts from midnight UTC.
     for q in ("", "?since=nonsense"):
         status, today = jget(live, f"/api/today{q}")

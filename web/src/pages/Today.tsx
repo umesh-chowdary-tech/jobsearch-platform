@@ -86,7 +86,7 @@ export function Today({ onCount }: { onCount: (n: number) => void }) {
       )}
 
       <div className="h2row">
-        <h2>Needs a decision · {t.decide.length}</h2>
+        <h2>Fetched today, needs a decision · {t.decide.length}</h2>
         <a href="#/jobs">All jobs</a>
       </div>
       {t.decide.length
@@ -102,11 +102,16 @@ export function Today({ onCount }: { onCount: (n: number) => void }) {
         : t.caught_up === false
           ? <p className="empty">SwitchKaro is reading every job already open on the company boards it watches, against your
               profile. That takes a few minutes after you first save your profile; the matches show here, then ranked.</p>
-          : <p className="empty">Nothing strong or possible is waiting on you. New postings are checked every two hours;
-            every job kept for you is under <a href="#/jobs">Jobs</a>.</p>}
+          : <p className="empty">Nothing strong or possible came in today. New postings are checked every two hours.</p>}
+      {t.older_waiting > 0 && (
+        <p className="muted">
+          {t.older_waiting} older {t.older_waiting === 1 ? "job still needs" : "jobs still need"} a decision:{" "}
+          <a href="#/jobs">see them under Jobs</a>.
+        </p>
+      )}
       {t.unread > 0 && (
         <p className="muted">
-          {t.unread} more kept postings haven't been read by a model yet.{" "}
+          {t.unread} more {t.unread === 1 ? "posting" : "postings"} fetched today {t.unread === 1 ? "hasn't" : "haven't"} been read by a model yet.{" "}
           <button className="quiet" disabled={rank.running} onClick={() => rank.start("rank")}>
             {rank.running ? "Reading…" : "Have a model read them"}
           </button>

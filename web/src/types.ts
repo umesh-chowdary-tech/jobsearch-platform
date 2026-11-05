@@ -36,6 +36,7 @@ export interface Row {
 export interface Today {
   first_name: string;
   decide: Row[];
+  older_waiting: number;
   fetched_today: { total: number; strong: number; possible: number; weak: number; unread: number };
   back_from_later: Row[];
   saved_for_later: number;

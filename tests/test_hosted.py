@@ -10,6 +10,7 @@ import json
 import shutil
 import time
 import zipfile
+from datetime import datetime, timezone
 
 import pytest
 
@@ -146,7 +147,8 @@ def _postings(prof, pid="3000001"):
     prof.var.mkdir(parents=True, exist_ok=True)
     p = {"id": pid, "title": "Backend Engineer", "company": "Globex", "board": "greenhouse:globex",
          "verdict": "keep", "location": "Pune", "matched": {"Python": "core"}, "coverage": "1/1",
-         "ai": {"fit": "strong", "why": "fits", "by": "Claude"}}
+         "ai": {"fit": "strong", "why": "fits", "by": "Claude"},
+         "first_seen": datetime.now(timezone.utc).isoformat(timespec="seconds")}
     (prof.var / "triage-results.json").write_text(json.dumps({"postings": {pid: p}}))
 
 
