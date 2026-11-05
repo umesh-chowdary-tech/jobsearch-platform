@@ -813,6 +813,11 @@ def add_item(prof: Profile, kind: str, fields: dict[str, Any], entry: str = "") 
             if same is not None:
                 same.update(value=vals["value"], state="confirmed", edited=True)
         elif kind == "tech":
+            # One skill, one spelling: "go" typed for another piece of work
+            # joins the Go you have, rather than putting both on a resume.
+            spelt = next((str(i["name"]) for i in items if i["kind"] == "tech" and i["state"] == "confirmed"
+                          and str(i.get("name", "")).lower() == vals["name"].lower()), None)
+            vals["name"] = spelt or vals["name"]
             same = next((i for i in items if i["kind"] == "tech" and i.get("entry") == entry
                          and str(i.get("name", "")).lower() == vals["name"].lower()), None)
             if same is not None:

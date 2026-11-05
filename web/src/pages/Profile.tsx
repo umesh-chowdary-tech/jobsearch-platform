@@ -177,15 +177,71 @@ function HeadEditor({ ed }: { ed: Ed }) {
 // ── skills ─────────────────────────────────────────────────────────────────
 
 function SkillsPart({ v, ed }: { v: ProfileView; ed: Ed | null }) {
-  const editing = ed?.editing === "skills";
+  const open = ed?.editing || "";
+  const works = ed ? ed.s.items.filter(i => i.kind === "entry" && i.state === "confirmed") : [];
   return (
     <>
       <div className="h2row">
         <h2>Skills</h2>
-        {ed && !editing && ed.s.skills.length > 0 && <EditButton onClick={() => ed.open("skills")} />}
+        {ed && open !== "skills" && open !== "add-skill" && (
+          <div className="row">
+            {works.length > 0 && <button className="quiet" onClick={() => ed.open("add-skill")}><Icon name="plus" />Add a skill</button>}
+            {ed.s.skills.length > 0 && <EditButton onClick={() => ed.open("skills")} />}
+          </div>
+        )}
       </div>
-      {editing ? <SkillsEditor ed={ed!} /> : <Skills v={v} editable={!!ed} />}
+      {ed && open === "add-skill" && <AddSkill ed={ed} works={works} />}
+      {open === "skills" ? <SkillsEditor ed={ed!} /> : <Skills v={v} editable={!!ed} />}
     </>
+  );
+}
+
+/** A skill added straight from Skills. It still goes under the work it was
+ *  used in - one add per piece of work - because a resume lists a skill only
+ *  with work behind it. */
+function AddSkill({ ed, works }: { ed: Ed; works: SetupItem[] }) {
+  const { s, step } = ed;
+  const [name, setName] = useState("");
+  const [picked, setPicked] = useState<string[]>(() => (works.length === 1 ? [works[0].id] : []));
+  const [busy, setBusy] = useState(false);
+  const typed = name.trim().toLowerCase();
+  const known = typed ? s.skills.find(k => k.name.toLowerCase() === typed) : undefined;
+  const listed = new Set(s.items.filter(i => i.kind === "tech" && i.state === "confirmed" && typed
+                                        && String(i.name || "").toLowerCase() === typed).map(i => i.entry));
+  const todo = picked.filter(id => !listed.has(id));
+  const ready = !busy && !!typed && todo.length > 0;
+  const add = async () => {
+    setBusy(true);
+    for (const id of todo) {
+      if (!await step("add", { kind: "tech", entry: id, fields: { name: name.trim() } })) { setBusy(false); return; }
+    }
+    setBusy(false);
+    ed.open("");
+  };
+  return (
+    <div className="card stack edit-card">
+      <div className="lbl">Add a skill</div>
+      <div className="line">
+        <input type="text" value={name} placeholder="The skill, like “PostgreSQL”" aria-label="The skill"
+               onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && ready) add(); }} />
+      </div>
+      <div>
+        <div className="small muted">Where you used it. A resume lists a skill only with the work behind it.</div>
+        {works.map(w => (
+          <label key={w.id} className="pick">
+            <input type="checkbox" checked={listed.has(w.id) || picked.includes(w.id)} disabled={listed.has(w.id)}
+                   onChange={e => setPicked(e.target.checked ? [...picked, w.id] : picked.filter(x => x !== w.id))} />
+            <span>{w.title || w.headline}{w.where && <span className="muted"> · {w.where}</span>}
+              {listed.has(w.id) && <span className="muted"> · already listed</span>}</span>
+          </label>
+        ))}
+      </div>
+      {known && <p className="small muted">You have {known.name} already. This adds the work you tick to it.</p>}
+      <div className="row">
+        <button className="primary" disabled={!ready} onClick={add}><Icon name="plus" />Add the skill</button>
+        <button className="quiet" onClick={() => ed.open("")}>Cancel</button>
+      </div>
+    </div>
   );
 }
 
@@ -207,7 +263,7 @@ function Skills({ v, editable }: { v: ProfileView; editable: boolean }) {
         </div>
       )) : <p className="empty">No skills yet.</p>}
       <p className="small muted tier">Skills come only from work you added. {editable
-        ? "To add one, edit the work where you used it, under Experience."
+        ? "Add a skill asks which work you used it in."
         : <>To change one, <a href="#/setup">update it in Setup</a>.</>}</p>
     </div>
   );
@@ -220,7 +276,7 @@ function SkillsEditor({ ed }: { ed: Ed }) {
   return (
     <div className="card stack edit-card">
       <p className="small">How well you know each. “Touched it” is never listed on a resume; “Not a skill of mine” takes it
-        out. To add a skill, edit the work where you used it.</p>
+        out.</p>
       <div className="scroll-x"><table><tbody>
         {s.skills.map(k => (
           <tr key={k.name}>

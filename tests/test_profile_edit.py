@@ -98,6 +98,17 @@ def test_a_skill_already_named_under_the_work_is_confirmed_not_added_twice(new):
     assert len(gos) == 1 and gos[0]["state"] == "confirmed"
 
 
+def test_a_skill_added_from_the_skills_part_is_backed_by_each_piece_of_work_picked(new):
+    """Add a skill, on the profile page, sends one add per piece of work the
+    person ticks. Typed in lower case, it joins the skill they already have
+    rather than listing Go and go side by side on a resume."""
+    _saved(new)
+    out = _step(new, "add", {"kind": "tech", "entry": "e2", "fields": {"name": "go"}})
+    skills = {k["name"]: k for k in out["skills"]}
+    assert "go" not in skills and skills["Go"]["backed_by"] == 2
+    assert "Go" in _entry(new, "e2")["tech"]
+
+
 def test_before_the_first_save_a_change_writes_nothing(new):
     _drafted(new)
     _confirm_all(new)
