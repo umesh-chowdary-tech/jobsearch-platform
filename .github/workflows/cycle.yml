@@ -33,3 +33,19 @@ jobs:
             sleep 30
           done
           exit 1
+      # Runs after the wake above, so the service answers. Fails the run when the
+      # boards have stopped being read (hosted/admin.py fetch_health): GitHub then
+      # mails the repository's owner about the failed scheduled run.
+      - name: Check the job boards are being read
+        env:
+          HOSTED_URL: ${{ secrets.HOSTED_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$HOSTED_URL" ] || [ -z "$CRON_SECRET" ]; then exit 0; fi
+          body=$(curl -sf --max-time 60 -H "X-Cron-Secret: $CRON_SECRET" "$HOSTED_URL/api/cron/health") \
+            || { echo "::error::the service did not answer the board check"; exit 1; }
+          echo "$body"
+          if echo "$body" | grep -q '"ok": true'; then exit 0; fi
+          problem=$(echo "$body" | sed -n 's/.*"problem": "\([^"]*\)".*/\1/p')
+          echo "::error::Jobs are not being fetched: ${problem:-see the response above}. Check Admin > Jobs & health."
+          exit 1

@@ -114,7 +114,12 @@ For a demo instead, sign in with any made-up email.
     to Groq too.
   - *Jobs & health:* run a job update now, pause the schedule; updates and
     new postings per day, keys set or not, the database's last save, boards
-    not read for two days, recent errors.
+    not read for two days (by the job update or by discovery, whichever was
+    later), recent errors.
+  - *An alert when jobs stop coming in:* each scheduled `cycle` run asks
+    `/api/cron/health` (the cron secret, counts only) and fails when no board
+    has been read in 24 hours or more than a quarter haven't been in two days.
+    GitHub mails the repository's owner about a failed scheduled run.
   - *Log:* every change an admin made, and who made it.
 
   Admins see counts and emails, never anyone's resume, profile or jobs. The

@@ -330,14 +330,16 @@ def overview(prof: Profile) -> dict[str, Any]:
 
 
 def system(prof: Profile) -> dict[str, Any]:
+    from ..pool import board_reads
     boards = _read(prof.shared / "boards.json", {}) or {}
+    read = {r["key"]: r["last_ok"] for r in board_reads(prof.shared)}
     rows = []
     for key in sorted(boards):
         b = boards[key]
         seen = _read(prof.shared / "seen" / f"{b.get('provider')}__{b.get('slug')}.json", {}) or {}
         rows.append({"key": key, "name": b.get("board_name") or "",
                      "live": b.get("posting_count", 0), "polls": seen.get("poll_count", 0),
-                     "last_ok": b.get("last_ok") or ""})
+                     "last_ok": read.get(key, "")})
     return {
         "boards": rows,
         "escalations": open_escalations(prof.shared / "escalations.jsonl"),
