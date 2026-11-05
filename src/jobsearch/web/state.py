@@ -192,9 +192,35 @@ def resume_files(prof: Profile, variant: str) -> list[dict[str, str]]:
             for ext in RESUME_EXT if (d / f"{variant}{ext}").exists()]
 
 
-def today(prof: Profile) -> dict[str, Any]:
+def _when(stamp: Any) -> datetime | None:
+    """An ISO time as an aware datetime; None for anything else."""
+    try:
+        t = datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return t if t.tzinfo else t.replace(tzinfo=timezone.utc)
+
+
+def fetched_since(rows: list[dict[str, Any]], since: datetime) -> dict[str, int]:
+    """Live kept postings first fetched at or after `since`, by the model's fit."""
+    out = {"total": 0, "strong": 0, "possible": 0, "weak": 0, "unread": 0}
+    for r in rows:
+        seen = _when(r["first_seen"]) if r["first_seen"] else None
+        if seen is None or seen < since:
+            continue
+        out["total"] += 1
+        out[r["fit"] if r["fit"] in ("strong", "possible", "weak") else "unread"] += 1
+    return out
+
+
+def today(prof: Profile, since: str | None = None) -> dict[str, Any]:
+    """`since` is when the person's day began, from their browser - the
+    server's own clock is UTC. Missing or unreadable, midnight UTC stands."""
     rows = postings(prof)
     live = [r for r in rows if r["verdict"] == "keep" and not r["closed"]]
+    start = _when(since) if since else None
+    if start is None:
+        start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     undecided = [r for r in live if r["status"] == "new"]
 
     def later(r: dict) -> str | None:
@@ -219,6 +245,7 @@ def today(prof: Profile) -> dict[str, Any]:
     return {
         "first_name": name.split()[0] if name.split() else "",
         "decide": decide,
+        "fetched_today": fetched_since(live, start),
         "back_from_later": back,
         "saved_for_later": len(waiting),
         "favorites": sum(1 for r in live if r["favorite"] and r["status"] not in pipeline.DONE),

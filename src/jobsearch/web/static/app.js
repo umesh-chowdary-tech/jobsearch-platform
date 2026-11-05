@@ -432,7 +432,10 @@ async function setStatus(pid, status, note) {
 /* ── Today ───────────────────────────────────────────────────────────────── */
 
 async function viewToday() {
-  const t = await api("/api/today");
+  // When this person's day began: the server's clock is UTC.
+  const now = new Date();
+  const since = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+  const t = await api(`/api/today?since=${encodeURIComponent(since)}`);
   setCount("today", t.decide.length + t.back_from_later.length);
   const hour = new Date().getHours();
   const hello = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
@@ -448,7 +451,10 @@ async function viewToday() {
     el("div", { class: "hero" },
       el("div", { class: "date" }, new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })),
       el("h1", {}, t.first_name ? `${hello}, ${t.first_name}` : hello),
-      el("p", { class: "sub" }, `${t.stages.new || 0} live postings you haven't decided on yet.`)),
+      el("p", { class: "sub" }, `${t.fetched_today.total} live posting${t.fetched_today.total === 1 ? "" : "s"} fetched today.`)),
+    el("div", { class: "fits", "aria-label": "Fetched today, by fit" },
+      [["strong", "Strong fit"], ["possible", "Possible fit"], ["weak", "Weak fit"], ["unread", "Not read yet"]].map(([k, label]) =>
+        el("div", { class: `fit ${k}` }, el("div", { class: "n" }, t.fetched_today[k]), el("div", { class: "l" }, label)))),
     el("div", { class: "kpis" },
       kpi("list", "", t.decide.length, "waiting on a decision"),
       kpi("target", "", t.decide.filter(r => r.fit === "strong").length, "strong fits among them"),
@@ -477,9 +483,13 @@ async function viewToday() {
   }
 
   parts.push(el("h2", {}, `Needs a decision · ${t.decide.length}`));
-  parts.push(t.decide.length
-    ? el("div", { class: "list" }, t.decide.map(r => postingItem(r, true)))
-    : el("p", { class: "empty" }, "Nothing strong or possible is waiting on you."));
+  if (!t.decide.length) parts.push(el("p", { class: "empty" }, "Nothing strong or possible is waiting on you."));
+  for (const [fit, label] of [["strong", "Strong fits"], ["possible", "Possible fits"]]) {
+    const rows = t.decide.filter(r => r.fit === fit);
+    if (!rows.length) continue;
+    parts.push(el("h3", { class: `group fit-head ${fit}` }, `${label} · ${rows.length}`));
+    parts.push(el("div", { class: "list" }, rows.map(r => postingItem(r, true))));
+  }
   if (t.unread) {
     parts.push(el("p", { class: "muted" }, `${t.unread} more kept postings haven't been read by a model yet. `,
       el("button", { type: "button", class: "quiet", onclick: () => run("rank") }, "Have a model read them")));
