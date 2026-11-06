@@ -547,12 +547,20 @@ function AdminsTab({ o, act }: { o: AdminOverview; act: Act }) {
   const [open, setOpen] = useState(false);
   const [hi, setHi] = useState(0);
   // People who have joined and aren't admins yet, matching what's typed anywhere in their email.
-  const matches = useMemo(() => {
-    const q = email.trim().toLowerCase();
-    const taken = new Set(o.admins.map(a => a.email));
-    return q ? o.people.filter(p => p.email && !taken.has(p.email) && p.email.toLowerCase().includes(q)).slice(0, 6) : [];
-  }, [email, o.people, o.admins]);
+  const admins = useMemo(() => new Set(o.admins.map(a => a.email)), [o.admins]);
+  const typed = email.trim().toLowerCase();
+  const already = admins.has(typed);
+  // Joined people and existing admins matching what's typed anywhere in their email. Admins are
+  // listed too, marked and not pickable, so it's plain who already is one.
+  const shown = useMemo(() => {
+    if (!typed) return [];
+    const joined = new Map(o.people.filter(p => p.email).map(p => [p.email.toLowerCase(), p.joined]));
+    const all = [...new Set([...joined.keys(), ...admins])].filter(e => e.includes(typed)).sort();
+    return all.slice(0, 8).map(e => ({ email: e, joined: joined.get(e) ?? null, admin: admins.has(e) }));
+  }, [typed, o.people, admins]);
+  const matches = shown.filter(m => !m.admin);
   const add = async (to = email) => {
+    if (admins.has(to.trim().toLowerCase())) return;
     setOpen(false);
     if (await act({ action: "admin_add", email: to }, `${to.trim()} is an admin now`)) setEmail("");
   };
@@ -595,26 +603,34 @@ function AdminsTab({ o, act }: { o: AdminOverview; act: Act }) {
         <div className="combo">
           <label className="field">Their sign-in email
             <input type="email" value={email} placeholder="Start typing a name or email" autoComplete="off"
-                   role="combobox" aria-expanded={open && matches.length > 0} aria-controls="admin-email-list"
+                   role="combobox" aria-expanded={open && shown.length > 0} aria-controls="admin-email-list"
                    aria-autocomplete="list"
                    onChange={e => { setEmail(e.target.value); setOpen(true); setHi(0); }}
                    onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)}
                    onKeyDown={onKey} /></label>
-          {open && matches.length > 0 && (
+          {open && shown.length > 0 && (
             <ul id="admin-email-list" role="listbox" className="combo-list">
-              {matches.map((p, i) => (
-                <li key={p.email} role="option" aria-selected={i === hi} className={i === hi ? "on" : ""}
-                    onMouseDown={e => { e.preventDefault(); pick(p.email); }} onMouseEnter={() => setHi(i)}>
-                  <span>{p.email}</span>
-                  <span className="small muted">joined {p.joined ? day(p.joined) : "—"}</span>
-                </li>
-              ))}
+              {shown.map(p => {
+                const i = matches.indexOf(p);
+                return p.admin ? (
+                  <li key={p.email} role="option" aria-selected={false} aria-disabled className="taken">
+                    <span>{p.email}</span><span className="small">already an admin</span>
+                  </li>
+                ) : (
+                  <li key={p.email} role="option" aria-selected={i === hi} className={i === hi ? "on" : ""}
+                      onMouseDown={e => { e.preventDefault(); pick(p.email); }} onMouseEnter={() => setHi(i)}>
+                    <span>{p.email}</span>
+                    <span className="small muted">joined {p.joined ? day(p.joined) : "—"}</span>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
+        {already && <p className="small fail" role="status">{typed} is already an admin.</p>}
         <p className="small muted">They see the Admin tab the next time they open SwitchKaro. If they haven't joined
           yet, they can join without an invite code.</p>
-        <div><button className="primary" disabled={!email.trim()} onClick={() => add()}>Make admin</button></div>
+        <div><button className="primary" disabled={!email.trim() || already} onClick={() => add()}>Make admin</button></div>
       </div>
     </>
   );
