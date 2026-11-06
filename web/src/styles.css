@@ -93,6 +93,7 @@ label.pick input { flex-shrink: 0; }
               background: var(--card); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow); }
 .combo-list li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 10px; border-radius: 7px; cursor: pointer; }
 .combo-list li.on { background: var(--accent-soft); color: var(--accent-ink); }
+.combo-list li.taken { cursor: default; color: var(--ink-3); }
 
 .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; box-shadow: var(--shadow); }
 .list { background: var(--card); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
