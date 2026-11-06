@@ -88,6 +88,11 @@ label.inline { display: inline-flex; gap: 6px; align-items: center; margin-right
 label.pick { display: flex; gap: 8px; align-items: center; margin: 8px 0 0; font-size: 13.5px; color: var(--ink); }
 label.pick input { flex-shrink: 0; }
 .field input, .field select { width: 100%; margin-top: 3px; }
+.combo { position: relative; }
+.combo-list { position: absolute; left: 0; right: 0; z-index: 5; margin: 4px 0 0; padding: 4px; list-style: none;
+              background: var(--card); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow); }
+.combo-list li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 10px; border-radius: 7px; cursor: pointer; }
+.combo-list li.on { background: var(--accent-soft); color: var(--accent-ink); }
 
 .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; box-shadow: var(--shadow); }
 .list { background: var(--card); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }

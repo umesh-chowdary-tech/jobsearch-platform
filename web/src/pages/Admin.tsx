@@ -544,8 +544,27 @@ function Requests({ o, act }: { o: AdminOverview; act: Act }) {
  *  JOBSEARCH_ADMINS setting, whose admins can't be removed from here. */
 function AdminsTab({ o, act }: { o: AdminOverview; act: Act }) {
   const [email, setEmail] = useState("");
-  const add = async () => {
-    if (await act({ action: "admin_add", email }, `${email.trim()} is an admin now`)) setEmail("");
+  const [open, setOpen] = useState(false);
+  const [hi, setHi] = useState(0);
+  // People who have joined and aren't admins yet, matching what's typed anywhere in their email.
+  const matches = useMemo(() => {
+    const q = email.trim().toLowerCase();
+    const taken = new Set(o.admins.map(a => a.email));
+    return q ? o.people.filter(p => p.email && !taken.has(p.email) && p.email.toLowerCase().includes(q)).slice(0, 6) : [];
+  }, [email, o.people, o.admins]);
+  const add = async (to = email) => {
+    setOpen(false);
+    if (await act({ action: "admin_add", email: to }, `${to.trim()} is an admin now`)) setEmail("");
+  };
+  const pick = (to: string) => { setEmail(to); setOpen(false); };
+  const onKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (open && matches.length && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+      e.preventDefault();
+      setHi((hi + (e.key === "ArrowDown" ? 1 : matches.length - 1)) % matches.length);
+    } else if (e.key === "Enter" && email.trim()) {
+      e.preventDefault();
+      if (open && matches[hi]) pick(matches[hi].email); else add();
+    } else if (e.key === "Escape") setOpen(false);
   };
   return (
     <>
@@ -573,12 +592,29 @@ function AdminsTab({ o, act }: { o: AdminOverview; act: Act }) {
       </div>
       <h2>Add an admin</h2>
       <div className="card stack">
-        <label className="field">Their sign-in email
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="name@example.com"
-                 onKeyDown={e => { if (e.key === "Enter" && email.trim()) add(); }} /></label>
+        <div className="combo">
+          <label className="field">Their sign-in email
+            <input type="email" value={email} placeholder="Start typing a name or email" autoComplete="off"
+                   role="combobox" aria-expanded={open && matches.length > 0} aria-controls="admin-email-list"
+                   aria-autocomplete="list"
+                   onChange={e => { setEmail(e.target.value); setOpen(true); setHi(0); }}
+                   onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 150)}
+                   onKeyDown={onKey} /></label>
+          {open && matches.length > 0 && (
+            <ul id="admin-email-list" role="listbox" className="combo-list">
+              {matches.map((p, i) => (
+                <li key={p.email} role="option" aria-selected={i === hi} className={i === hi ? "on" : ""}
+                    onMouseDown={e => { e.preventDefault(); pick(p.email); }} onMouseEnter={() => setHi(i)}>
+                  <span>{p.email}</span>
+                  <span className="small muted">joined {p.joined ? day(p.joined) : "—"}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
         <p className="small muted">They see the Admin tab the next time they open SwitchKaro. If they haven't joined
           yet, they can join without an invite code.</p>
-        <div><button className="primary" disabled={!email.trim()} onClick={add}>Make admin</button></div>
+        <div><button className="primary" disabled={!email.trim()} onClick={() => add()}>Make admin</button></div>
       </div>
     </>
   );
