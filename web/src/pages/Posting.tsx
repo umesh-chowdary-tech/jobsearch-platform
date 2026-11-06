@@ -23,8 +23,11 @@ const PART_LABEL: [string, string, number][] = [
   ["place", "Place", 15], ["level", "Level", 15], ["fresh", "How new", 10],
 ];
 
-/** The offline match score, and what made it - worked out before any AI. */
-function MatchParts({ score, parts }: { score: number; parts: Record<string, number> }) {
+/** The offline match score, and what made it - worked out before any AI.
+ *  Each part is points toward the score, not a count: "18 of 45 points", and
+ *  for skills the count beside it ("8 of 12 skills"), from the posting's coverage. */
+function MatchParts({ score, parts, coverage }: { score: number; parts: Record<string, number>; coverage: string }) {
+  const [have, of] = String(coverage || "").split("/").map(Number);
   const [open, setOpen] = useState(false);
   return (
     <div className="small" style={{ marginTop: 8 }}>
@@ -32,7 +35,10 @@ function MatchParts({ score, parts }: { score: number; parts: Record<string, num
       {open && (
         <ul className="muted" style={{ margin: "6px 0 0", paddingLeft: 18 }}>
           {PART_LABEL.filter(([k]) => k in parts).map(([k, label, max]) => (
-            <li key={k}>{label}: {parts[k]}{max ? ` of ${max}` : ""}</li>
+            <li key={k}>
+              {label}: {max ? `${parts[k]} of ${max} points` : `${parts[k]} points`}
+              {k === "skills" && of > 0 ? ` (${have} of ${of} skills)` : ""}
+            </li>
           ))}
         </ul>
       )}
@@ -149,7 +155,7 @@ export function Posting({ id }: { id: string }) {
           The AI checked: {Object.entries(p.checks).map(([k, v]) => `${k} ${v === "ok" ? "✓" : v === "no" ? "✗" : "?"}`).join(" · ")}
         </p>
       )}
-      {p.match != null && p.verdict === "keep" && <MatchParts score={p.match} parts={p.match_parts} />}
+      {p.match != null && p.verdict === "keep" && <MatchParts score={p.match} parts={p.match_parts} coverage={p.coverage} />}
       <div className="tags">
         {Object.keys(p.matched).map(k => <span key={k} className="pill c">{k}</span>)}
         {p.required_gaps.map(g => <span key={g} className="pill g" title="asked for, not backed">{g}</span>)}
