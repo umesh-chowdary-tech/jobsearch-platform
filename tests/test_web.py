@@ -448,3 +448,32 @@ def test_stop_asks_the_running_cycle_to_stop(live):
         assert status == 202 and json.loads(raw)["stopping"]["what"] == "scheduled cycle"
         _, o = jget(live, "/api/overview")
         assert o["stopping"] is True
+
+
+def test_a_person_sees_why_jobs_were_filtered_out_of_their_own_list(live):
+    """Their own rejection tally, in five plain groups - counts only."""
+    tally = {"title carries no engineering signal": 40, "names no technology": 5,
+             "'sales' role": 30, "'manager' role": 20,
+             "location Pune, India does not match the profil": 8, "remote, but tied to a place the profile does": 4,
+             "title says 'senior'": 6, "asks for 5+ years, profile caps at 2": 3,
+             "something new": 1}
+    posts = {"k1": {"id": "k1", "verdict": "keep"}, "k2": {"id": "k2", "verdict": "flag"},
+             "n1": {"id": "n1", "verdict": "no_match"}, "n2": {"id": "n2", "verdict": "no_match"}}
+    (live.prof.var / "triage-results.json").write_text(
+        json.dumps({"postings": posts, "reject_reasons": tally}), encoding="utf-8")
+    status, f = jget(live, "/api/filtered")
+    assert status == 200
+    assert f["kept"] == 2 and f["read"] == 2 + 2 + sum(tally.values())
+    groups = {g["key"]: g for g in f["groups"]}
+    assert [g["key"] for g in f["groups"]] == ["not_software", "kind", "place", "level", "skills", "other"]
+    assert groups["not_software"]["count"] == 45 and groups["kind"]["count"] == 50
+    assert groups["kind"]["top"] == [{"reason": "'sales' role", "count": 30}, {"reason": "'manager' role", "count": 20}]
+    assert groups["place"]["count"] == 12 and groups["level"]["count"] == 9
+    assert groups["skills"]["count"] == 2 and groups["other"]["count"] == 1
+
+
+def test_the_filter_summary_is_on_the_hosted_service_too(live):
+    from jobsearch.web import routes
+    from jobsearch.web.runner import Runner
+    assert routes.allowed("GET", "/api/filtered", routes.HOSTED)
+    assert routes.get(live.prof, "/api/filtered", {}, Runner(live.prof), scope=routes.HOSTED)["groups"] == []

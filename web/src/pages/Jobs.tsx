@@ -14,6 +14,49 @@ const STAGE_CHOICES: [string, string][] = [["open", "Still open"], ["any", "Any 
   ...STAGES.map(s => [s, s[0].toUpperCase() + s.slice(1)] as [string, string])];
 const PAGE = 50;
 
+interface Filtered {
+  kept: number; read: number;
+  groups: { key: string; label: string; count: number; top: { reason: string; count: number }[] }[];
+}
+
+/** What a group's reasons say, shortly: "'sales' role" is "sales", a place is its name. */
+function reasonText(r: string): string {
+  return r.replace(/^'(.+)' role$/, "$1").replace(/^location (.+?) does not match.*$/, "$1")
+    .replace(/^remote, but tied to a place.*$/, "remote elsewhere")
+    .replace(/^title says '(.+)'$/, "titles with “$1”").replace(/, profile caps at \d+$/, "");
+}
+
+const WHAT_TO_DO: Record<string, string> = {
+  kind: "Kinds of work you skip are set in your Profile's preferences.",
+  place: "Add cities, or remote, in your Profile's preferences.",
+  level: "Your years of experience decide this; check them in your Profile.",
+  skills: "Add the skills you can back in your Profile, under Skills.",
+};
+
+/** Why the list is this long: your own filters' counts, from the last full read. */
+function WhyFiltered() {
+  const [f, setF] = useState<Filtered | null>(null);
+  useEffect(() => { get<Filtered>("/api/filtered").then(setF).catch(() => setF(null)); }, []);
+  if (!f || !f.read) return null;
+  return (
+    <details className="why-filtered">
+      <summary>Why these jobs? Your filters read {f.read.toLocaleString()} postings and kept {f.kept}.</summary>
+      <ul>
+        {f.groups.map(g => (
+          <li key={g.key}>
+            <b>{g.label}</b> · {g.count.toLocaleString()}
+            {g.key !== "skills" && g.key !== "not_software" && g.top.length > 0 && (
+              <span className="muted"> ({g.top.map(t => `${reasonText(t.reason)} ${t.count}`).join(", ")})</span>
+            )}
+            {WHAT_TO_DO[g.key] && <div className="small muted">{WHAT_TO_DO[g.key]} <a href="#/profile">Open Profile</a></div>}
+          </li>
+        ))}
+      </ul>
+      <p className="small muted">Most postings on the company boards aren't software jobs. To see more jobs, ask for more companies below.</p>
+    </details>
+  );
+}
+
 interface Filters {
   fit: string; stage: string; q: string; fav: boolean; later: boolean; fresh: boolean; closed: boolean;
   sort: "match" | "newest"; role: string;
@@ -156,6 +199,7 @@ export function Jobs({ query }: { query: URLSearchParams }) {
       ) : (
         <p className="empty">Nothing matches these filters. <button className="quiet" onClick={clear}>Clear filters</button></p>
       )}
+      <WhyFiltered />
       <h2>Ask for a company</h2>
       <AskCompany />
     </>
