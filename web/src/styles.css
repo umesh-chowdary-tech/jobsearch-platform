@@ -346,6 +346,14 @@ tr.manage .row + .row { margin-top: 10px; }
 .tier .lbl { font-weight: 650; }
 .tier .help { color: var(--ink-3); font-size: 12.5px; margin-bottom: 8px; }
 .tier .pill { margin: 0 4px 4px 0; }
+button.pill.pick { border: 1px solid transparent; font-weight: inherit; line-height: inherit; }
+button.pill.pick:hover { border-color: var(--ink-3); }
+button.pill.pick[aria-pressed="true"] { border-color: var(--ink-2); }
+.tier.behind { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; font-size: 13px; }
+.tier.behind button { padding: 3px 8px; font-size: 13px; }
+.card.flash { animation: flash 1.6s ease-out; }
+@keyframes flash { 0%, 30% { box-shadow: 0 0 0 3px var(--accent-soft); } 100% { box-shadow: none; } }
+@media (prefers-reduced-motion: reduce) { .card.flash { animation: none; } }
 h3.group { margin: 22px 0 10px; }
 .history { margin-bottom: 4px; }
 .legend { display: flex; gap: 16px; font-size: 12px; color: var(--ink-2); margin: 12px 0; }

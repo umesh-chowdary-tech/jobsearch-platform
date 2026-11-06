@@ -109,6 +109,31 @@ def test_a_skill_added_from_the_skills_part_is_backed_by_each_piece_of_work_pick
     assert "Go" in _entry(new, "e2")["tech"]
 
 
+def test_a_skill_added_with_no_work_counts_for_jobs_but_is_never_printed(new):
+    """Add a skill needs only its name. With no work behind it, jobs are
+    matched against it, but a resume lists a skill only under work, so it
+    never reaches one."""
+    from jobsearch.assemble import surfaced_skills
+    from jobsearch.skills import load_index
+    _saved(new)
+    out = _step(new, "add", {"kind": "skill", "fields": {"name": "Docker"}})
+    skills = {k["name"]: k for k in out["skills"]}
+    assert skills["Docker"]["backed_by"] == 0 and skills["Docker"]["tier"] == "working"
+    index = load_index(new)
+    assert index.claims["Docker"].tier == "working"
+    assert "Docker" not in surfaced_skills(load_store(new)["entries"], index, {"Docker"})
+
+
+def test_a_skill_added_on_its_own_takes_the_spelling_you_have_and_can_go(new):
+    _saved(new)
+    out = _step(new, "add", {"kind": "skill", "fields": {"name": "postgresql"}})
+    assert [k["name"] for k in out["skills"]].count("PostgreSQL") == 1
+    assert not any(k["name"] == "postgresql" for k in out["skills"])
+    _step(new, "add", {"kind": "skill", "fields": {"name": "Docker"}})
+    _step(new, "skills", {"tiers": {"Docker": "remove"}})
+    assert "Docker" not in yaml.safe_dump(_yaml(new, "skills.yaml"))
+
+
 def test_before_the_first_save_a_change_writes_nothing(new):
     _drafted(new)
     _confirm_all(new)

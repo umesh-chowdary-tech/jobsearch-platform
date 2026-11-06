@@ -4,9 +4,9 @@
 // the AI found from your files is in Setup, one card at a time; this page
 // only says how many are left. Skill gaps are on Market.
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { get, post } from "../api";
-import { deck, EditItem, Fields, FIELDS, IDENTITY, PrefsForm, type Step } from "../checking";
+import { deck, EditItem, Fields, FIELDS, IDENTITY, PrefsForm, Unsaved, useUnsaved, type Step } from "../checking";
 import type { ProfileEntry, ProfileView, SetupItem, SetupState } from "../types";
 import { Icon, useToast } from "../ui";
 
@@ -37,8 +37,10 @@ function month(s?: string): string {
   return m ? new Date(Number(m[1]), Number(m[2]) - 1).toLocaleDateString(undefined, { month: "short", year: "numeric" }) : s;
 }
 
-/** What editing needs: the draft, a way to change it, and which part is open. */
-interface Ed { s: SetupState; step: Step; editing: string; open: (part: string) => void }
+/** What editing needs: the draft, a way to change it, and which part is open.
+ *  `open` asks before dropping typing not saved yet (switching parts, Done);
+ *  `go` doesn't - for after a save, and for Cancel. */
+interface Ed { s: SetupState; step: Step; editing: string; open: (part: string) => void; go: (part: string) => void }
 
 export function Profile() {
   const [s, setS] = useState<SetupState | null>(null);
@@ -46,6 +48,18 @@ export function Profile() {
   const [err, setErr] = useState("");
   const [editing, setEditing] = useState("");
   const toast = useToast();
+  // Editors with typing not saved yet (useUnsaved).
+  const dirty = useRef(new Set<object>());
+  const report = useCallback((who: object, d: boolean) => { if (d) dirty.current.add(who); else dirty.current.delete(who); }, []);
+  const open = useCallback((part: string) => {
+    if (part !== editing && dirty.current.size && !window.confirm("You have changes you haven't saved. Drop them?")) return;
+    setEditing(part);
+  }, [editing]);
+  useEffect(() => {
+    const leaving = (e: BeforeUnloadEvent) => { if (dirty.current.size) e.preventDefault(); };
+    window.addEventListener("beforeunload", leaving);
+    return () => window.removeEventListener("beforeunload", leaving);
+  }, []);
 
   const loadView = useCallback(() => get<ProfileView>("/api/profile").then(setP).catch(e => setErr((e as Error).message)), []);
   useEffect(() => {
@@ -74,11 +88,11 @@ export function Profile() {
   const drafted = s.items.length > 0;
   // Changes here write the profile once setup has saved it from this draft
   // (onboard.resave); after "Start over" in Setup, not until it's saved again.
-  const ed: Ed | null = drafted && s.saved_at ? { s, step, editing, open: setEditing } : null;
+  const ed: Ed | null = drafted && s.saved_at ? { s, step, editing, open, go: setEditing } : null;
   const left = drafted ? deck(s).length : 0;
 
   return (
-    <>
+    <Unsaved.Provider value={report}>
       {left > 0 && (
         <a className="remind" href="#/setup">{left} {left === 1 ? "thing" : "things"} from your resume to check <span aria-hidden="true">→</span></a>
       )}
@@ -95,7 +109,7 @@ export function Profile() {
       <SkillsPart v={p} ed={ed} />
       <Experience v={p} ed={ed} />
       <PrefsPart v={p} ed={ed} />
-    </>
+    </Unsaved.Provider>
   );
 }
 
@@ -135,6 +149,7 @@ function HeadEditor({ ed }: { ed: Ed }) {
   const [lang, setLang] = useState("");
   const [busy, setBusy] = useState(false);
   const langs = s.items.filter(i => i.kind === "language" && i.state === "confirmed");
+  useUnsaved(keys.some(k => vals[k].trim() !== String(mine(k)?.value ?? "")) || !!lang.trim());
   const save = async () => {
     setBusy(true);
     for (const k of keys) {
@@ -145,7 +160,7 @@ function HeadEditor({ ed }: { ed: Ed }) {
       if (!ok) { setBusy(false); return; }
     }
     setBusy(false);
-    ed.open("");
+    ed.go("");
   };
   const addLang = async () => { if (await step("add", { kind: "language", fields: { value: lang } })) setLang(""); };
   return (
@@ -168,7 +183,7 @@ function HeadEditor({ ed }: { ed: Ed }) {
       </div>
       <div className="row">
         <button className="primary" disabled={busy || !vals.name.trim()} onClick={save}><Icon name="check" />Save</button>
-        <button className="quiet" onClick={() => ed.open("")}>Cancel</button>
+        <button className="quiet" onClick={() => ed.go("")}>Cancel</button>
       </div>
     </div>
   );
@@ -185,7 +200,7 @@ function SkillsPart({ v, ed }: { v: ProfileView; ed: Ed | null }) {
         <h2>Skills</h2>
         {ed && open !== "skills" && open !== "add-skill" && (
           <div className="row">
-            {works.length > 0 && <button className="quiet" onClick={() => ed.open("add-skill")}><Icon name="plus" />Add a skill</button>}
+            <button className="quiet" onClick={() => ed.open("add-skill")}><Icon name="plus" />Add a skill</button>
             {ed.s.skills.length > 0 && <EditButton onClick={() => ed.open("skills")} />}
           </div>
         )}
@@ -196,27 +211,35 @@ function SkillsPart({ v, ed }: { v: ProfileView; ed: Ed | null }) {
   );
 }
 
-/** A skill added straight from Skills. It still goes under the work it was
- *  used in - one add per piece of work - because a resume lists a skill only
- *  with work behind it. */
+/** A skill added straight from Skills: just its name. Ticking the work it
+ *  was used in is optional - one add per piece of work - and only then can a
+ *  resume list it, since a resume lists a skill only under work. On its own
+ *  it still counts when jobs are matched. */
 function AddSkill({ ed, works }: { ed: Ed; works: SetupItem[] }) {
   const { s, step } = ed;
   const [name, setName] = useState("");
-  const [picked, setPicked] = useState<string[]>(() => (works.length === 1 ? [works[0].id] : []));
+  const [picked, setPicked] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const typed = name.trim().toLowerCase();
   const known = typed ? s.skills.find(k => k.name.toLowerCase() === typed) : undefined;
   const listed = new Set(s.items.filter(i => i.kind === "tech" && i.state === "confirmed" && typed
                                         && String(i.name || "").toLowerCase() === typed).map(i => i.entry));
   const todo = picked.filter(id => !listed.has(id));
-  const ready = !busy && !!typed && todo.length > 0;
+  // Nothing ticked adds the skill on its own - unless you have it already.
+  const ready = !busy && !!typed && (todo.length > 0 || (!picked.length && !known));
+  useUnsaved(!!typed);
   const add = async () => {
     setBusy(true);
+    if (!todo.length) {
+      if (await step("add", { kind: "skill", fields: { name: name.trim() } })) ed.go("");
+      setBusy(false);
+      return;
+    }
     for (const id of todo) {
       if (!await step("add", { kind: "tech", entry: id, fields: { name: name.trim() } })) { setBusy(false); return; }
     }
     setBusy(false);
-    ed.open("");
+    ed.go("");
   };
   return (
     <div className="card stack edit-card">
@@ -225,8 +248,9 @@ function AddSkill({ ed, works }: { ed: Ed; works: SetupItem[] }) {
         <input type="text" value={name} placeholder="The skill, like “PostgreSQL”" aria-label="The skill"
                onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && ready) add(); }} />
       </div>
-      <div>
-        <div className="small muted">Where you used it. A resume lists a skill only with the work behind it.</div>
+      {works.length > 0 && <div>
+        <div className="small muted">Where you used it - optional. Resumes list a skill only under work you tick; with
+          none ticked, it still counts when jobs are matched to you.</div>
         {works.map(w => (
           <label key={w.id} className="pick">
             <input type="checkbox" checked={listed.has(w.id) || picked.includes(w.id)} disabled={listed.has(w.id)}
@@ -235,18 +259,34 @@ function AddSkill({ ed, works }: { ed: Ed; works: SetupItem[] }) {
               {listed.has(w.id) && <span className="muted"> · already listed</span>}</span>
           </label>
         ))}
-      </div>
-      {known && <p className="small muted">You have {known.name} already. This adds the work you tick to it.</p>}
+      </div>}
+      {known && <p className="small muted">You have {known.name} already.{works.length > 0 && " Tick work to add it to."}</p>}
       <div className="row">
         <button className="primary" disabled={!ready} onClick={add}><Icon name="plus" />Add the skill</button>
-        <button className="quiet" onClick={() => ed.open("")}>Cancel</button>
+        <button className="quiet" onClick={() => ed.go("")}>Cancel</button>
       </div>
     </div>
   );
 }
 
+/** The id of a piece of work's card, to scroll to from a skill. */
+const cardId = (id: string) => `work-${id}`;
+
+/** Scroll to a piece of work and flash it, so the eye lands on it. */
+function showWork(id: string) {
+  const el = document.getElementById(cardId(id));
+  if (!el) return;
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  el.classList.remove("flash");
+  void el.offsetWidth;            // restart the animation on a second click
+  el.classList.add("flash");
+}
+
 function Skills({ v, editable }: { v: ProfileView; editable: boolean }) {
+  const [picked, setPicked] = useState("");
   const shown = TIERS.filter(([k]) => v.tiers[k]?.length);
+  const named = (e: ProfileEntry) => (e.tech || []).some(t => t.toLowerCase() === picked.toLowerCase());
+  const behind = picked ? v.entries.filter(named) : [];
   return (
     <div className="card">
       {shown.length ? shown.map(([k, label, help]) => (
@@ -255,15 +295,26 @@ function Skills({ v, editable }: { v: ProfileView; editable: boolean }) {
           <div className="help">{help}</div>
           <div>
             {v.tiers[k].map(s => (
-              <span key={s.skill} className={`pill${k === "core" ? " c" : ""}`} title={s.scope || undefined}>
+              <button key={s.skill} type="button" className={`pill pick${k === "core" ? " c" : ""}`} title={s.scope || undefined}
+                      aria-pressed={picked === s.skill} onClick={() => setPicked(picked === s.skill ? "" : s.skill)}>
                 {s.skill}{k === "scoped" && s.scope ? ` (${s.scope})` : ""}
-              </span>
+              </button>
             ))}
           </div>
         </div>
       )) : <p className="empty">No skills yet.</p>}
-      <p className="small muted tier">Skills come only from work you added. {editable
-        ? "Add a skill asks which work you used it in."
+      {picked && (
+        <div className="tier behind" aria-live="polite">
+          {behind.length ? <>
+            <span><b>{picked}</b> · in {behind.length === 1 ? "1 piece of work" : `${behind.length} pieces of work`}:</span>
+            {behind.map(e => (
+              <button key={e.id} type="button" className="quiet" onClick={() => showWork(e.id)}>{e.title || e.headline || e.id}</button>
+            ))}
+          </> : <span><b>{picked}</b> · no work lists it, so resumes leave it out. It still counts when jobs are matched.</span>}
+        </div>
+      )}
+      <p className="small muted tier">Click a skill to see the work behind it. Resumes list a skill only under work. {editable
+        ? "Add a skill needs just its name."
         : <>To change one, <a href="#/setup">update it in Setup</a>.</>}</p>
     </div>
   );
@@ -273,6 +324,7 @@ function SkillsEditor({ ed }: { ed: Ed }) {
   const { s, step } = ed;
   const [tiers, setTiers] = useState<Record<string, string>>(() => Object.fromEntries(s.skills.map(k => [k.name, k.tier])));
   const changed = s.skills.some(k => tiers[k.name] !== k.tier);
+  useUnsaved(changed);
   return (
     <div className="card stack edit-card">
       <p className="small">How well you know each. “Touched it” is never listed on a resume; “Not a skill of mine” takes it
@@ -281,7 +333,7 @@ function SkillsEditor({ ed }: { ed: Ed }) {
         {s.skills.map(k => (
           <tr key={k.name}>
             <td>{k.name}</td>
-            <td className="muted small">{k.backed_by === 1 ? "1 piece of work" : `${k.backed_by} pieces of work`}</td>
+            <td className="muted small">{k.backed_by === 0 ? "No work - not on resumes" : k.backed_by === 1 ? "1 piece of work" : `${k.backed_by} pieces of work`}</td>
             <td><select aria-label={`How well you know ${k.name}`} value={tiers[k.name]}
                         onChange={e => setTiers({ ...tiers, [k.name]: e.target.value })}>
               {TIER_PICK.map(([val, l]) => <option key={val} value={val}>{l}</option>)}
@@ -290,9 +342,9 @@ function SkillsEditor({ ed }: { ed: Ed }) {
         ))}
       </tbody></table></div>
       <div className="row">
-        <button className="primary" disabled={!changed} onClick={async () => { if (await step("skills", { tiers })) ed.open(""); }}>
+        <button className="primary" disabled={!changed} onClick={async () => { if (await step("skills", { tiers })) ed.go(""); }}>
           <Icon name="check" />Save</button>
-        <button className="quiet" onClick={() => ed.open("")}>Cancel</button>
+        <button className="quiet" onClick={() => ed.go("")}>Cancel</button>
       </div>
     </div>
   );
@@ -357,7 +409,7 @@ function Entry({ e, onEdit }: { e: ProfileEntry; onEdit?: () => void }) {
   const meta = [e.where, e.period].filter(Boolean).join(" · ");
   const evidence = href(e.evidence);
   return (
-    <div className="card entry">
+    <div className="card entry" id={cardId(e.id)}>
       <div className="spread">
         <div>
           <b>{e.title || e.headline || e.id}</b>
@@ -401,6 +453,7 @@ function NewItem({ kind, ed, done, label }: { kind: string; ed: Ed; done: (next:
   const fields = FIELDS[kind];
   const [vals, setVals] = useState<Record<string, string>>(() => Object.fromEntries(fields.map(([k]) => [k, k === "type" ? "work" : ""])));
   const [busy, setBusy] = useState(false);
+  useUnsaved(Object.entries(vals).some(([k, x]) => (k === "type" ? x !== "work" : !!x.trim())));
   const add = async () => {
     setBusy(true);
     const next = await ed.step("add", { kind, fields: Object.fromEntries(Object.entries(vals).filter(([, x]) => x.trim())) });
@@ -425,9 +478,9 @@ function AddWork({ ed }: { ed: Ed }) {
       <p className="small muted">In your own words - it goes in as you write it. Then add its facts, results and skills.</p>
       <NewItem kind="entry" ed={ed} label="Add it" done={next => {
         const made = next.items.find(i => i.kind === "entry" && !before.has(i.id));
-        ed.open(made ? made.id : "");
+        ed.go(made ? made.id : "");
       }} />
-      <div><button className="quiet" onClick={() => ed.open("")}>Cancel</button></div>
+      <div><button className="quiet" onClick={() => ed.go("")}>Cancel</button></div>
     </div>
   );
 }
@@ -458,6 +511,7 @@ function JobsEditor({ ed }: { ed: Ed }) {
 function Line({ it, field, step, extra }: { it: SetupItem; field: string; step: Step; extra?: ReactNode }) {
   const [v, setV] = useState(String(it[field] ?? ""));
   const changed = v.trim() !== String(it[field] ?? "");
+  useUnsaved(changed);
   return (
     <div className="line">
       <input type="text" value={v} aria-label="Edit this line" onChange={e => setV(e.target.value)} />
@@ -473,6 +527,7 @@ function AddLine({ placeholder, onAdd, children }: {
 }) {
   const [v, setV] = useState("");
   const clear = () => setV("");
+  useUnsaved(!!v.trim());
   const go = async () => { if (v.trim() && onAdd && await onAdd(v)) clear(); };
   return (
     <div className="line">
@@ -521,7 +576,7 @@ function EntryEditor({ e, ed }: { e: SetupItem; ed: Ed }) {
   const add = (kind: string, fields: object) => step("add", { kind, entry: e.id, fields });
   const notes = under("note");
   return (
-    <div className="card stack entry-edit">
+    <div className="card stack entry-edit" id={cardId(e.id)}>
       <EditItem key={JSON.stringify(e)} it={e} step={step} />
       <Part title="Facts" hint="What you did, in your own words. Numbers only if they're true.">
         {under("fact").map(f => <Line key={`${f.id}-${f.text}`} it={f} field="text" step={step} />)}
@@ -562,12 +617,12 @@ function EntryEditor({ e, ed }: { e: SetupItem; ed: Ed }) {
       </Part>
       <Labels e={e} step={step} angles={s.interview.angles} />
       {waiting > 0 && <p className="small muted">{waiting} more from your files {waiting === 1 ? "is" : "are"} waiting
-        under “Not in your profile yet”, above.</p>}
+        for you to check in <a href="#/setup">Setup</a>.</p>}
       <div className="row">
         <button className="primary" onClick={() => ed.open("")}>Done</button>
         <button className="quiet" onClick={async () => {
-          if (window.confirm("Remove this from your profile? You can put it back from “You left out”.")) {
-            if (await step("item", { id: e.id, state: "removed" })) ed.open("");
+          if (window.confirm("Remove this from your profile? You can bring it back in Setup, under “You said no to”.")) {
+            if (await step("item", { id: e.id, state: "removed" })) ed.go("");
           }
         }}>Remove this work</button>
       </div>
@@ -614,8 +669,8 @@ function Prefs({ v, editable }: { v: ProfileView; editable: boolean }) {
 function PrefsEditor({ ed }: { ed: Ed }) {
   return (
     <div className="card edit-card">
-      <PrefsForm s={ed.s} label="Save" onCancel={() => ed.open("")}
-                 onSave={async v => { if (await ed.step("prefs", { prefs: v })) ed.open(""); }} />
+      <PrefsForm s={ed.s} label="Save" onCancel={() => ed.go("")}
+                 onSave={async v => { if (await ed.step("prefs", { prefs: v })) ed.go(""); }} />
     </div>
   );
 }
