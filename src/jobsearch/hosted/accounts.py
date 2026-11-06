@@ -51,7 +51,7 @@ def load(shared: Path) -> dict[str, Any]:
         data = json.loads(_path(shared).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         data = {}
-    return {"users": data.get("users") or {}, "invites": data.get("invites") or {}}
+    return {"users": data.get("users") or {}, "invites": data.get("invites") or {}, "admins": data.get("admins") or {}}
 
 
 def _save(shared: Path, data: dict[str, Any]) -> None:
@@ -195,5 +195,52 @@ def remove(shared: Path, sub: str) -> None:
         _save(shared, data)
 
 
-def admins() -> set[str]:
+def plausible_email(email: str) -> bool:
+    """Shaped like an address, checked without a regex that could backtrack
+    on a long input."""
+    local, at, domain = email.partition("@")
+    return (bool(at) and 0 < len(local) <= 64 and 3 < len(domain) <= 190 and "@" not in domain
+            and "." in domain.strip(".") and not any(c.isspace() for c in email))
+
+
+def server_admins() -> set[str]:
+    """The service's own setting (JOBSEARCH_ADMINS): always admins, and not
+    removable from the admin page, so nobody can lock everyone out."""
     return {e.strip().lower() for e in os.environ.get("JOBSEARCH_ADMINS", "").split(",") if e.strip()}
+
+
+def added_admins(shared: Path | None) -> dict[str, dict[str, Any]]:
+    """Admins added on the admin page: email -> who added them, and when."""
+    return dict(load(shared)["admins"]) if shared is not None else {}
+
+
+def admins(shared: Path | None = None) -> set[str]:
+    """Everyone who sees the admin page: the server's setting and the page's
+    list. Without `shared`, the server's setting alone."""
+    return server_admins() | set(added_admins(shared))
+
+
+def add_admin(shared: Path, email: str, by: str) -> None:
+    email = email.strip().lower()
+    if not plausible_email(email):
+        raise AccountError("enter an email address")
+    with _lock:
+        data = load(shared)
+        if email in server_admins() or email in data["admins"]:
+            raise AccountError(f"{email} is already an admin")
+        data["admins"][email] = {"by": by, "at": utcnow()}
+        _save(shared, data)
+
+
+def remove_admin(shared: Path, email: str) -> None:
+    """Rewrites accounts.json without them - a file the database mirrors, so
+    the removal survives a restart (a deleted file would come back)."""
+    email = email.strip().lower()
+    if email in server_admins():
+        raise AccountError(f"{email} is an admin in the service's own settings (JOBSEARCH_ADMINS); "
+                           "remove them there")
+    with _lock:
+        data = load(shared)
+        if data["admins"].pop(email, None) is None:
+            raise AccountError(f"{email} isn't an admin")
+        _save(shared, data)

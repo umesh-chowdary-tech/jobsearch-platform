@@ -52,12 +52,7 @@ DELETE_WORDS = "delete my account"
 log = logging.getLogger("jobsearch.hosted")
 
 
-def plausible_email(email: str) -> bool:
-    """Shaped like an address, checked without a regex that could backtrack
-    on a long input. Dev sign-in only; Supabase checks real ones."""
-    local, at, domain = email.partition("@")
-    return (bool(at) and 0 < len(local) <= 64 and 3 < len(domain) <= 190 and "@" not in domain
-            and "." in domain.strip(".") and not any(c.isspace() for c in email))
+plausible_email = accounts.plausible_email     # dev sign-in checks addresses the same way
 
 
 def _plain(name: str, limit: int) -> str:
@@ -188,7 +183,7 @@ class Service:
 
     def admin(self, request: Request) -> Who:
         who = self.who(request)
-        if not who.email or who.email not in accounts.admins():
+        if not who.email or who.email not in accounts.admins(self.shared):
             raise ApiError(403, "admins only")
         return who
 
@@ -198,7 +193,7 @@ class Service:
         if row:
             self._seen(who, row)
         return {"email": who.email, "member": row is not None, "suspended": bool((row or {}).get("suspended")),
-                "profile_ready": bool(prof and prof.exists()), "admin": bool(who.email and who.email in accounts.admins()),
+                "profile_ready": bool(prof and prof.exists()), "admin": bool(who.email and who.email in accounts.admins(self.shared)),
                 "consent": (row or {}).get("consent"), "consent_current": accounts.consent_current(row)}
 
 
@@ -450,7 +445,7 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
             try:
                 accounts.join(svc.shared, who.sub, who.email, str(body.get("code") or ""),
                               str(body.get("consent") or ""),
-                              admin=bool(who.email and who.email in accounts.admins()))
+                              admin=bool(who.email and who.email in accounts.admins(svc.shared)))
             except accounts.AccountError as exc:
                 raise ApiError(400, str(exc)) from exc
             return svc.me(who)

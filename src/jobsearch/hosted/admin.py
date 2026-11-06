@@ -422,6 +422,10 @@ def overview(svc: Service, missing_settings: list[str]) -> dict[str, Any]:
                        for job, spec in JOBS.items()],
         },
         "log": history(shared),
+        # The server's setting first (not removable here), then the page's list.
+        "admins": ([{"email": e, "source": "server", "by": None, "at": None} for e in sorted(accounts.server_admins())]
+                   + [{"email": e, "source": "added", "by": v.get("by"), "at": v.get("at")}
+                      for e, v in sorted(accounts.added_admins(shared).items()) if e not in accounts.server_admins()]),
         "requests": company_requests.all_requests(shared),
     }
 
@@ -539,6 +543,13 @@ def act(svc: Service, by: str, body: dict[str, Any]) -> dict[str, Any]:
         except company_requests.RequestError as exc:
             raise AdminError(str(exc)) from None
         record(shared, by, action, row["company"], note[:120])
+    elif action in ("admin_add", "admin_remove"):
+        email = str(body.get("email") or "")[:254].strip().lower()
+        if action == "admin_add":
+            accounts.add_admin(shared, email, by)
+        else:
+            accounts.remove_admin(shared, email)
+        record(shared, by, action, email)
     elif action in ("cycle_pause", "cycle_resume"):
         if action == "cycle_pause":
             cycle.pause(shared, None)
