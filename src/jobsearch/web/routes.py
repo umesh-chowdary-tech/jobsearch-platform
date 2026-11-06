@@ -56,7 +56,7 @@ _ID = r"[\w.-]+"
 # there: the inbox, the board registry and the schedule belong to the local
 # app or to whoever runs the service.
 HOSTED_GET = tuple(re.compile(p) for p in (
-    r"/api/(overview|today|postings|resumes|profile|setup|market|actions|job|outreach|applications|companies)",
+    r"/api/(overview|today|postings|resumes|profile|setup|market|filtered|actions|job|outreach|applications|companies)",
     rf"/api/postings/{_ID}", rf"/api/postings/{_ID}/(kit|leads)"))
 HOSTED_POST = tuple(re.compile(p) for p in (
     r"/api/setup/(upload|draft|items?|fact|add|restore|dismiss|skills|prefs|save|link|note|remove|reset|ask|answer|apply|"
@@ -121,6 +121,7 @@ def get(prof: Profile, path: str, query: dict[str, list[str]], runner: Runner, s
         "/api/resumes": lambda: state.resumes(prof),
         "/api/outreach": lambda: state.outreach_view(prof),
         "/api/market": lambda: state.market(prof),
+        "/api/filtered": lambda: state.filtered(prof),
         "/api/system": lambda: state.system(prof),
         "/api/profile": lambda: state.profile(prof),
         # The local app's view also covers the inbox it reads; the service

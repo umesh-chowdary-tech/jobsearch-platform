@@ -291,6 +291,40 @@ def today(prof: Profile, since: str | None = None, only_today: bool = False,
     }
 
 
+# ── why so few ───────────────────────────────────────────────────────────────
+
+# The rejection tally's reasons (triage.py), in the groups a person can act on.
+# First match wins; anything new lands in "other" rather than nowhere.
+FILTER_GROUPS: tuple[tuple[str, str, re.Pattern[str]], ...] = (
+    ("not_software", "Not a software job", re.compile(r"no engineering signal|names no technology")),
+    ("kind", "A kind of work you skip", re.compile(r"^'.+' role$")),
+    ("place", "A place you didn't list", re.compile(r"^location |^remote, ")),
+    ("level", "Above your level or years", re.compile(r"^title says |^asks for \d+\+ years")),
+)
+
+
+def filtered(prof: Profile) -> dict[str, Any]:
+    """Why this person's list is as short as it is: every posting their
+    filters read, and the reasons the rest went - their own counts, nothing
+    about anyone else and no posting named."""
+    blob = _read(prof.var / "triage-results.json", {}) or {}
+    tally = {str(k): int(v) for k, v in (blob.get("reject_reasons") or {}).items() if isinstance(v, int) and v > 0}
+    verdicts = [str((p or {}).get("verdict") or "") for p in (blob.get("postings") or {}).values()]
+    kept = sum(v in ("keep", "flag") for v in verdicts)
+    groups: dict[str, dict[str, Any]] = {key: {"key": key, "label": label, "count": 0, "top": []}
+                                         for key, label, _ in FILTER_GROUPS}
+    groups["skills"] = {"key": "skills", "label": "No skill you've backed", "count": 0, "top": []}
+    groups["other"] = {"key": "other", "label": "Other reasons", "count": 0, "top": []}
+    for reason, n in sorted(tally.items(), key=lambda kv: (-kv[1], kv[0])):
+        key = next((k for k, _, pat in FILTER_GROUPS if pat.search(reason)), "other")
+        groups[key]["count"] += n
+        if len(groups[key]["top"]) < 3:
+            groups[key]["top"].append({"reason": reason, "count": n})
+    groups["skills"]["count"] = sum(v == "no_match" for v in verdicts)
+    return {"kept": kept, "read": len(verdicts) + sum(tally.values()),
+            "groups": [g for g in groups.values() if g["count"]]}
+
+
 # ── health ───────────────────────────────────────────────────────────────────
 
 _LOG_LINE = re.compile(r"^(\d{4}-\d{2}-\d{2}T[\d:]+\+00:00)\s{2}(.*)$")
