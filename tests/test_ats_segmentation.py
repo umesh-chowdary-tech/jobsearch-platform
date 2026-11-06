@@ -158,3 +158,42 @@ def test_the_languages_section_does_not_swallow_experience(store, index, ai_resu
     v, entries, skills = ai_resume
     exp = experience_section(_renders(store, index, v, entries, skills)["text"])
     assert "Marathi" not in exp and "Software Engineer II" in exp
+
+
+# ── a profile with no title saved ────────────────────────────────────────────
+# A real resume from Setup had no title and no employment rows. Its dated
+# line read only "Apr 2022 - Present", and a parser took the first piece of
+# work below it ("Ticket Agent") for the job and the employer.
+
+NO_TITLE_READ = """Asha Example
+EXPERIENCE
+Apr 2022 - Present
+Acme Freight
+Ticket Agent
+Built a ticket agent · since 2026
+"""
+
+
+def _untitled(store):
+    idn = {**store["identity"], "title": {"official": ""}, "employment": []}
+    return idn
+
+
+def test_a_bare_dated_line_fails_the_check(store):
+    work = [{"id": "x", "type": "work", "where": "Acme Freight", "period": "2022-04 to present"}]
+    res = {c["check"]: c for c in check_text(NO_TITLE_READ, _untitled(store), work, [])["checks"]}
+    assert not res["dated line names the job"]["ok"]
+
+
+@pytest.mark.parametrize("fmt", ["text", "html", "latex"])
+def test_with_no_title_the_employer_is_on_the_dated_line(store, index, ai_resume, fmt):
+    v, entries, skills = ai_resume
+    v = Variant(**{**v.to_dict(), "title_descriptor": ""})
+    idn = _untitled(store)
+    text = {"text": render_text(idn, v, entries, skills, index),
+            "html": strip_html(render_html(idn, v, entries, skills, index)),
+            "latex": latex_to_text(render_latex(idn, v, entries, skills, index))}[fmt]
+    res = check_text(text, idn, entries, skills)
+    assert res["ok"], [c for c in res["checks"] if not c["ok"]]
+    dated = [l for l in experience_section(text).splitlines() if _RANGE.search(l)]
+    assert len(dated) == 1 and "Acme Freight" in dated[0], dated

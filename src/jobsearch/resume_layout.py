@@ -84,6 +84,40 @@ def position_title(identity: dict[str, Any] | None, descriptor: str | None = Non
     return band or (descriptor or "")
 
 
+def _recency(e: dict[str, Any]) -> tuple[int, int]:
+    return (_year(e.get("period")), int(_is_present(e.get("period"))))
+
+
+def newest_first(items: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(items, key=lambda e: (-_recency(e)[0], -_recency(e)[1]))
+
+
+def projects(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """One job's work as projects, each with the pieces that are `part_of` it.
+
+    Six workstreams under one job read as six small things, and the one a
+    parser met first was taken for the job: "Ticket Agent" became the employer.
+    A person says which piece belongs to which project; the page prints the
+    project once, its pieces beneath it. A piece whose project is not on the
+    page stands as a project of its own.
+
+    Newest first, by the newest thing in each project - a 2026 piece keeps its
+    2025 project above a 2024 one.
+    """
+    ids = {str(e.get("id")) for e in items if e.get("id")}
+    leads = [e for e in items if str(e.get("part_of") or "") not in ids]
+    out = []
+    for lead in leads:
+        pieces = newest_first(e for e in items if e.get("id") is not None and e is not lead
+                              and str(e.get("part_of") or "") == str(lead.get("id")))
+        newest = max([_recency(lead)] + [_recency(p) for p in pieces])
+        out.append({"entry": lead, "pieces": pieces, "_newest": newest})
+    out.sort(key=lambda g: (-g["_newest"][0], -g["_newest"][1]))
+    for g in out:
+        g.pop("_newest")
+    return out
+
+
 def group_work(entries: list[dict[str, Any]],
                identity: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     """One block per employer, newest first: title, employer, one date range.
@@ -123,7 +157,9 @@ def group_work(entries: list[dict[str, Any]],
             span = f"{_month(earliest)} - Present" if ongoing else entry_period(
                 {"period": earliest})
             location = ""
-        out.append({"employer": employer, "period": span, "entries": items,
+        groups = projects(items)
+        items = [x for g in groups for x in (g["entry"], *g["pieces"])]
+        out.append({"employer": employer, "period": span, "entries": items, "projects": groups,
                     "location": location, "start_year": first,
                     "_sort": (first, 1 if ongoing else 0)})
     return sorted(out, key=lambda b: (-b["_sort"][1], -b["_sort"][0]))
@@ -191,6 +227,38 @@ def _is_method(skill: str, index: SkillIndex) -> bool:
 
 
 METHODS = "methods"
+
+
+# A project's one Stack line covers its pieces too, so it may name more.
+PROJECT_STACK_CAP = 8
+
+
+def project_stack(group: dict[str, Any], skills: Iterable[str],
+                  index: SkillIndex | None) -> list[str]:
+    """The Stack line for a project and its pieces, printed once under it."""
+    members = [group["entry"], *group["pieces"]]
+    if not group["pieces"]:
+        return stack_items(group["entry"], skills, index)
+    if index is None:
+        return []
+    mine = {c.skill for e in members for c in index.emittable_for(e.get("tech") or [])}
+    return [s for s in skills if (index.canonical(s) or s) in mine
+            and not _is_method(s, index)][:PROJECT_STACK_CAP]
+
+
+def job_line(identity: dict[str, Any] | None, descriptor: str | None, employer: str,
+             location: str) -> tuple[str, str]:
+    """(the dated line's words, the line under it).
+
+    The dated line must name the job. With no title saved it named nothing -
+    just "Apr 2022 - Present" - and a parser took the first bold line below,
+    a piece called "Ticket Agent", for the job and its "since 2026" for the
+    dates. With no title, the employer goes on the dated line instead.
+    """
+    title = position_title(identity, descriptor)
+    if title:
+        return title, employer + (f", {location}" if location else "")
+    return employer, location
 
 
 def practice_items(entries: Iterable[dict[str, Any]], skills: Iterable[str],

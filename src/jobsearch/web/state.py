@@ -541,7 +541,7 @@ def market(prof: Profile) -> dict[str, Any]:
 
 
 ENTRY_FIELDS = ("id", "title", "type", "where", "period", "headline", "facts", "metrics", "tech",
-                "confidence", "priority", "status", "angles", "evidence", "sources", "notes")
+                "confidence", "priority", "status", "angles", "evidence", "sources", "notes", "part_of")
 
 
 def _prefs_view(prof: Profile) -> dict[str, Any] | None:

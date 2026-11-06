@@ -993,15 +993,18 @@ def apply_answers(prof: Profile, llm: LLM | None = None) -> dict[str, Any]:
     return d
 
 
-def set_labels(prof: Profile, entry: str, angles: list[str] | None = None, cut_first: bool | None = None
-               ) -> dict[str, Any]:
-    """The person's own say on a piece of work's angles, and whether a resume
-    cuts it first."""
+def set_labels(prof: Profile, entry: str, angles: list[str] | None = None, cut_first: bool | None = None,
+               part_of: str | None = None) -> dict[str, Any]:
+    """The person's own say on a piece of work's angles, whether a resume
+    cuts it first, and which project at the same job it is part of ("" for
+    none). A resume prints a piece under its project, never as a job."""
     with editing(prof.var):
         d = load_draft(prof)
         it = _find(d, entry)
         if it["kind"] != "entry":
             raise SetupError(f"{entry!r} is not a piece of work")
+        if part_of is not None:
+            _set_part_of(d, it, part_of)
         if angles is not None:
             bad = [a for a in angles if a not in Q.ANGLES]
             if bad:
@@ -1015,6 +1018,29 @@ def set_labels(prof: Profile, entry: str, angles: list[str] | None = None, cut_f
         it["labels_by"] = "you"
         _save(prof, d)
         return it
+
+
+def _set_part_of(d: dict[str, Any], it: dict[str, Any], parent: str) -> None:
+    """One level only: a project holds pieces, a piece holds nothing. Both are
+    work at the same employer - a piece of another job is another job."""
+    parent = str(parent or "").strip()
+    if not parent:
+        it.pop("part_of", None)
+        return
+    if it.get("type") != "work":
+        raise SetupError("only work at a job can be part of a project")
+    if parent == it["id"]:
+        raise SetupError("a piece of work can't be part of itself")
+    p = _find(d, parent)
+    if p["kind"] != "entry" or p.get("type") != "work" or p.get("state") == "removed":
+        raise SetupError("pick a project from the same job")
+    if _norm(p.get("where")) != _norm(it.get("where")):
+        raise SetupError("pick a project from the same job")
+    if p.get("part_of"):
+        raise SetupError(f"{p.get('title') or p.get('headline')!r} is itself part of a project - pick that one")
+    if any(o.get("part_of") == it["id"] for o in d.get("items") or [] if o["kind"] == "entry"):
+        raise SetupError("other work is part of this one - move it first")
+    it["part_of"] = parent
 
 
 def _confirmed(d: dict[str, Any], kind: str) -> list[dict[str, Any]]:
@@ -1193,6 +1219,7 @@ def build(d: dict[str, Any], prefs: dict[str, Any]) -> tuple[dict, dict, dict]:
             "tech": [t["name"] for t in tech if t["entry"] == eid],
             "angles": list(e.get("angles") or []), "evidence": _evidence([e, *mine], names), "confidence": "high",
             **({"priority": "low"} if e.get("priority") == "low" else {}),
+            **({"part_of": e["part_of"]} if e.get("part_of") in live and e.get("type") == "work" else {}),
             **({"notes": " ".join(said)} if said else {}),
             "sources": [s for x in [e, *mine, *results] for s in _provenance(x, names)],
         })
@@ -1244,12 +1271,12 @@ def build(d: dict[str, Any], prefs: dict[str, Any]) -> tuple[dict, dict, dict]:
 # What a person (or anyone, by hand) may have added to a saved profile that
 # setup doesn't write: saving again keeps it.
 KEEP_ON_ENTRY = ("status", "pins", "scope")
-KEEP_IF_EMPTY = ("metrics", "angles", "notes", "priority")
+KEEP_IF_EMPTY = ("metrics", "angles", "notes", "priority", "part_of")
 
 
 def _keep_hand_work(prof: Profile, store: dict, skills: dict, d: dict[str, Any]) -> tuple[dict, dict]:
     """Saving over an existing profile keeps what setup doesn't produce: an
-    entry added by hand, an entry's notes, metrics, angles, priority; an
+    entry added by hand, an entry's notes, metrics, angles, priority, part_of; an
     approved job-title descriptor; skills marked banned or not-skills.
     What the draft itself has a say on - a piece of work, a skill, a contact
     detail, an entry's results or notes the person removed - goes by the
@@ -1261,7 +1288,8 @@ def _keep_hand_work(prof: Profile, store: dict, skills: dict, d: dict[str, Any])
     has = {(it.get("entry"), it["kind"]) for it in items if it.get("entry")}
     labelled = {it["id"] for it in items if it["kind"] == "entry" and it.get("labels_by")}
     decides = {"metrics": lambda eid: (eid, "metric") in has, "notes": lambda eid: (eid, "note") in has,
-               "angles": lambda eid: eid in labelled, "priority": lambda eid: eid in labelled}
+               "angles": lambda eid: eid in labelled, "priority": lambda eid: eid in labelled,
+               "part_of": lambda eid: eid in labelled}
 
     def read(name: str) -> dict:
         try:

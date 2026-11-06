@@ -96,25 +96,32 @@ def substance(e: dict[str, Any]) -> tuple:
             _start_year(e))
 
 
+# Projects per job. Past two, a project prints only when it adds something the
+# posting asks for that nothing chosen has - the Java a Java posting wants.
+MAX_PROJECTS = 2
+# Pieces under one project.
+MAX_PIECES = 3
+
+
 def select_entries(store: dict[str, Any], index: SkillIndex,
                    wanted: "PostingKeywords | set[str]", max_work: int = 6,
                    max_projects: int = 3, scorer: Scorer | None = None
                    ) -> list[dict[str, Any]]:
-    """The entries that make the best-matching page, one slot at a time.
+    """The entries that make the best-matching page, one project at a time.
 
-    Each slot goes to the entry that raises the ATS match most, given what is
-    already chosen (ats.py). That one rule replaces the hand-set bonuses this
-    used to add up - +4 for the right angle, +2 for employment, -50 for a
-    low-priority entry - and the angle guess that came before them, which
-    tied three ways on a Java posting and was settled by file order.
+    Work is chosen as projects: an entry with the pieces that are `part_of` it
+    (resume_layout.projects). Printed one by one, six workstreams of one job
+    read as six small things, and a parser took the first one for the job.
 
-    It also makes "cut this first" mean what it says. A low-priority entry
-    loses every tie, so it fills a slot only when it adds something nothing
-    else can: when it is the only Spring Boot on record, a Spring Boot posting
-    gets it and a Python one does not.
+    Each slot goes to the project (or side project) that raises the ATS match
+    most, given what is already chosen (ats.py). A job shows up to
+    MAX_PROJECTS; another prints only if it raises the match. "Cut this first"
+    loses every tie, so a low-priority entry fills a slot only when it adds
+    something nothing else can: the only Spring Boot on record prints for a
+    Spring Boot posting and not for a Python one.
 
-    Only store entries are chosen, and they print verbatim. Coverage can only
-    rise by choosing true things.
+    `max_work` caps the projects across all jobs, `max_projects` the side
+    projects. Only store entries are chosen, and they print verbatim.
     """
     if not isinstance(wanted, PostingKeywords):
         from .ats import keywords_for
@@ -122,39 +129,86 @@ def select_entries(store: dict[str, Any], index: SkillIndex,
     scorer = scorer or Scorer(wanted, index)
     entries = [e for e in (store.get("entries") or []) if emittable(e)]
     work = [e for e in entries if e.get("type") == "work"]
-    projects = [e for e in entries if e.get("type") == "project"]
+    side = [e for e in entries if e.get("type") == "project"]
     rest = [e for e in entries if e.get("type") in ("education", "certification",
                                                     "award", "profile")]
+
+    def page_of(chosen: list[list[dict[str, Any]]]) -> list[dict[str, Any]]:
+        return [e for g in chosen for e in g] + rest
+
+    def score(page: list[dict[str, Any]]) -> Match:
+        skills = surfaced_skills(page, index, wanted.claimable, weights=wanted.weights)
+        return scorer.score(page, skills, "")
+
+    # Each job's projects, with their best pieces (by what they add, then
+    # the same tie-breaks as everything else).
+    from .resume_layout import projects
+    by_job: dict[str, list[dict[str, Any]]] = {}
+    for e in work:
+        by_job.setdefault(str(e.get("where") or "-"), []).append(e)
+    groups: list[list[dict[str, Any]]] = []
+    for items in by_job.values():
+        for g in projects(items):
+            lead = g["entry"]
+            pieces = sorted(g["pieces"], key=lambda p: (score([lead, p] + rest).key, substance(p)),
+                            reverse=True)[:MAX_PIECES]
+            groups.append([lead, *pieces])
+    groups += [[e] for e in side]
+
+    def job(g: list[dict[str, Any]]) -> str | None:
+        return str(g[0].get("where") or "-") if g[0].get("type") == "work" else None
 
     # The newest role is always included, whatever its keyword overlap.
     #
     # On a TypeScript/React posting the newest, most senior workstream scored
     # 6th of 8 on vocabulary alone and fell outside max_work - so the resume
-    # silently dropped the current and most senior work. A reader sees that gap immediately, and no keyword
-    # argument survives it. The match decides the tail, never the top.
+    # silently dropped the current and most senior work. A reader sees that gap
+    # immediately, and no keyword argument survives it. The match decides the
+    # tail, never the top.
     from .render import chronological
-    picked = chronological(work)[:1] if max_work > 0 else []
-    room = {"work": max_work - len(picked), "project": max_projects}
-    pool = [e for e in work + projects if not any(e is p for p in picked)]
+    picked: list[list[dict[str, Any]]] = []
+    if work and max_work > 0:
+        newest = chronological(work)[0]
+        picked = [next(g for g in groups if any(e is newest for e in g))]
+    pool = [g for g in groups if not any(g is p for p in picked)]
 
-    def value(e: dict[str, Any]) -> tuple:
-        page = picked + [e] + rest
-        skills = surfaced_skills(page, index, wanted.claimable, weights=wanted.weights)
-        return (scorer.score(page, skills, "").key, substance(e))
+    def room(g: list[dict[str, Any]]) -> bool:
+        if job(g) is None:
+            return sum(job(p) is None for p in picked) < max_projects
+        return sum(job(p) is not None for p in picked) < max_work
+
+    def extra(g: list[dict[str, Any]]) -> bool:
+        """Past a job's MAX_PROJECTS, or marked "cut first": in only for what
+        it adds. A cut-first entry never takes one of the regular slots - on
+        a Java posting the old Java entry joined the two main projects, it did
+        not push one of them off."""
+        if job(g) is None:
+            return False
+        at_job = sum(job(p) == job(g) for p in picked)
+        return at_job >= MAX_PROJECTS or g[0].get("priority") == "low"
 
     while True:
-        open_ = [e for e in pool if room.get(str(e.get("type")), 0) > 0]
+        now = score(page_of(picked)).match
+        regular, extras = [], []
+        for g in pool:
+            if not room(g):
+                continue
+            m = score(page_of(picked + [g]))
+            if not extra(g):
+                regular.append((m.key, substance(g[0]), g))
+            elif m.match > now + 1e-9:
+                extras.append((m.key, substance(g[0]), g))
+        open_ = regular or extras
         if not open_:
             break
-        best = max(open_, key=value)
+        best = max(open_, key=lambda t: (t[0], t[1]))[2]
         picked.append(best)
-        pool.remove(best)
-        room[str(best.get("type"))] -= 1
+        pool = [g for g in pool if g is not best]
 
-    # Work first, then projects, each in the order chosen: the summary is
+    # Work first, then side projects, each in the order chosen: the summary is
     # written from the first few, so they should be the ones that matched.
-    return ([e for e in picked if e.get("type") == "work"]
-            + [e for e in picked if e.get("type") == "project"] + rest)
+    return ([e for g in picked if job(g) for e in g]
+            + [e for g in picked if job(g) is None for e in g] + rest)
 
 
 def surfaced_skills(entries: Iterable[dict[str, Any]], index: SkillIndex,

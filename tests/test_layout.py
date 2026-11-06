@@ -57,6 +57,34 @@ def test_entries_within_a_block_are_newest_first():
     assert blocks[0]["entries"][0]["period"] == "2026-present"
 
 
+# ── projects and their pieces ────────────────────────────────────────────────
+
+def test_pieces_print_under_their_project():
+    """The case that broke a real resume: six workstreams in a row, and a
+    parser took the first piece ("Ticket Agent") for the job."""
+    blocks = group_work([
+        _w("Acme", "2025-present", id="platform"), _w("Acme", "2026-present", id="ticket", part_of="platform"),
+        _w("Acme", "2023-present", id="track"), _w("Acme", "2024", id="checker", part_of="track"),
+    ])
+    groups = blocks[0]["projects"]
+    assert [g["entry"]["id"] for g in groups] == ["platform", "track"]     # by its newest piece
+    assert [p["id"] for p in groups[0]["pieces"]] == ["ticket"]
+    assert [e["id"] for e in blocks[0]["entries"]] == ["platform", "ticket", "track", "checker"]
+
+
+def test_a_piece_whose_project_is_not_on_the_page_stands_alone():
+    blocks = group_work([_w("Acme", "2026-present", id="ticket", part_of="platform")])
+    assert blocks[0]["projects"][0]["entry"]["id"] == "ticket"
+
+
+def test_the_dated_line_names_the_job_even_without_a_title():
+    """No title saved: the dated line said only "Apr 2022 - Present", and a
+    parser read the next bold line as the job. The employer goes there."""
+    from jobsearch.resume_layout import job_line
+    assert job_line({"title": {"official": ""}}, "", "Acme", "Pune") == ("Acme", "Pune")
+    assert job_line({"title": {"official": "SE II"}}, "", "Acme", "") == ("SE II", "Acme")
+
+
 # ── dates ────────────────────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("raw, expect", [

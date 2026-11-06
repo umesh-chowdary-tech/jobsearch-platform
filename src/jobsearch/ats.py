@@ -246,18 +246,23 @@ class Scorer:
 
     def score(self, entries: list[dict[str, Any]], skills: Iterable[str],
               descriptor: str, summary: str | None = None) -> Match:
-        from .resume_layout import practice_items, stack_items
+        from .resume_layout import practice_items, project_stack, projects, stack_items
         skills = list(skills)
         canon = lambda xs: {self.index.canonical(s) or s for s in xs}
         sections = []
         jobs: dict[str, list[dict[str, Any]]] = {}
         for e in entries:
-            # The stack line prints under the entry, so it is body text.
-            sections.append((_section(e), self.terms(e) | canon(stack_items(e, skills, self.index))))
+            sections.append((_section(e), self.terms(e)))
             if e.get("type") == "work":
                 jobs.setdefault(str(e.get("where") or "-"), []).append(e)
-        # So is the Practices line under each employer.
+            elif e.get("type") == "project":
+                # The stack line prints under the entry, so it is body text.
+                sections.append(("projects", canon(stack_items(e, skills, self.index))))
         for block in jobs.values():
+            # A work project's one Stack line, as the page prints it.
+            for g in projects(block):
+                sections.append(("experience", canon(project_stack(g, skills, self.index))))
+            # So is the Practices line under each employer.
             sections.append(("experience", canon(practice_items(block, skills, self.index))))
         if summary:
             sections.append(("summary", self.index.detect(summary)))
