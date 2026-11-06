@@ -171,7 +171,14 @@ def _free_view(svc: Service) -> dict[str, Any]:
 def _set_free_mode(shared: Path, by: str, on: bool, hours: Any, dev: bool) -> str:
     path = shared / FREE_MODE
     if not on:
-        path.unlink(missing_ok=True)
+        # Ended now, not deleted: the database never hears of a deleted file,
+        # so the next start of the service would turn it back on.
+        if path.exists():
+            now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            tmp = shared / (FREE_MODE + ".tmp")
+            tmp.write_text(json.dumps({"jobs": [], "since": None, "until": now, "by": by, "off": now}, indent=1),
+                           encoding="utf-8")
+            tmp.replace(path)
         return "off"
     if hours not in FREE_HOURS or isinstance(hours, bool):
         raise AdminError("choose 1, 8 or 24 hours, or until it's turned off")

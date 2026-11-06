@@ -307,3 +307,41 @@ def test_refresh_steps_aside_when_another_machine_is_cycling(root, monkeypatch):
         if th.name == "refresh":
             th.join(timeout=10)
     assert "PC" in t.refresh_status()["refresh"]["error"]
+
+
+# ── switches turned off stay off after a restart ─────────────────────────────
+
+def test_a_resumed_schedule_stays_resumed_on_a_fresh_disk(tmp_path):
+    """Render's disk is wiped when the service sleeps, and var/ comes back
+    from the database. Resuming used to delete the pause file - a deletion the
+    database never hears of - so the next start paused the schedule again."""
+    import shutil
+    from jobsearch import cycle
+    remote, var = DictRemote(), tmp_path / "var"
+    shared = var / "_shared"
+    cycle.pause(shared, None)
+    statestore.push(var, remote)
+    cycle.resume(shared)
+    statestore.push(var, remote)
+    assert cycle.paused(shared) is None
+    shutil.rmtree(var)                       # the service slept
+    statestore.pull(var, remote)
+    assert cycle.paused(shared) is None
+
+
+def test_free_mode_turned_off_stays_off_on_a_fresh_disk(tmp_path):
+    import shutil
+    from jobsearch.hosted.admin import _set_free_mode
+    from jobsearch.llm import free_mode
+    remote, root = DictRemote(), tmp_path
+    var = root / "var"
+    shared = var / "_shared"
+    shared.mkdir(parents=True)
+    _set_free_mode(shared, "a@example.com", True, None, False)
+    statestore.push(var, remote)
+    assert free_mode(root) is not None
+    _set_free_mode(shared, "a@example.com", False, None, False)
+    statestore.push(var, remote)
+    shutil.rmtree(var)
+    statestore.pull(var, remote)
+    assert free_mode(root) is None

@@ -68,7 +68,11 @@ def pause(var: Path, hours: float | None) -> dict[str, str | None]:
 
 
 def resume(var: Path) -> None:
-    (Path(var) / PAUSE).unlink(missing_ok=True)
+    """Ended now, not deleted: the hosted service's database never hears of a
+    deleted file (statestore), so the next start would bring the pause back."""
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    if (Path(var) / PAUSE).exists():
+        write_atomic(Path(var) / PAUSE, {"since": None, "until": now, "resumed": now})
 
 
 def paused(var: Path) -> dict[str, str | None] | None:
