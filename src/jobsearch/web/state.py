@@ -207,29 +207,43 @@ def _seen_since(r: dict[str, Any], since: datetime) -> bool:
     return seen is not None and seen >= since
 
 
-def fetched_since(rows: list[dict[str, Any]], since: datetime) -> dict[str, int]:
-    """Live kept postings first fetched at or after `since`, by the model's fit."""
+def _board_today(r: dict[str, Any], day: str, since: datetime) -> bool:
+    """The board dated it `day` - the day it was posted, which is all boards
+    say reliably (an "updated" date moves for a whole board at once). A board
+    that gives no date: first fetched since `since` instead."""
+    posted = str(r.get("posted_at") or "")[:10]
+    return posted == day if posted else _seen_since(r, since)
+
+
+def by_fit(rows: list[dict[str, Any]]) -> dict[str, int]:
+    """How many of `rows` the model called each fit; unread for none yet."""
     out = {"total": 0, "strong": 0, "possible": 0, "weak": 0, "unread": 0}
     for r in rows:
-        if not _seen_since(r, since):
-            continue
         out["total"] += 1
         out[r["fit"] if r["fit"] in ("strong", "possible", "weak") else "unread"] += 1
     return out
 
 
-def today(prof: Profile, since: str | None = None, only_today: bool = False) -> dict[str, Any]:
-    """`since` is when the person's day began, from their browser - the
-    server's own clock is UTC. Missing or unreadable, midnight UTC stands.
+_DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
 
-    `only_today` (the Today screen): the postings to decide are only those
-    fetched since then; older undecided ones wait under Jobs and are counted
-    in `older_waiting`. Off (the connector): every undecided one."""
+
+def today(prof: Profile, since: str | None = None, only_today: bool = False,
+          day: str | None = None) -> dict[str, Any]:
+    """`since` is when the person's day began and `day` its date, both from
+    their browser - the server's own clock is UTC. Missing or unreadable,
+    midnight UTC and the UTC date stand.
+
+    `only_today` (the Today screen): the postings to decide are only those the
+    boards dated today; older undecided ones wait under Jobs and are counted in
+    `older_waiting`. Off (the connector): every undecided one. The counts
+    (`fits`, `waiting`) are always every open job."""
     rows = postings(prof)
     live = [r for r in rows if r["verdict"] == "keep" and not r["closed"]]
     start = _when(since) if since else None
     if start is None:
         start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    if not (day and _DAY.fullmatch(day)):
+        day = datetime.now(timezone.utc).date().isoformat()
     undecided = [r for r in live if r["status"] == "new"]
 
     def later(r: dict) -> str | None:
@@ -243,8 +257,8 @@ def today(prof: Profile, since: str | None = None, only_today: bool = False) -> 
     fresh = [r for r in undecided if later(r) is None]
     worth = [r for r in fresh if r["fit"] in ("strong", "possible")]
     if only_today:
-        decide = [r for r in worth if _seen_since(r, start)]
-        unread = [r for r in fresh if not r["fit"] and _seen_since(r, start)]
+        decide = [r for r in worth if _board_today(r, day, start)]
+        unread = [r for r in fresh if not r["fit"] and _board_today(r, day, start)]
     else:
         decide, unread = worth, [r for r in fresh if not r["fit"]]
     ledger = outreach.load_ledger(prof)
@@ -258,7 +272,9 @@ def today(prof: Profile, since: str | None = None, only_today: bool = False) -> 
     return {
         "first_name": name.split()[0] if name.split() else "",
         "decide": decide,
-        "fetched_today": fetched_since(live, start),
+        "posted_today": sum(1 for r in live if _board_today(r, day, start)),
+        "fits": by_fit(live),
+        "waiting": {"total": len(worth), "strong": sum(1 for r in worth if r["fit"] == "strong")},
         "older_waiting": len(worth) - len(decide),
         "back_from_later": back,
         "saved_for_later": len(waiting),

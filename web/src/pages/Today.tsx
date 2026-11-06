@@ -9,6 +9,12 @@ export function startOfDay(now = new Date()): string {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
 }
 
+/** The person's own date, YYYY-MM-DD: the day the boards' dates are matched against. */
+export function localDay(now = new Date()): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}`;
+}
+
 const FITS = [
   { key: "strong", label: "Strong fit" },
   { key: "possible", label: "Possible fit" },
@@ -29,7 +35,7 @@ export function Today({ onCount }: { onCount: (n: number) => void }) {
   const [t, setT] = useState<TodayData | null>(null);
   const [err, setErr] = useState("");
   const load = useCallback(() => {
-    get<TodayData>(`/api/today?since=${encodeURIComponent(startOfDay())}`)
+    get<TodayData>(`/api/today?since=${encodeURIComponent(startOfDay())}&day=${localDay()}`)
       .then(d => { setT(d); onCount(d.decide.length + d.back_from_later.length); })
       .catch(e => setErr((e as Error).message));
   }, [onCount]);
@@ -47,19 +53,21 @@ export function Today({ onCount }: { onCount: (n: number) => void }) {
       <div className="hero">
         <div className="date">{new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}</div>
         <h1>{t.first_name ? `${hello}, ${t.first_name}` : hello}</h1>
-        <p className="sub">{t.fetched_today.total} live posting{t.fetched_today.total === 1 ? "" : "s"} fetched today.</p>
+        <p className="sub">
+          {t.posted_today} job{t.posted_today === 1 ? "" : "s"} posted on the boards today · {t.fits.total} open job{t.fits.total === 1 ? "" : "s"} kept for you.
+        </p>
       </div>
-      <div className="fits" aria-label="Fetched today, by fit">
+      <div className="fits" aria-label="All your open jobs, by fit">
         {FITS.map(f => (
           <div key={f.key} className={`fit ${f.key}`}>
-            <div className="n">{t.fetched_today[f.key]}</div>
+            <div className="n">{t.fits[f.key]}</div>
             <div className="l">{f.label}</div>
           </div>
         ))}
       </div>
       <div className="kpis">
-        <Kpi icon="list" n={t.decide.length} label="waiting on a decision" />
-        <Kpi icon="target" n={t.decide.filter(r => r.fit === "strong").length} label="strong fits among them" />
+        <Kpi icon="list" n={t.waiting.total} label="waiting on a decision" />
+        <Kpi icon="target" n={t.waiting.strong} label="strong fits among them" />
         <Kpi icon="activity" tone="cool" n={inProgress} label="applications in progress" />
         <Kpi icon="star" tone="warm" n={t.favorites} label="favorites" />
       </div>
@@ -86,7 +94,7 @@ export function Today({ onCount }: { onCount: (n: number) => void }) {
       )}
 
       <div className="h2row">
-        <h2>Fetched today, needs a decision · {t.decide.length}</h2>
+        <h2>Posted today, needs a decision · {t.decide.length}</h2>
         <a href="#/jobs">All jobs</a>
       </div>
       {t.decide.length
@@ -102,7 +110,7 @@ export function Today({ onCount }: { onCount: (n: number) => void }) {
         : t.caught_up === false
           ? <p className="empty">SwitchKaro is reading every job already open on the company boards it watches, against your
               profile. That takes a few minutes after you first save your profile; the matches show here, then ranked.</p>
-          : <p className="empty">Nothing strong or possible came in today. New postings are checked every two hours.</p>}
+          : <p className="empty">Nothing strong or possible was posted on the boards today. New postings are checked every two hours.</p>}
       {t.older_waiting > 0 && (
         <p className="muted">
           {t.older_waiting} older {t.older_waiting === 1 ? "job still needs" : "jobs still need"} a decision:{" "}
@@ -111,7 +119,7 @@ export function Today({ onCount }: { onCount: (n: number) => void }) {
       )}
       {t.unread > 0 && (
         <p className="muted">
-          {t.unread} more {t.unread === 1 ? "posting" : "postings"} fetched today {t.unread === 1 ? "hasn't" : "haven't"} been read by a model yet.{" "}
+          {t.unread} more {t.unread === 1 ? "posting" : "postings"} posted today {t.unread === 1 ? "hasn't" : "haven't"} been read by a model yet.{" "}
           <button className="quiet" disabled={rank.running} onClick={() => rank.start("rank")}>
             {rank.running ? "Reading…" : "Have a model read them"}
           </button>

@@ -249,41 +249,42 @@ def test_saved_for_later_leaves_today_and_comes_back(live):
     assert today["saved_for_later"] == 0
 
 
-def test_today_counts_only_what_was_fetched_since_the_day_began(live):
-    """The headline count is today's arrivals, split by fit - not every live
-    posting ever kept."""
-    def p(pid, first_seen, fit=None, verdict="keep", closed=False):
+def test_today_lists_what_the_boards_posted_today_and_counts_everything(live):
+    """The list is what the boards dated today (or, with no date from the
+    board, first fetched today); the counts above it are every open job."""
+    def p(pid, posted_at, fit=None, verdict="keep", closed=False, first_seen="2026-10-01T00:00:00+00:00",
+          status=None):
         rec = {"id": pid, "title": "Engineer", "company": "stripe", "board": "greenhouse:stripe",
-               "verdict": verdict, "first_seen": first_seen}
+               "verdict": verdict, "first_seen": first_seen, "posted_at": posted_at}
         if fit:
             rec["ai"] = {"fit": fit, "why": "x"}
         if closed:
             rec["closed_at"] = "2026-11-05T09:00:00+00:00"
         return rec
-    rows = [p("1", "2026-11-04T10:00:00+00:00", "strong"),        # yesterday
-            p("2", "2026-11-04T19:00:00+00:00", "strong"),        # today in India
-            p("3", "2026-11-05T02:00:00+00:00", "possible"),
-            p("4", "2026-11-05T03:00:00+00:00", "possible"),
-            p("5", "2026-11-05T04:00:00+00:00", "weak"),
-            p("6", "2026-11-05T05:00:00+00:00"),                  # not read yet
-            p("7", "2026-11-05T05:00:00+00:00", "strong", verdict="drop"),
-            p("8", "2026-11-05T05:00:00+00:00", "strong", closed=True)]
+    rows = [p("1", "2026-11-04", "strong"),                       # the board dated it yesterday
+            p("2", "2026-11-05", "strong"),                       # today
+            p("3", "2026-11-05", "possible"),
+            p("4", None, "possible", first_seen="2026-11-04T19:00:00+00:00"),   # no date; fetched today in India
+            p("5", None, "possible", first_seen="2026-11-04T10:00:00+00:00"),   # no date; fetched yesterday
+            p("6", "2026-11-05", "weak"),
+            p("7", "2026-11-05"),                                 # not read yet
+            p("8", "2026-11-05", "strong", verdict="drop"),
+            p("9", "2026-11-05", "strong", closed=True)]
     (live.prof.var / "triage-results.json").write_text(
         json.dumps({"postings": {r["id"]: r for r in rows}}), encoding="utf-8")
 
-    # Midnight in India, as the browser sends it.
-    _, today = jget(live, "/api/today?since=2026-11-04T18:30:00.000Z")
-    assert today["fetched_today"] == {"total": 5, "strong": 1, "possible": 2, "weak": 1, "unread": 1}
-
-    # Only today's go on Today; the older one waits under Jobs, and is counted.
+    # Midnight in India, and India's date, as the browser sends them.
+    _, today = jget(live, "/api/today?since=2026-11-04T18:30:00.000Z&day=2026-11-05")
     assert sorted(r["id"] for r in today["decide"]) == ["2", "3", "4"]
-    assert today["unread"] == 1 and today["older_waiting"] == 1
+    assert today["unread"] == 1 and today["older_waiting"] == 2 and today["posted_today"] == 5
+    # Every open job kept for this person, not only today's.
+    assert today["fits"] == {"total": 7, "strong": 2, "possible": 3, "weak": 1, "unread": 1}
+    assert today["waiting"] == {"total": 5, "strong": 2}
 
-    # Without a usable start of day, it counts from midnight UTC.
-    for q in ("", "?since=nonsense"):
+    # Without a usable day, today's date in UTC stands.
+    for q in ("", "?since=nonsense&day=nonsense"):
         status, today = jget(live, f"/api/today{q}")
-        assert status == 200
-        assert set(today["fetched_today"]) == {"total", "strong", "possible", "weak", "unread"}
+        assert status == 200 and set(today["fits"]) == {"total", "strong", "possible", "weak", "unread"}
 
 
 def test_later_can_be_undone_and_rejects_nonsense(live):
