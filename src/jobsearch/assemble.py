@@ -177,7 +177,7 @@ def select_entries(store: dict[str, Any], index: SkillIndex,
             return sum(job(p) is None for p in picked) < max_projects
         return sum(job(p) is not None for p in picked) < max_work
 
-    def extra(g: list[dict[str, Any]]) -> bool:
+    def beyond_two(g: list[dict[str, Any]]) -> bool:
         """Past a job's MAX_PROJECTS, or marked "cut first": in only for what
         it adds. A cut-first entry never takes one of the regular slots - on
         a Java posting the old Java entry joined the two main projects, it did
@@ -194,7 +194,7 @@ def select_entries(store: dict[str, Any], index: SkillIndex,
             if not room(g):
                 continue
             m = score(page_of(picked + [g]))
-            if not extra(g):
+            if not beyond_two(g):
                 regular.append((m.key, substance(g[0]), g))
             elif m.match > now + 1e-9:
                 extras.append((m.key, substance(g[0]), g))
