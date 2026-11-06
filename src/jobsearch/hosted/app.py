@@ -566,6 +566,14 @@ def create_app(root: Path | None = None, verifier: Verifier | None = None, stati
             return _json_response(404, {"error": "not found"})
         return _json_response(*svc.start_cycle())
 
+    @app.get("/api/cron/health")
+    def cron_health(request: Request) -> Response:
+        """Whether the boards are being read - the cron job checks it each run."""
+        given = request.headers.get("x-cron-secret", "")
+        if not svc.cron_secret or not hmac.compare_digest(given.encode(), svc.cron_secret.encode()):
+            return _json_response(404, {"error": "not found"})
+        return _json_response(200, admin.fetch_health(svc.shared))
+
     # ── everything else: the shared routes, for this person ─────────────────
     @app.api_route("/api/{rest:path}", methods=["GET", "POST"])
     async def api(rest: str, request: Request) -> Response:

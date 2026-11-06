@@ -23,6 +23,7 @@ from ..busy import holder
 from ..limits import Meter, load_limits, load_overrides, price_for, save_overrides
 from ..llm import FREE_MODE, KNOWN, ROUTES_OVERRIDE, free_mode, load_routes
 from ..models import utcnow
+from ..pool import board_reads, read_time as _when
 from ..profile import Profile
 from . import accounts
 
@@ -230,14 +231,39 @@ def _runs(shared: Path, since: str) -> list[dict[str, Any]]:
     return out
 
 
+STALE_DAYS = 2            # a board not read this long is named on the admin page
+QUIET_HOURS = 24          # no board read at all this long: fetching has stopped
+STALE_SHARE = 0.25        # more than this share of boards stale: fetching is failing
+
+
+def _stale(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    before = datetime.now(timezone.utc) - timedelta(days=STALE_DAYS)
+    return [r for r in rows if not r["last_ok"] or (_when(r["last_ok"]) or before) <= before]
+
+
 def _boards(shared: Path) -> dict[str, Any]:
-    boards = _json(shared / "boards.json")
-    stale_before = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
-    rows = [{"name": b.get("board_name") or key, "live": int(b.get("posting_count") or 0),
-             "last_ok": b.get("last_ok") or ""} for key, b in sorted(boards.items()) if isinstance(b, dict)]
-    stale = [r for r in rows if not r["last_ok"] or r["last_ok"] < stale_before]
+    rows = board_reads(shared)
+    stale = _stale(rows)
     return {"total": len(rows), "live_postings": sum(r["live"] for r in rows), "stale": stale[:30],
             "stale_count": len(stale)}
+
+
+def fetch_health(shared: Path) -> dict[str, Any]:
+    """Are the boards being read? For the cron job, which fails - and so
+    mails the repository's owner - when they are not. Counts only, no names."""
+    rows = board_reads(shared)
+    stale = _stale(rows)
+    times = [t for t in (_when(r["last_ok"]) for r in rows if r["last_ok"]) if t]
+    newest = max(times) if times else None
+    problem = None
+    if not rows:
+        problem = "no job boards are known"
+    elif newest is None or newest < datetime.now(timezone.utc) - timedelta(hours=QUIET_HOURS):
+        problem = f"no job board has been read in {QUIET_HOURS} hours"
+    elif len(stale) > STALE_SHARE * len(rows):
+        problem = f"{len(stale)} of {len(rows)} job boards have not been read in {STALE_DAYS} days"
+    return {"ok": problem is None, "problem": problem, "boards": len(rows), "stale": len(stale),
+            "newest_read": newest.isoformat(timespec="seconds") if newest else None}
 
 
 def _day_range(n: int) -> list[str]:

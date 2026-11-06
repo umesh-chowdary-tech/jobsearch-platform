@@ -458,3 +458,50 @@ def test_the_notices_only_blanks_are_the_ones_settings_fill():
         text = (ROOT / "web" / "src" / "legal" / doc).read_text(encoding="utf-8")
         blanks = set(re.findall(r"\[([^\]]+)\](?!\()", text))
         assert blanks <= {"Operator name", "city", "contact email"}, (doc, blanks)
+
+
+# ── are the boards being read ────────────────────────────────────────────────
+
+def _board_files(shared, reads):
+    """boards.json as discovery leaves it (its last_ok days old), and each
+    board's seen file as the watcher leaves it after a poll."""
+    from jobsearch.watch import seen_path
+    shared.mkdir(parents=True, exist_ok=True)
+    old = "2026-01-01T00:00:00+00:00"
+    boards = {}
+    for slug, last_poll in reads.items():
+        boards[f"greenhouse:{slug}"] = {"provider": "greenhouse", "slug": slug, "board_name": slug,
+                                         "posting_count": 3, "last_ok": old}
+        if last_poll:
+            p = seen_path(shared, "greenhouse", slug)
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(json.dumps({"ids": [], "last_poll": last_poll, "seeded_at": old}))
+    (shared / "boards.json").write_text(json.dumps(boards))
+
+
+def _ago(hours):
+    from datetime import timedelta
+    return (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat(timespec="seconds")
+
+
+def test_a_board_the_watcher_reads_is_not_stale_whatever_discovery_says(tmp_path):
+    from jobsearch.hosted.admin import _boards
+    _board_files(tmp_path, {"globex": _ago(3), "initech": _ago(3), "hooli": None})
+    b = _boards(tmp_path)
+    assert b["total"] == 3 and b["stale_count"] == 1 and [r["name"] for r in b["stale"]] == ["hooli"]
+
+
+@pytest.mark.parametrize("reads, ok", [
+    ({"globex": 3, "initech": 3, "hooli": 3, "acme": None}, True),     # one of four unread: fine
+    ({"globex": 3, "initech": None, "hooli": None, "acme": 3}, False),  # half unread for days
+    ({"globex": 30, "initech": 30}, False),                             # nothing read in a day
+    ({}, False),                                                        # no boards at all
+])
+def test_cron_health_says_when_the_boards_stop_being_read(env, reads, ok):
+    client, root = env
+    _board_files(shared_var(root), {k: _ago(v) if v else None for k, v in reads.items()})
+    assert client.get("/api/cron/health").status_code == 404
+    assert client.get("/api/cron/health", headers={"X-Cron-Secret": "wrong"}).status_code == 404
+    r = client.get("/api/cron/health", headers={"X-Cron-Secret": "cron-test-secret"}).json()
+    assert r["ok"] is ok and (r["problem"] is None) is ok
+    assert set(r) == {"ok", "problem", "boards", "stale", "newest_read"}

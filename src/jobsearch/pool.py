@@ -369,6 +369,33 @@ def last_poll(shared: Path) -> Callable[[str], str | None]:
     return when
 
 
+def read_time(stamp: str) -> datetime | None:
+    try:
+        t = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return t if t.tzinfo else t.replace(tzinfo=timezone.utc)
+
+
+def board_reads(shared: Path) -> list[dict[str, Any]]:
+    """Each board and when it was last read: the watcher's own poll (its seen
+    file) or discovery's check (boards.json), whichever is later. Discovery
+    alone is days old on a board the watcher reads every few hours."""
+    polled = last_poll(shared)
+    try:
+        boards = json.loads((Path(shared) / "boards.json").read_text(encoding="utf-8")) or {}
+    except (OSError, json.JSONDecodeError):
+        boards = {}
+    rows = []
+    for key, b in sorted(boards.items()):
+        if not isinstance(b, dict):
+            continue
+        times = [t for t in (read_time(str(b.get("last_ok") or "")), read_time(str(polled(key) or ""))) if t]
+        rows.append({"key": key, "name": b.get("board_name") or key, "live": int(b.get("posting_count") or 0),
+                     "last_ok": max(times).isoformat(timespec="seconds") if times else ""})
+    return rows
+
+
 _checked: dict[tuple[str, str], tuple[float, bool | None]] = {}
 # What may go into a board's URL: a posting id and a slug as boards make them.
 # Anything else - a "/", "?" or ".." - is not asked about at all.
