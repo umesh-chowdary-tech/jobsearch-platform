@@ -296,6 +296,7 @@ export interface AdminPerson {
 
 export interface AdminOverview {
   people: AdminPerson[];
+  admins: { email: string; source: "server" | "added"; by: string | null; at: string | null }[];
   active: { week: number; month: number };
   joins: { week: string; n: number }[];
   funnel: { step: string; n: number }[];

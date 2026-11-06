@@ -270,3 +270,52 @@ def test_job_update_runs_are_read_from_the_log(env):
     jobs = client.get("/api/admin/overview", headers=BOSS).json()["jobs"]
     assert jobs["runs"] == 2 and jobs["failed"] == 1 and jobs["avg_took"] == 22
     assert jobs["days"][-1] == {"day": today, "runs": 2, "failed": 1, "new": 4}
+
+
+# ── who is an admin ──────────────────────────────────────────────────────────
+
+def test_an_admin_adds_and_removes_admins_by_email(env):
+    """The list on the admin page decides, beside the server's own setting -
+    whose admins can't be removed from the page, so nobody locks everyone out."""
+    client, root = env
+    alice = auth(token())                                       # alice@example.com, not an admin
+    joined(client, root)
+    assert client.get("/api/me", headers=alice).json()["admin"] is False
+    assert client.get("/api/admin/overview", headers=alice).status_code == 403
+    for bad in ("", "nope", "a@b", "x" * 300 + "@example.com"):
+        assert do(client, action="admin_add", email=bad).status_code == 400
+
+    o = do(client, action="admin_add", email="  Alice@Example.com ").json()["overview"]
+    rows = {a["email"]: a for a in o["admins"]}
+    assert rows["boss@example.com"]["source"] == "server" and rows["alice@example.com"]["source"] == "added"
+    assert rows["alice@example.com"]["by"] == "boss@example.com"
+    assert client.get("/api/me", headers=alice).json()["admin"] is True
+    assert client.get("/api/admin/overview", headers=alice).status_code == 200
+    assert do(client, action="admin_add", email="alice@example.com").status_code == 400     # already one
+
+    # The server's own admin stays; the added one goes, and loses the page at once.
+    assert do(client, action="admin_remove", email="boss@example.com").status_code == 400
+    o = do(client, action="admin_remove", email="alice@example.com").json()["overview"]
+    assert [a["email"] for a in o["admins"]] == ["boss@example.com"]
+    assert client.get("/api/admin/overview", headers=alice).status_code == 403
+    assert [r["action"] for r in o["log"]][:2] == ["admin_remove", "admin_add"]
+
+
+def test_an_added_admin_survives_a_fresh_disk(tmp_path):
+    """Kept in accounts.json, which the database mirrors - and taken away by
+    rewriting it, never by deleting a file the database would bring back."""
+    import shutil
+    from jobsearch import statestore
+    from test_connector import DictRemote
+    remote, var = DictRemote(), tmp_path / "var"
+    shared = var / "_shared"
+    accounts.add_admin(shared, "carol@example.com", "boss@example.com")
+    statestore.push(var, remote)
+    shutil.rmtree(var)
+    statestore.pull(var, remote)
+    assert "carol@example.com" in accounts.admins(shared)
+    accounts.remove_admin(shared, "carol@example.com")
+    statestore.push(var, remote)
+    shutil.rmtree(var)
+    statestore.pull(var, remote)
+    assert "carol@example.com" not in accounts.admins(shared)

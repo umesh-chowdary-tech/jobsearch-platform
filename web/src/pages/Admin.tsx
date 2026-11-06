@@ -9,10 +9,10 @@ import { get, post } from "../api";
 import type { AdminOverview, AdminPerson } from "../types";
 import { ago, day, Icon, useToast, type IconName } from "../ui";
 
-type Tab = "overview" | "people" | "ai" | "jobs" | "log";
+type Tab = "overview" | "people" | "ai" | "jobs" | "admins" | "log";
 const TABS: { id: Tab; label: string }[] = [
   { id: "overview", label: "Overview" }, { id: "people", label: "People" }, { id: "ai", label: "AI & budget" },
-  { id: "jobs", label: "Jobs & health" }, { id: "log", label: "Log" },
+  { id: "jobs", label: "Jobs & health" }, { id: "admins", label: "Admins" }, { id: "log", label: "Log" },
 ];
 const JOB_NAMES: Record<string, string> = {
   rank: "Ranking jobs", resume: "Writing resumes", setup: "Reading resumes", outreach: "Message openers",
@@ -78,6 +78,7 @@ export function Admin() {
       {tab === "people" && <PeopleTab o={o} act={act} />}
       {tab === "ai" && <AiTab o={o} act={act} />}
       {tab === "jobs" && <JobsTab o={o} act={act} />}
+      {tab === "admins" && <AdminsTab o={o} act={act} />}
       {tab === "log" && <LogTab o={o} />}
     </>
   );
@@ -539,6 +540,50 @@ function Requests({ o, act }: { o: AdminOverview; act: Act }) {
   );
 }
 
+/** Who sees this page. The list here decides, beside the service's own
+ *  JOBSEARCH_ADMINS setting, whose admins can't be removed from here. */
+function AdminsTab({ o, act }: { o: AdminOverview; act: Act }) {
+  const [email, setEmail] = useState("");
+  const add = async () => {
+    if (await act({ action: "admin_add", email }, `${email.trim()} is an admin now`)) setEmail("");
+  };
+  return (
+    <>
+      <div className="card scroll-x">
+        <p className="small muted">Admins see this page: everyone's email, counts and AI spend, and every switch.
+          Never anyone's resume, profile or jobs.</p>
+        <table>
+          <thead><tr><th>Email</th><th>Added</th><th /></tr></thead>
+          <tbody>
+            {o.admins.map(a => (
+              <tr key={a.email}>
+                <td>{a.email}</td>
+                <td className="small muted">{a.source === "server"
+                  ? "in the service's settings (JOBSEARCH_ADMINS)"
+                  : `by ${a.by}${a.at ? `, ${day(a.at)}` : ""}`}</td>
+                <td>{a.source === "added" && (
+                  <button className="quiet" onClick={() => act({ action: "admin_remove", email: a.email }, `${a.email} is no longer an admin`)}>
+                    Remove
+                  </button>
+                )}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <h2>Add an admin</h2>
+      <div className="card stack">
+        <label className="field">Their sign-in email
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="name@example.com"
+                 onKeyDown={e => { if (e.key === "Enter" && email.trim()) add(); }} /></label>
+        <p className="small muted">They see the Admin tab the next time they open SwitchKaro. If they haven't joined
+          yet, they can join without an invite code.</p>
+        <div><button className="primary" disabled={!email.trim()} onClick={add}>Make admin</button></div>
+      </div>
+    </>
+  );
+}
+
 const ACTIONS: Record<string, string> = {
   suspend: "Paused an account", unsuspend: "Resumed an account", delete: "Deleted an account",
   person_limit: "Changed a person's AI limit", revoke_invite: "Cancelled an invite", ai_pause: "Paused all AI",
@@ -547,6 +592,7 @@ const ACTIONS: Record<string, string> = {
   cycle_run: "Ran a job update", cycle_pause: "Paused job updates", cycle_resume: "Resumed job updates",
   boards_check: "Checked the job boards", company_search: "Looked for companies' job boards",
   company_decline: "Declined a company request", company_stop: "Stopped watching a company's board",
+  admin_add: "Made someone an admin", admin_remove: "Removed an admin",
 };
 
 function LogTab({ o }: { o: AdminOverview }) {
