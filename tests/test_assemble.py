@@ -68,10 +68,47 @@ def test_selection_excludes_them(store, index):
 
 
 def test_selection_respects_the_caps(store, index):
+    """`max_work` counts projects at jobs: a project brings its pieces."""
     chosen = select_entries(store, index, {"Python"},
                             max_work=3, max_projects=2)
-    assert len([e for e in chosen if e["type"] == "work"]) <= 3
+    work = [e for e in chosen if e["type"] == "work"]
+    ids = {e["id"] for e in work}
+    assert len([e for e in work if e.get("part_of") not in ids]) <= 3
     assert len([e for e in chosen if e["type"] == "project"]) <= 2
+
+
+def _projects_at_acme(chosen):
+    work = [e for e in chosen if e["type"] == "work"]
+    ids = {e["id"] for e in work}
+    return [e["id"] for e in work if e.get("part_of") not in ids]
+
+
+def test_a_job_shows_two_projects_with_their_pieces(store, index):
+    """The owner's rule: a job, then at most two projects, each with its pieces.
+    The sample's pieces sit under the agent platform and Acme Track."""
+    chosen = select_entries(store, index, {"Python"})
+    assert sorted(_projects_at_acme(chosen)) == ["acme-agent-platform", "acme-track"]
+    ids = [e["id"] for e in chosen]
+    assert "acme-support-agent" in ids and "acme-daily-digest" in ids
+
+
+def test_unlinked_work_is_two_projects_unless_more_add_something(store, index):
+    """With no `part_of` links each workstream is a project of its own - and
+    the job still shows two, not six, when nothing more answers the posting."""
+    loose = {**store, "entries": [{k: v for k, v in e.items() if k != "part_of"}
+                                  for e in store["entries"]]}
+    chosen = select_entries(loose, index, {"Python"})
+    assert len([e for e in chosen if e["type"] == "work"]) == 2
+
+
+def test_a_third_project_prints_only_for_what_it_adds(store, index):
+    """The portal migration (cut first) is the only Spring Boot on record: a
+    Spring Boot posting gets it as a third project, a Python one does not."""
+    assert "acme-portal-migration" not in _projects_at_acme(select_entries(store, index, {"Python"}))
+    spring = _projects_at_acme(select_entries(store, index, {"Spring Boot"}))
+    assert "acme-portal-migration" in spring
+    # It joins the two main projects; it never pushes one of them off.
+    assert {"acme-agent-platform", "acme-track"} <= set(spring)
 
 
 # ── the skills line ──────────────────────────────────────────────────────────

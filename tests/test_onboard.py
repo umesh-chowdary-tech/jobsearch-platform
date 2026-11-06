@@ -376,3 +376,26 @@ def test_the_sample_resumes_invent_nothing_either():
             v, entries, _ = build(scratch, store, index, posting, use_model=False)
         text = render_text(store["identity"], v, entries, v.surfaces, index)
         assert untraced_bullets(text, store) == [], pid
+
+
+# ── a piece of work that is part of a project ────────────────────────────────
+
+def test_a_piece_of_work_can_be_part_of_a_project_at_the_same_job(new):
+    """Saved as `part_of`, so a resume prints the piece under its project
+    instead of as a job of its own."""
+    _drafted(new)
+    _confirm_all(new)
+    piece = O.add_item(new, "entry", {"type": "work", "title": "Refund retries", "where": "Globex Payments",
+                                      "period": "2023 to present", "headline": "Added retries to refunds"})
+    O.update_item(new, piece["id"], "confirmed")
+    O.set_labels(new, piece["id"], part_of="e1")
+    with pytest.raises(O.SetupError, match="same job"):
+        O.set_labels(new, "e2", part_of="e1")                        # Initech work under a Globex project
+    with pytest.raises(O.SetupError, match="itself part of a project"):
+        O.set_labels(new, "e1", part_of=piece["id"])                 # one level only
+    O.save(new, O.state(new)["prefs"])
+    by_id = {e["id"]: e for e in load_store(new)["entries"]}
+    assert by_id[piece["id"]]["part_of"] == "e1" and "part_of" not in by_id["e1"]
+    O.set_labels(new, piece["id"], part_of="")                       # and it can be undone
+    O.resave(new)                                                    # as the Profile page does
+    assert "part_of" not in {e["id"]: e for e in load_store(new)["entries"]}[piece["id"]]

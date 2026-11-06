@@ -343,7 +343,8 @@ function Experience({ v, ed }: { v: ProfileView; ed: Ed | null }) {
             {es.map(e => {
               const d = draftOf(e.id);
               return ed && d && open === e.id ? <EntryEditor key={e.id} e={d} ed={ed} />
-                : <Entry key={e.id} e={e} onEdit={ed && d ? () => ed.open(e.id) : undefined} />;
+                : <Entry key={e.id} e={e} onEdit={ed && d ? () => ed.open(e.id) : undefined}
+                         under={nameOf(v.entries.find(x => x.id === e.part_of))} />;
             })}
           </div>
         </section>
@@ -352,7 +353,11 @@ function Experience({ v, ed }: { v: ProfileView; ed: Ed | null }) {
   );
 }
 
-function Entry({ e, onEdit }: { e: ProfileEntry; onEdit?: () => void }) {
+function nameOf(e?: ProfileEntry): string | undefined {
+  return e ? (e.title || e.headline || e.id) : undefined;
+}
+
+function Entry({ e, onEdit, under }: { e: ProfileEntry; onEdit?: () => void; under?: string }) {
   const metrics = (e.metrics || []).map(m => (typeof m === "string" ? { claim: m } as { claim: string; measured?: boolean; estimate?: boolean } : m));
   const meta = [e.where, e.period].filter(Boolean).join(" · ");
   const evidence = href(e.evidence);
@@ -362,6 +367,7 @@ function Entry({ e, onEdit }: { e: ProfileEntry; onEdit?: () => void }) {
         <div>
           <b>{e.title || e.headline || e.id}</b>
           {meta && <div className="muted small">{meta}</div>}
+          {under && <div className="muted small">Part of {under}</div>}
         </div>
         <div className="row">
           {e.priority === "low" && <span className="pill" title="Left off first when a resume runs short of room">cut first</span>}
@@ -493,8 +499,15 @@ function Part({ title, hint, children }: { title: string; hint: string; children
   );
 }
 
-function Labels({ e, step, angles }: { e: SetupItem; step: Step; angles: string[] }) {
+function Labels({ e, step, angles, items }: { e: SetupItem; step: Step; angles: string[]; items: SetupItem[] }) {
   const mine = e.angles || [];
+  // A project at the same job that is not itself a piece; nothing can sit
+  // under a piece, so work that already holds pieces can't become one.
+  const same = (a?: string, b?: string) => (a || "").trim().toLowerCase() === (b || "").trim().toLowerCase();
+  const holds = items.some(i => i.kind === "entry" && i.part_of === e.id);
+  const parents = e.type === "work" && !holds ? items.filter(i =>
+    i.kind === "entry" && i.type === "work" && i.state === "confirmed" && i.id !== e.id && !i.part_of
+    && same(i.where, e.where)) : [];
   return (
     <div className="row small">
       <span className="muted">What it shows:</span>
@@ -510,6 +523,16 @@ function Labels({ e, step, angles }: { e: SetupItem; step: Step; angles: string[
       </select>
       <label className="inline"><input type="checkbox" checked={e.priority === "low"}
              onChange={ev => step("labels", { entry: e.id, cut_first: ev.target.checked })} /> Cut first when a resume runs long</label>
+      {(parents.length > 0 || e.part_of) && (
+        <label className="inline" title="A resume prints this under that project, not as a project of its own">
+          Part of
+          <select aria-label="Part of which project" value={e.part_of || ""} style={{ width: "auto", marginLeft: 6 }}
+                  onChange={ev => step("labels", { entry: e.id, part_of: ev.target.value })}>
+            <option value="">no project - it is one</option>
+            {parents.map(p => <option key={p.id} value={p.id}>{p.title || p.headline}</option>)}
+          </select>
+        </label>
+      )}
     </div>
   );
 }
@@ -560,7 +583,7 @@ function EntryEditor({ e, ed }: { e: SetupItem; ed: Ed }) {
         {notes.map(n => <Line key={`${n.id}-${n.text}`} it={n} field="text" step={step} />)}
         {!notes.length && <AddLine placeholder="Add a note" onAdd={text => add("note", { text })} />}
       </Part>
-      <Labels e={e} step={step} angles={s.interview.angles} />
+      <Labels e={e} step={step} angles={s.interview.angles} items={s.items} />
       {waiting > 0 && <p className="small muted">{waiting} more from your files {waiting === 1 ? "is" : "are"} waiting
         under “Not in your profile yet”, above.</p>}
       <div className="row">

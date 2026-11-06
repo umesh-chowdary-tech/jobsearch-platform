@@ -22,12 +22,14 @@ from .resume_layout import (
     group_skills,
     group_work,
     heading,
+    job_line,
     lead_line,
     position_title,
     practice_items,
+    project_stack,
     stack_items,
 )
-from .render import bullets, chronological
+from .render import PIECE_BULLETS, PROJECT_BULLETS, bullets, chronological
 from .skills import SkillIndex
 
 _ESC = {
@@ -96,6 +98,10 @@ PREAMBLE = r"""\documentclass[a4paper,10pt]{article}
   {#1}\par\vspace{3pt}}
 \newcommand{\stream}[1]{%
   \textbf{#1}\par\vspace{1pt}}
+\newcommand{\piece}[1]{%
+  \hspace*{12pt}\textbf{#1}\par\vspace{1pt}}
+\newcommand{\piecelead}[1]{%
+  {\small\itshape\leftskip=12pt\relax #1\par}}
 \newcommand{\stackline}[1]{%
   {\small\hspace{12pt}Stack: #1}\par}
 \newcommand{\practices}[1]{%
@@ -144,24 +150,37 @@ def render_latex(identity: dict[str, Any], variant, entries: list[dict[str, Any]
     if blocks:
         L.append(r"\section{Experience}")
         for b in blocks:
-            L.append(r"\position{" + tex(position_title(identity, variant.title_descriptor))
-                     + "}{" + tex(b["period"]) + "}")
-            L.append(r"\company{" + tex(b["employer"])
-                     + (", " + tex(b["location"]) if b["location"] else "") + "}")
+            top, under = job_line(identity, variant.title_descriptor, b["employer"], b["location"])
+            L.append(r"\position{" + tex(top) + "}{" + tex(b["period"]) + "}")
+            if under:
+                L.append(r"\company{" + tex(under) + "}")
             practices = practice_items(b["entries"], skills, index)
             if practices:
                 L.append(r"\practices{" + tex(", ".join(practices)) + "}")
-            for e in b["entries"]:
+            for g in b["projects"]:
+                e, pieces = g["entry"], g["pieces"]
                 L.append(r"\stream{" + tex(heading(e)) + "}")
                 lead = lead_line(e, b["start_year"])
                 if lead:
                     L.append(r"{\small\itshape " + tex(lead) + r"}\par")
-                items = bullets(e)
+                items = bullets(e, PROJECT_BULLETS if pieces else None)
                 if items:
                     L.append(r"\begin{itemize}")
                     L += [r"  \item " + tex(x) for x in items]
                     L.append(r"\end{itemize}")
-                stack(e)
+                for p in pieces:
+                    L.append(r"\piece{" + tex(heading(p)) + "}")
+                    lead = lead_line(p, b["start_year"])
+                    if lead:
+                        L.append(r"\piecelead{" + tex(lead) + "}")
+                    items = bullets(p, PIECE_BULLETS)
+                    if items:
+                        L.append(r"\begin{itemize}[leftmargin=24pt]")
+                        L += [r"  \item " + tex(x) for x in items]
+                        L.append(r"\end{itemize}")
+                gs = project_stack(g, skills, index)
+                if gs:
+                    L.append(r"\stackline{" + tex(", ".join(gs)) + "}")
                 L.append(r"\vspace{3pt}")
 
     # ── projects ─────────────────────────────────────────────────────────────

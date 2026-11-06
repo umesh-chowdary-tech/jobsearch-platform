@@ -201,12 +201,37 @@ could reach. Both are recorded on every `sent_to` row and shown in the app.
 
 ### Selection is one rule
 
-Each of the six work and three project slots goes to the entry that raises the
-match most, given what is already chosen. The newest role is always first.
-When two entries raise it equally: the person's own "cut this first"
-(`priority: low`), then a measured number, then a link a reader can open, then
-recency. So a low-priority entry is the first thing cut, unless it is the only
-place something lives - it prints on postings that need what only it carries.
+Work is chosen as **projects**: an entry plus the pieces that are `part_of` it
+(see below). Each of the six work and three side-project slots goes to the
+project that raises the match most, given what is already chosen. The project
+holding the newest work is always first. When two raise it equally: the
+person's own "cut this first" (`priority: low`), then a measured number, then a
+link a reader can open, then recency.
+
+A job shows **two projects**. A third, or any project marked "cut first", prints
+only when it raises the match - it adds something the posting asks for that
+nothing chosen has - and it never takes one of the two regular places. So the
+old Java work joins the two main projects on a Java posting and stays off a
+Python one.
+
+### Projects and their pieces
+
+A first resume from Setup printed six workstreams under one job, and had no
+title saved. Its dated line read only `Apr 2022 - Present`; a parser took the
+first bold line under it - a piece called "Ticket Agent" - for the job, and its
+`since 2026` for the dates.
+
+- **`part_of`** (master-store, set on the Profile page) names the project at the
+  same job a piece belongs to. One level: a project holds pieces, a piece holds
+  nothing. A piece whose project is not on the page prints as a project.
+- **Layout:** the job line, then each project - name, one-line description, up
+  to 3 bullets - then its pieces as bold sub-lines with up to 2 bullets each,
+  and one `Stack:` line for the whole project (up to 8 skills). A project with
+  no pieces keeps the old 5 bullets and 6-skill stack. Projects run newest
+  first, by their newest piece.
+- **No title saved:** the dated line names the employer instead, so it always
+  says whose job it is. A check, *dated line names the job*, fails any resume
+  whose dated line names neither the title nor an employer.
 
 ### Stack lines and practices
 

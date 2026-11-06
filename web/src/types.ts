@@ -87,6 +87,7 @@ export interface ProfileEntry {
   metrics?: ({ measured?: boolean; claim?: string; estimate?: boolean } | string)[] | null;
   tech?: string[] | null;
   priority?: string | null;
+  part_of?: string | null;
   status?: string | null;
   evidence?: string | null;
   sources?: string[] | null;
@@ -212,6 +213,7 @@ export interface SetupItem {
   conflict?: string;
   listed_only?: boolean;
   measured?: boolean | null;
+  part_of?: string;
   claim?: string;
   client?: string;
   angles?: string[];

@@ -152,7 +152,9 @@ def test_work_is_grouped_under_one_employer(doc):
     src, _, _ = doc
     assert src.count(r"\position{Software Engineer II") == 1
     assert src.count(r"\company{Acme Freight") == 1
-    assert len(_call_arities(src, "stream")) >= 3
+    assert len(_call_arities(src, "stream")) >= 2
+    # Pieces print under their project, not as workstreams of their own.
+    assert len(_call_arities(src, "piece")) >= 2
 
 
 def test_skills_are_grouped_not_one_long_line(doc):
