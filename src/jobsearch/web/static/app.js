@@ -435,7 +435,9 @@ async function viewToday() {
   // When this person's day began: the server's clock is UTC.
   const now = new Date();
   const since = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-  const t = await api(`/api/today?since=${encodeURIComponent(since)}`);
+  // And its date: the day the boards' own dates are matched against.
+  const day = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const t = await api(`/api/today?since=${encodeURIComponent(since)}&day=${day}`);
   setCount("today", t.decide.length + t.back_from_later.length);
   const hour = new Date().getHours();
   const hello = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
@@ -451,13 +453,13 @@ async function viewToday() {
     el("div", { class: "hero" },
       el("div", { class: "date" }, new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })),
       el("h1", {}, t.first_name ? `${hello}, ${t.first_name}` : hello),
-      el("p", { class: "sub" }, `${t.fetched_today.total} live posting${t.fetched_today.total === 1 ? "" : "s"} fetched today.`)),
-    el("div", { class: "fits", "aria-label": "Fetched today, by fit" },
+      el("p", { class: "sub" }, `${t.posted_today} job${t.posted_today === 1 ? "" : "s"} posted on the boards today · ${t.fits.total} open job${t.fits.total === 1 ? "" : "s"} kept for you.`)),
+    el("div", { class: "fits", "aria-label": "All your open jobs, by fit" },
       [["strong", "Strong fit"], ["possible", "Possible fit"], ["weak", "Weak fit"], ["unread", "Not read yet"]].map(([k, label]) =>
-        el("div", { class: `fit ${k}` }, el("div", { class: "n" }, t.fetched_today[k]), el("div", { class: "l" }, label)))),
+        el("div", { class: `fit ${k}` }, el("div", { class: "n" }, t.fits[k]), el("div", { class: "l" }, label)))),
     el("div", { class: "kpis" },
-      kpi("list", "", t.decide.length, "waiting on a decision"),
-      kpi("target", "", t.decide.filter(r => r.fit === "strong").length, "strong fits among them"),
+      kpi("list", "", t.waiting.total, "waiting on a decision"),
+      kpi("target", "", t.waiting.strong, "strong fits among them"),
       kpi("activity", "cool", t.in_progress.length, "applications in progress"),
       kpi("clock", "warm", t.outreach_due.length, "referral follow-ups due")),
     chips];
@@ -482,8 +484,8 @@ async function viewToday() {
       el("a", { href: "#/applications" }, "Open Applications")));
   }
 
-  parts.push(el("h2", {}, `Fetched today, needs a decision · ${t.decide.length}`));
-  if (!t.decide.length) parts.push(el("p", { class: "empty" }, "Nothing strong or possible came in today."));
+  parts.push(el("h2", {}, `Posted today, needs a decision · ${t.decide.length}`));
+  if (!t.decide.length) parts.push(el("p", { class: "empty" }, "Nothing strong or possible was posted on the boards today."));
   if (t.older_waiting) {
     parts.push(el("p", { class: "muted" }, `${t.older_waiting} older job${t.older_waiting > 1 ? "s" : ""} still need${t.older_waiting > 1 ? "" : "s"} a decision: `,
       el("a", { href: "#/postings" }, "see them under Postings"), "."));
@@ -495,7 +497,7 @@ async function viewToday() {
     parts.push(el("div", { class: "list" }, rows.map(r => postingItem(r, true))));
   }
   if (t.unread) {
-    parts.push(el("p", { class: "muted" }, `${t.unread} more posting${t.unread > 1 ? "s" : ""} fetched today ${t.unread > 1 ? "haven't" : "hasn't"} been read by a model yet. `,
+    parts.push(el("p", { class: "muted" }, `${t.unread} more posting${t.unread > 1 ? "s" : ""} posted today ${t.unread > 1 ? "haven't" : "hasn't"} been read by a model yet. `,
       el("button", { type: "button", class: "quiet", onclick: () => run("rank") }, "Have a model read them")));
   }
   if (t.outreach_due.length) {
