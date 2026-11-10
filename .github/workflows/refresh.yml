@@ -2,7 +2,8 @@
 # has no cron and sleeps after 15 quiet minutes, so this wakes the connector
 # and asks it to refresh. Needs one repository secret, CONNECTOR_URL: the
 # connector's URL up to and including the secret segment, e.g.
-# https://jobsearch-connector.onrender.com/<secret>. Without it, it does nothing.
+# https://jobsearch-connector.onrender.com/<secret>. Without it, the run fails, so
+# a missing secret is noticed instead of the boards silently going unpolled.
 name: refresh
 on:
   schedule:
@@ -19,7 +20,7 @@ jobs:
         env:
           CONNECTOR_URL: ${{ secrets.CONNECTOR_URL }}
         run: |
-          if [ -z "$CONNECTOR_URL" ]; then echo "CONNECTOR_URL is not set - no connector to refresh"; exit 0; fi
+          if [ -z "$CONNECTOR_URL" ]; then echo "CONNECTOR_URL secret is not set"; exit 1; fi
           # A sleeping free instance takes about a minute to wake.
           for i in 1 2 3; do
             code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 120 -X POST "$CONNECTOR_URL/refresh") || code=000
