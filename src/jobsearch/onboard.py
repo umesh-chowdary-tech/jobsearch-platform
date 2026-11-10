@@ -694,7 +694,7 @@ def draft(prof: Profile, llm: LLM | None = None, source: str | None = None) -> d
 
 EDITABLE = {"identity": ("value",), "job": ("employer", "title", "client", "location", "start", "end"),
             "entry": ("type", "where", "title", "period", "headline"), "fact": ("text",),
-            "tech": ("name",), "language": ("value",), "metric": ("claim", "measured"), "note": ("text",)}
+            "tech": ("name",), "skill": ("name",), "language": ("value",), "metric": ("claim", "measured"), "note": ("text",)}
 
 
 def _find(d: dict[str, Any], item_id: str) -> dict[str, Any]:
@@ -758,6 +758,9 @@ ADDABLE: dict[str, tuple[tuple[str, ...], str, str]] = {
     "language": (("value",), "value", "name the language"),
     "fact": (("text",), "text", "write the fact first"),
     "tech": (("name",), "name", "name the skill"),
+    # A skill of yours with no work named: it counts when jobs are matched,
+    # but a resume lists a skill only under work, so it isn't printed.
+    "skill": (("name",), "name", "name the skill"),
     "metric": (("claim", "measured"), "claim", "write the result first"),
     "note": (("text",), "text", "write the note first"),
 }
@@ -812,13 +815,14 @@ def add_item(prof: Profile, kind: str, fields: dict[str, Any], entry: str = "") 
             same = next((i for i in items if i["kind"] == "identity" and i.get("field") == vals["field"]), None)
             if same is not None:
                 same.update(value=vals["value"], state="confirmed", edited=True)
-        elif kind == "tech":
+        elif kind in ("tech", "skill"):
             # One skill, one spelling: "go" typed for another piece of work
-            # joins the Go you have, rather than putting both on a resume.
-            spelt = next((str(i["name"]) for i in items if i["kind"] == "tech" and i["state"] == "confirmed"
+            # (or on its own) joins the Go you have, rather than putting both
+            # on a resume.
+            spelt = next((str(i["name"]) for i in items if i["kind"] in ("tech", "skill") and i["state"] == "confirmed"
                           and str(i.get("name", "")).lower() == vals["name"].lower()), None)
             vals["name"] = spelt or vals["name"]
-            same = next((i for i in items if i["kind"] == "tech" and i.get("entry") == entry
+            same = next((i for i in items if i["kind"] == kind and (kind == "skill" or i.get("entry") == entry)
                          and str(i.get("name", "")).lower() == vals["name"].lower()), None)
             if same is not None:
                 same["state"] = "confirmed"
@@ -1048,13 +1052,16 @@ def _confirmed(d: dict[str, Any], kind: str) -> list[dict[str, Any]]:
 
 
 def skill_suggestions(d: dict[str, Any]) -> list[dict[str, Any]]:
-    """Every skill a confirmed entry's confirmed line names, with how many
-    entries back it and the tier suggested (core when three or more do)."""
+    """Every skill a confirmed entry's confirmed line names, and every skill
+    the person added on its own, with how many entries back it (none, for one
+    added on its own) and the tier suggested (core when three or more do)."""
     live = {it["id"] for it in _confirmed(d, "entry")}
     backed: dict[str, set[str]] = {}
     for t in _confirmed(d, "tech"):
         if t["entry"] in live:
             backed.setdefault(t["name"], set()).add(t["entry"])
+    for k in _confirmed(d, "skill"):
+        backed.setdefault(k["name"], set())
     chosen = d.get("skills") or {}
     return [{"name": n, "backed_by": len(es), "entries": sorted(es),
              "tier": chosen.get(n) or ("core" if len(es) >= 3 else "working")}
@@ -1283,7 +1290,7 @@ def _keep_hand_work(prof: Profile, store: dict, skills: dict, d: dict[str, Any])
     draft, so removing it on the profile page removes it."""
     items = d.get("items") or []
     drafted = {it["id"] for it in items if it["kind"] == "entry"}
-    named_in_draft = {it.get("name") for it in items if it["kind"] == "tech"} | set(d.get("skills") or {})
+    named_in_draft = {it.get("name") for it in items if it["kind"] in ("tech", "skill")} | set(d.get("skills") or {})
     fields = {it.get("field") for it in items if it["kind"] == "identity"}
     has = {(it.get("entry"), it["kind"]) for it in items if it.get("entry")}
     labelled = {it["id"] for it in items if it["kind"] == "entry" and it.get("labels_by")}
