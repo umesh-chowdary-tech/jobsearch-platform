@@ -252,7 +252,7 @@ function SaveFirst({ s, step, onSaved }: { s: SetupState; step: Step; onSaved: (
     if (r) {
       toast(`Saved: ${r.result?.entries ?? 0} pieces of work, ${r.result?.skills ?? 0} skills`);
       onSaved();
-      go("#/profile");
+      go("#/resumes");                 // next: build the overall resume and say how you like it
     }
   };
   return (
@@ -301,7 +301,8 @@ export function Setup({ onSaved }: { onSaved: () => void }) {
           <SaidNo s={s} step={step} />
           {s.exists && s.saved_at ? (
             <div className="card next-step">
-              <span className="grow small">Your profile is saved. Change anything in it on your Profile page.</span>
+              <span className="grow small">Your profile is saved. Next, build your resume and say how you like it.</span>
+              <button className="primary" onClick={() => go("#/resumes")}>Build my resume</button>
               <button onClick={() => go("#/profile")}>Go to my profile</button>
             </div>
           ) : <SaveFirst s={s} step={step} onSaved={onSaved} />}

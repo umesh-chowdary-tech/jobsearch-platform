@@ -104,10 +104,8 @@ BULLET_CAP = {"work": 5, "project": 3, "education": 1, "certification": 3,
 
 
 # A project with pieces under it shares the room: its own bullets, then each
-# piece's. Five for the project and five per piece ran one job past a page.
-PROJECT_BULLETS, PIECE_BULLETS = 3, 2
-
-
+# piece's - three and two on a job resume (resume_style.JOB). Five for the
+# project and five per piece ran one job past a page.
 def bullets(e: dict[str, Any], cap: int | None = None) -> list[str]:
     """Facts, then any measured metric that is not already one of them.
 
@@ -158,34 +156,41 @@ def chronological(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sorted(entries, key=lambda e: (-_start_year(e)[0], -_start_year(e)[1]))
 
 
-def render_text(identity, variant, entries, skills, index=None) -> str:
+def caps(style, has_pieces: bool) -> tuple[int | None, int]:
+    """(a work project's bullets, each piece's) for a style."""
+    if has_pieces:
+        return style.project_bullets, style.piece_bullets
+    return (style.solo_bullets or style.project_bullets), style.piece_bullets
+
+
+def in_order(style, sections: dict[str, list]) -> list:
+    """The sections the style shows, in its order; empty ones dropped."""
+    return [x for name in style.sections if style.shows(name) for x in sections.get(name) or []]
+
+
+def render_text(identity, variant, entries, skills, index=None, style=None) -> str:
     from .resume_layout import (contact_bits, entry_period, group_skills, group_work,
                                 heading, job_line, lead_line, position_title,
                                 practice_items, project_stack, stack_items)
+    from .resume_style import JOB
+    style = style or JOB
+    sec: dict[str, list[str]] = {}
 
-    def stack(e: dict[str, Any], indent: str) -> None:
-        items = stack_items(e, skills, index)
-        if items:
-            lines.append(f"{indent}Stack: {', '.join(items)}")
-
-    lines = [
-        identity["name"],
-        position_title(identity, variant.title_descriptor),
-        " | ".join(contact_bits(identity)),
-    ]
+    head = [identity["name"], position_title(identity, variant.title_descriptor),
+            " | ".join(contact_bits(identity))]
     if variant.summary:
-        lines += ["", "SUMMARY", variant.summary]
+        sec["summary"] = ["", "SUMMARY", variant.summary]
     if skills:
-        lines += ["", "SKILLS"]
+        out = ["", "SKILLS"]
         if index is not None:
-            for label, items in group_skills(skills, index):
-                lines.append(f"{label}: {', '.join(items)}")
+            out += [f"{label}: {', '.join(items)}" for label, items in group_skills(skills, index)]
         else:
-            lines.append(", ".join(skills))
+            out.append(", ".join(skills))
+        sec["skills"] = out
 
     blocks = group_work(entries, identity)
     if blocks:
-        lines += ["", "EXPERIENCE"]
+        lines = ["", "EXPERIENCE"]
         for b in blocks:
             # Title and dates, then employer: one dated line per job. The
             # workstreams below carry no range, or a parser reads each as a job.
@@ -198,51 +203,57 @@ def render_text(identity, variant, entries, skills, index=None) -> str:
                 lines.append(f"  Practices: {', '.join(practices)}")
             for g in b["projects"]:
                 e, pieces = g["entry"], g["pieces"]
+                own, each = caps(style, bool(pieces))
                 lines.append(f"  {heading(e)}")
                 lead = lead_line(e, b["start_year"])
                 if lead:
                     lines.append(f"    {lead}")
-                for x in bullets(e, PROJECT_BULLETS if pieces else None):
+                for x in bullets(e, own):
                     lines.append(f"    - {x}")
                 for p in pieces:
                     lines.append(f"    {heading(p)}")
                     lead = lead_line(p, b["start_year"])
                     if lead:
                         lines.append(f"      {lead}")
-                    for x in bullets(p, PIECE_BULLETS):
+                    for x in bullets(p, each):
                         lines.append(f"      - {x}")
                 items = project_stack(g, skills, index)
                 if items:
                     lines.append(f"    Stack: {', '.join(items)}")
+        sec["experience"] = lines
 
-    def simple(head, kinds):
+    def simple(name, title, kinds):
         chosen = chronological([e for e in entries if e.get("type") in kinds])
         if not chosen:
             return
-        lines.extend(["", head])
+        lines = ["", title]
         for e in chosen:
             lines.append(f"  {heading(e)}  [{entry_period(e)}]")
             if lead_line(e):
                 lines.append(f"    {lead_line(e)}")
             for x in bullets(e):
                 lines.append(f"    - {x}")
-            stack(e, "    ")
+            items = stack_items(e, skills, index)
+            if items:
+                lines.append(f"    Stack: {', '.join(items)}")
+        sec[name] = lines
 
-    simple("PROJECTS", ("project",))
-    simple("EDUCATION", ("education",))
-    simple("CERTIFICATIONS", ("certification",))
+    simple("projects", "PROJECTS", ("project",))
+    simple("education", "EDUCATION", ("education",))
+    simple("certifications", "CERTIFICATIONS", ("certification",))
 
     awards = [e for e in entries if e.get("type") in ("award", "profile")]
     if awards:
-        lines += ["", "ACHIEVEMENTS"]
+        lines = ["", "ACHIEVEMENTS"]
         for e in awards:
             if e.get("type") == "profile":
                 lines += [f"  - {b}" for b in bullets(e)]
             else:
                 lines.append(f"  - {e.get('headline')}")
+        sec["achievements"] = lines
     if identity.get("languages"):
-        lines += ["", "LANGUAGES", ", ".join(identity["languages"])]
-    return "\n".join(lines) + "\n"
+        sec["languages"] = ["", "LANGUAGES", ", ".join(identity["languages"])]
+    return "\n".join(head + in_order(style, sec)) + "\n"
 
 
 # ── html ─────────────────────────────────────────────────────────────────────
@@ -312,12 +323,15 @@ def _entry_html(e: dict[str, Any], cls: str = "stream", start_year: int | None =
 
 
 def render_html(identity: dict[str, Any], variant, entries: list[dict[str, Any]],
-                skills: list[str], index: SkillIndex | None = None) -> str:
+                skills: list[str], index: SkillIndex | None = None, style=None) -> str:
     from .resume_layout import (contact_bits, group_skills, group_work, job_line,
                                 position_title, practice_items, project_stack)
+    from .resume_style import JOB
+    style = style or JOB
+    sec: dict[str, list[str]] = {}
 
     contact = " &middot; ".join(_e(x) for x in contact_bits(identity))
-    parts = [
+    head = [
         "<header>",
         f"<h1>{_e(identity['name'])}</h1>",
         f'<p class="role">{_e(position_title(identity, variant.title_descriptor))}</p>',
@@ -326,20 +340,21 @@ def render_html(identity: dict[str, Any], variant, entries: list[dict[str, Any]]
     ]
 
     if variant.summary:
-        parts.append(f"<h2>Summary</h2><p>{_e(variant.summary)}</p>")
+        sec["summary"] = [f"<h2>Summary</h2><p>{_e(variant.summary)}</p>"]
 
     if skills:
-        parts.append("<h2>Skills</h2>")
+        parts = ["<h2>Skills</h2>"]
         if index is not None:
             for label, items in group_skills(skills, index):
                 parts.append(f'<p class="skill"><b>{_e(label)}:</b> '
                              f'{_e(", ".join(items))}</p>')
         else:
             parts.append(f'<p class="skill">{_e(", ".join(skills))}</p>')
+        sec["skills"] = parts
 
     blocks = group_work(entries, identity)
     if blocks:
-        parts.append("<h2>Experience</h2>")
+        parts = ["<h2>Experience</h2>"]
         for b in blocks:
             top, under = job_line(identity, variant.title_descriptor, b["employer"], b["location"])
             parts.append(f'<div class="employer"><span>{_e(top)}</span>'
@@ -351,35 +366,35 @@ def render_html(identity: dict[str, Any], variant, entries: list[dict[str, Any]]
                 parts.append(f'<p class="stack">Practices: {_e(", ".join(practices))}</p>')
             for g in b["projects"]:
                 pieces = g["pieces"]
+                own, each = caps(style, bool(pieces))
                 if not pieces:
                     parts.append(_entry_html(g["entry"], start_year=b["start_year"], skills=skills,
-                                             index=index))
+                                             index=index, cap=own))
                     continue
                 parts.append(_entry_html(g["entry"], start_year=b["start_year"], skills=skills,
-                                         index=index, cap=PROJECT_BULLETS, stack=[]))
+                                         index=index, cap=own, stack=[]))
                 parts += ['<div class="piece">' + _entry_html(p, start_year=b["start_year"], index=index,
-                                                              cap=PIECE_BULLETS, stack=[]) + "</div>"
+                                                              cap=each, stack=[]) + "</div>"
                           for p in pieces]
                 stack = project_stack(g, skills, index)
                 if stack:
                     parts.append(f'<p class="stack">Stack: {_e(", ".join(stack))}</p>')
+        sec["experience"] = parts
 
-    def block(head: str, kinds: tuple[str, ...]) -> None:
+    def block(name: str, title: str, kinds: tuple[str, ...]) -> None:
         chosen = chronological([e for e in entries if e.get("type") in kinds])
-        if not chosen:
-            return
-        parts.append(f"<h2>{_e(head)}</h2>")
-        parts.extend(_entry_html(e, skills=skills, index=index) for e in chosen)
+        if chosen:
+            sec[name] = [f"<h2>{_e(title)}</h2>"] + [_entry_html(e, skills=skills, index=index)
+                                                    for e in chosen]
 
-    block("Projects", ("project",))
-    block("Education", ("education",))
+    block("projects", "Projects", ("project",))
+    block("education", "Education", ("education",))
 
     certs = [e for e in entries if e.get("type") == "certification"]
     if certs:
-        parts.append("<h2>Certifications</h2>")
-        parts.append('<p class="small">' + " &middot; ".join(
+        sec["certifications"] = ["<h2>Certifications</h2>", '<p class="small">' + " &middot; ".join(
             _e(e.get("headline")) + (f' ({_e(e.get("period"))})' if e.get("period") else "")
-            for e in certs) + "</p>")
+            for e in certs) + "</p>"]
 
     awards = [e for e in entries if e.get("type") in ("award", "profile")]
     if awards:
@@ -391,18 +406,17 @@ def render_html(identity: dict[str, Any], variant, entries: list[dict[str, Any]]
                 bits += [_e(b) for b in bullets(e)]
             else:
                 bits.append(_e(e.get("headline")))
-        parts.append("<h2>Achievements</h2>")
-        parts.append('<p class="small">' + " &middot; ".join(bits) + "</p>")
+        sec["achievements"] = ["<h2>Achievements</h2>", '<p class="small">' + " &middot; ".join(bits) + "</p>"]
 
     if identity.get("languages"):
-        parts.append("<h2>Languages</h2>")
-        parts.append('<p class="small">' + _e(", ".join(identity["languages"])) + "</p>")
+        sec["languages"] = ["<h2>Languages</h2>",
+                            '<p class="small">' + _e(", ".join(identity["languages"])) + "</p>"]
 
     return (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
         f'<title>{_e(identity["name"])} - {_e(variant.title_descriptor or variant.id)}</title>'
-        f"<style>{_CSS}</style></head><body>" + "".join(parts) + "</body></html>"
+        f"<style>{_CSS}</style></head><body>" + "".join(head + in_order(style, sec)) + "</body></html>"
     )
 
 

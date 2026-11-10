@@ -505,3 +505,14 @@ def test_no_invented_percentage_reaches_the_page(identity, built):
     for ghost in ("20% increase", "15% reduction", "95% of", "25% reduction",
                   "40% improvement", "30% faster", "10M users"):
         assert ghost not in text
+
+
+def test_the_newest_piece_keeps_its_project_first_when_pieces_are_cut(store, index):
+    """With "pieces per project" set low, the newest piece of work may not
+    print - but its project still leads the page. Choosing it once looked for
+    the piece among the cut-down projects and found nothing."""
+    newer = {**store, "entries": [{**e, "period": "2026-present"} if e["id"] == "acme-support-agent" else e
+                                  for e in store["entries"]]}
+    chosen = select_entries(newer, index, {"Python"}, pieces=0)
+    assert chosen[0]["id"] == "acme-agent-platform"
+    assert "acme-support-agent" not in [e["id"] for e in chosen]

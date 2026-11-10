@@ -29,7 +29,7 @@ from .resume_layout import (
     project_stack,
     stack_items,
 )
-from .render import PIECE_BULLETS, PROJECT_BULLETS, bullets, chronological
+from .render import bullets, caps, chronological, in_order
 from .skills import SkillIndex
 
 _ESC = {
@@ -101,7 +101,7 @@ PREAMBLE = r"""\documentclass[a4paper,10pt]{article}
 \newcommand{\piece}[1]{%
   \hspace*{12pt}\textbf{#1}\par\vspace{1pt}}
 \newcommand{\piecelead}[1]{%
-  {\small\itshape\leftskip=12pt\relax #1\par}}
+  \begin{itemize}[leftmargin=12pt,label={},topsep=0pt,partopsep=0pt]\item{\small\itshape #1}\end{itemize}}
 \newcommand{\stackline}[1]{%
   {\small\hspace{12pt}Stack: #1}\par}
 \newcommand{\practices}[1]{%
@@ -110,8 +110,13 @@ PREAMBLE = r"""\documentclass[a4paper,10pt]{article}
 
 
 def render_latex(identity: dict[str, Any], variant, entries: list[dict[str, Any]],
-                 skills: list[str], index: SkillIndex) -> str:
+                 skills: list[str], index: SkillIndex, style=None) -> str:
+    from .resume_style import JOB
+    style = style or JOB
     L: list[str] = [PREAMBLE, r"\begin{document}", ""]
+    # Each section collects its own lines; the style says which print, in
+    # what order. `L` is the one being written.
+    head, sec = L, {}
 
     def stack(e: dict[str, Any]) -> None:
         items = stack_items(e, skills, index)
@@ -130,10 +135,12 @@ def render_latex(identity: dict[str, Any], variant, entries: list[dict[str, Any]
     L.append(r"\end{center}")
     L.append(r"\vspace{2pt}")
 
+    L = sec.setdefault("summary", [])
     # ── summary ──────────────────────────────────────────────────────────────
     if variant.summary:
         L += [r"\section{Summary}", tex(variant.summary)]
 
+    L = sec.setdefault("skills", [])
     # ── skills, grouped ──────────────────────────────────────────────────────
     groups = group_skills(skills, index)
     if groups:
@@ -142,6 +149,7 @@ def render_latex(identity: dict[str, Any], variant, entries: list[dict[str, Any]
             L.append(r"\textbf{" + tex(label) + r":} " + tex(", ".join(items))
                      + r"\par\vspace{1.5pt}")
 
+    L = sec.setdefault("experience", [])
     # ── experience, grouped by employer ──────────────────────────────────────
     # One dated line per job - title, then employer - and undated workstreams
     # beneath it. Workday read each dated workstream as a separate job and took
@@ -163,7 +171,8 @@ def render_latex(identity: dict[str, Any], variant, entries: list[dict[str, Any]
                 lead = lead_line(e, b["start_year"])
                 if lead:
                     L.append(r"{\small\itshape " + tex(lead) + r"}\par")
-                items = bullets(e, PROJECT_BULLETS if pieces else None)
+                own, each = caps(style, bool(pieces))
+                items = bullets(e, own)
                 if items:
                     L.append(r"\begin{itemize}")
                     L += [r"  \item " + tex(x) for x in items]
@@ -173,7 +182,7 @@ def render_latex(identity: dict[str, Any], variant, entries: list[dict[str, Any]
                     lead = lead_line(p, b["start_year"])
                     if lead:
                         L.append(r"\piecelead{" + tex(lead) + "}")
-                    items = bullets(p, PIECE_BULLETS)
+                    items = bullets(p, each)
                     if items:
                         L.append(r"\begin{itemize}[leftmargin=24pt]")
                         L += [r"  \item " + tex(x) for x in items]
@@ -183,6 +192,7 @@ def render_latex(identity: dict[str, Any], variant, entries: list[dict[str, Any]
                     L.append(r"\stackline{" + tex(", ".join(gs)) + "}")
                 L.append(r"\vspace{3pt}")
 
+    L = sec.setdefault("projects", [])
     # ── projects ─────────────────────────────────────────────────────────────
     projects = chronological([e for e in entries if e.get("type") == "project"])
     if projects:
@@ -201,6 +211,7 @@ def render_latex(identity: dict[str, Any], variant, entries: list[dict[str, Any]
             stack(e)
             L.append(r"\vspace{3pt}")
 
+    L = sec.setdefault("education", [])
     # ── education ────────────────────────────────────────────────────────────
     edu = [e for e in entries if e.get("type") == "education"]
     if edu:
@@ -213,6 +224,7 @@ def render_latex(identity: dict[str, Any], variant, entries: list[dict[str, Any]
                      + r"}\par")
 
     # ── certifications & achievements on one compact block ───────────────────
+    L = sec.setdefault("certifications", [])
     certs = [e for e in entries if e.get("type") == "certification"]
     if certs:
         L.append(r"\section{Certifications}")
@@ -222,6 +234,7 @@ def render_latex(identity: dict[str, Any], variant, entries: list[dict[str, Any]
         )
         L.append("{\\small " + line + "}")
 
+    L = sec.setdefault("achievements", [])
     awards = [e for e in entries if e.get("type") in ("award", "profile")]
     if awards:
         L.append(r"\section{Achievements}")
@@ -233,11 +246,12 @@ def render_latex(identity: dict[str, Any], variant, entries: list[dict[str, Any]
                 parts.append(tex(e.get("headline")))
         L.append("{\\small " + " $\\cdot$ ".join(parts) + "}")
 
+    L = sec.setdefault("languages", [])
     if identity.get("languages"):
         L.append(r"\section{Languages}")
         L.append("{\\small " + tex(", ".join(identity["languages"])) + "}")
 
-    L += ["", r"\end{document}", ""]
+    L = head + in_order(style, sec) + ["", r"\end{document}", ""]
     return "\n".join(L)
 
 

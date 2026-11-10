@@ -89,6 +89,17 @@ def _assemble(prof: Profile, o: dict) -> int:
                                   no_model=bool(o.get("no_model")), no_pdf=False))
 
 
+def _base(prof: Profile, o: dict) -> int:
+    """The overall resume, from the whole profile in the person's style."""
+    from ..base_resume import build_base
+    try:
+        rec = build_base(prof, use_model=not o.get("no_model"))
+    except FileNotFoundError:
+        print("Save your profile in Setup first - the resume is built from it.")
+        return 1
+    return 0 if rec["checks_ok"] else 1
+
+
 def _dashboard(prof: Profile, o: dict) -> int:
     return _cli().cmd_dashboard(_ns(open=False, prof=prof))
 
@@ -123,15 +134,16 @@ ACTIONS: dict[str, tuple[str, Callable[[Profile, dict], int]]] = {
     "verify": ("Re-verify every board", _verify),
     "search": ("Look for new companies", _search),
     "assemble": ("Build the resume", _assemble),
+    "base": ("Build my overall resume", _base),
     "dashboard": ("Regenerate the static dashboard", _dashboard),
     "mail": ("Check the inbox", _mail),
 }
-HOSTED_ACTIONS = ("assemble", "rank")
+HOSTED_ACTIONS = ("assemble", "base", "rank")
 
 
 # Actions that touch only the person's own files, under the short edit lock
 # where they share one: a job update in progress must not refuse them.
-OWN_FILES = ("assemble",)
+OWN_FILES = ("assemble", "base")
 
 
 def under_lock(name: str, fn: Callable[[Profile, dict], int]) -> Callable[[Profile, dict], int]:

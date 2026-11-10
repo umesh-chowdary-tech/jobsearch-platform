@@ -64,7 +64,7 @@ HOSTED_POST = tuple(re.compile(p) for p in (
     r"/api/run", r"/api/outreach/draft", rf"/api/outreach/{_ID}/mark",
     r"/api/applications/(paste|add)", rf"/api/applications/{_ID}/(confirm|status|ignore|merge)",
     r"/api/companies/ask", rf"/api/companies/{_ID}/withdraw",
-    rf"/api/postings/{_ID}/(status|favorite|later|feedback)"))
+    rf"/api/postings/{_ID}/(status|favorite|later|feedback)", r"/api/resumes/style"))
 
 # What a referral ask may hold: a name, a line about them, a note on what
 # happened. Enough for a person; not a place to keep anything else.
@@ -305,6 +305,17 @@ def post(prof: Profile, path: str, body: dict[str, Any], runner: Runner, scope: 
         return 200, _setup(prof, path[len("/api/setup/"):], body)
     if path == "/api/run":
         return _run(prof, body, runner, scope)
+    if path == "/api/resumes/style":
+        # How the person likes their resume (resume_style.py): only what they
+        # changed is written; the overall resume is rebuilt by the page after.
+        from .. import resume_style
+        if not isinstance(body.get("changes"), dict):
+            raise ApiError(400, "changes must be an object")
+        try:
+            resume_style.save(prof, body["changes"])
+        except resume_style.StyleError as exc:
+            raise ApiError(400, str(exc)) from None
+        return 200, resume_style.view(prof)
     m = re.fullmatch(rf"/api/postings/({_ID})/(status|favorite|later|feedback)", path)
     if m:
         return 200, _posting_action(prof, m.group(1), m.group(2), body)
