@@ -68,7 +68,7 @@ def test_a_referral_ask_holds_a_line_not_a_document(prof, field, size):
 
 def test_the_hosted_scope_runs_only_resume_building_and_ranking(prof):
     run = Runner(prof)
-    assert set(routes.get(prof, "/api/actions", {}, run, scope=HOSTED)) == {"assemble", "rank"}
+    assert set(routes.get(prof, "/api/actions", {}, run, scope=HOSTED)) == {"assemble", "base", "rank"}
     with pytest.raises(ApiError, match="unknown action 'cycle'"):
         routes.post(prof, "/api/run", {"action": "cycle"}, run, scope=HOSTED)
     assert "cycle" in routes.get(prof, "/api/actions", {}, run, scope=LOCAL)

@@ -105,8 +105,9 @@ MAX_PIECES = 3
 
 def select_entries(store: dict[str, Any], index: SkillIndex,
                    wanted: "PostingKeywords | set[str]", max_work: int = 6,
-                   max_projects: int = 3, scorer: Scorer | None = None
-                   ) -> list[dict[str, Any]]:
+                   max_projects: int = 3, scorer: Scorer | None = None,
+                   per_job: int = MAX_PROJECTS, pieces: int = MAX_PIECES,
+                   extras: bool = True) -> list[dict[str, Any]]:
     """The entries that make the best-matching page, one project at a time.
 
     Work is chosen as projects: an entry with the pieces that are `part_of` it
@@ -121,7 +122,9 @@ def select_entries(store: dict[str, Any], index: SkillIndex,
     Spring Boot posting and not for a Python one.
 
     `max_work` caps the projects across all jobs, `max_projects` the side
-    projects. Only store entries are chosen, and they print verbatim.
+    projects; `per_job` and `pieces` come from the person's style, and
+    `extras=False` (page fitting) lets nothing in past `per_job`. Only store
+    entries are chosen, and they print verbatim.
     """
     if not isinstance(wanted, PostingKeywords):
         from .ats import keywords_for
@@ -150,9 +153,9 @@ def select_entries(store: dict[str, Any], index: SkillIndex,
     for items in by_job.values():
         for g in projects(items):
             lead = g["entry"]
-            pieces = sorted(g["pieces"], key=lambda p: (score([lead, p] + rest).key, substance(p)),
-                            reverse=True)[:MAX_PIECES]
-            groups.append([lead, *pieces])
+            best = sorted(g["pieces"], key=lambda p: (score([lead, p] + rest).key, substance(p)),
+                          reverse=True)[:pieces]
+            groups.append([lead, *best])
     groups += [[e] for e in side]
 
     def job(g: list[dict[str, Any]]) -> str | None:
@@ -169,7 +172,11 @@ def select_entries(store: dict[str, Any], index: SkillIndex,
     picked: list[list[dict[str, Any]]] = []
     if work and max_work > 0:
         newest = chronological(work)[0]
-        picked = [next(g for g in groups if any(e is newest for e in g))]
+        # Its project, even when the style keeps fewer pieces than it has and
+        # the newest piece itself was not among them.
+        picked = [next((g for g in groups if any(e is newest for e in g)), None)
+                  or next(g for g in groups if g[0].get("type") == "work"
+                          and g[0].get("id") == newest.get("part_of"))]
     pool = [g for g in groups if not any(g is p for p in picked)]
 
     def room(g: list[dict[str, Any]]) -> bool:
@@ -185,20 +192,20 @@ def select_entries(store: dict[str, Any], index: SkillIndex,
         if job(g) is None:
             return False
         at_job = sum(job(p) == job(g) for p in picked)
-        return at_job >= MAX_PROJECTS or g[0].get("priority") == "low"
+        return at_job >= per_job or g[0].get("priority") == "low"
 
     while True:
         now = score(page_of(picked)).match
-        regular, extras = [], []
+        regular, more = [], []
         for g in pool:
             if not room(g):
                 continue
             m = score(page_of(picked + [g]))
             if not beyond_two(g):
                 regular.append((m.key, substance(g[0]), g))
-            elif m.match > now + 1e-9:
-                extras.append((m.key, substance(g[0]), g))
-        open_ = regular or extras
+            elif extras and m.match > now + 1e-9:
+                more.append((m.key, substance(g[0]), g))
+        open_ = regular or more
         if not open_:
             break
         best = max(open_, key=lambda t: (t[0], t[1]))[2]
@@ -410,6 +417,33 @@ def summary_is_grounded(summary: str, facts: list[str]) -> tuple[bool, str]:
     return True, "grounded"
 
 
+def summarize(prof: Profile, entries: list[dict[str, Any]], applying_for: str,
+              llm: LLM | None = None) -> tuple[str | None, str | None, str]:
+    """(summary, who wrote it, why it was rejected) - the model's one job.
+
+    Grouped by role, not flattened. A flat list of facts from four different
+    jobs let the model attribute "second-in-command" to the wrong one - the
+    same structure-losing mistake as the truncated profile digest in pass 3,
+    one module later. Every number is then checked back against those facts.
+    """
+    roles: list[str] = []
+    facts: list[str] = []
+    for e in entries[:4]:
+        if e.get("type") not in ("work", "project"):
+            continue
+        own = [str(f) for f in (e.get("facts") or [])[:3]]
+        own += [m["claim"] for m in (e.get("metrics") or []) if m.get("measured")]
+        header = (f"ROLE: {e.get('headline')} "
+                  f"({e.get('where')}, {e.get('period') or 'n/a'})")
+        roles.append(header + "\n" + "\n".join(f"  - {f}" for f in own))
+        facts.extend(own)
+    summary, by = write_summary(llm or LLM(prof, purpose="resume"), roles, applying_for)
+    if not summary:
+        return None, None, ""
+    ok, why = summary_is_grounded(summary, facts)
+    return (summary, by, "") if ok else (None, None, why)
+
+
 # ── building ─────────────────────────────────────────────────────────────────
 
 def build(prof: Profile, store: dict[str, Any], index: SkillIndex,
@@ -473,29 +507,11 @@ def build(prof: Profile, store: dict[str, Any], index: SkillIndex,
             if rival else "")
 
     if use_model and not variant.summary:
-        # Grouped by role, not flattened. A flat list of facts from four
-        # different jobs let the model attribute "second-in-command" to the
-        # wrong one - the same structure-losing mistake as the truncated
-        # profile digest in pass 3, one module later.
-        roles: list[str] = []
-        facts: list[str] = []
-        for e in entries[:4]:
-            if e.get("type") not in ("work", "project"):
-                continue
-            own = [str(f) for f in (e.get("facts") or [])[:3]]
-            own += [m["claim"] for m in (e.get("metrics") or []) if m.get("measured")]
-            header = (f"ROLE: {e.get('headline')} "
-                      f"({e.get('where')}, {e.get('period') or 'n/a'})")
-            roles.append(header + "\n" + "\n".join(f"  - {f}" for f in own))
-            facts.extend(own)
-        summary, by = write_summary(llm or LLM(prof, purpose="resume"), roles,
-                                    posting.get("title", "software engineer"))
+        summary, by, why = summarize(prof, entries, posting.get("title", "software engineer"), llm)
         if summary:
-            ok, why = summary_is_grounded(summary, facts)
-            if ok:
-                variant.summary, variant.summary_by = summary, by
-            else:
-                decision += f"; summary rejected ({why})"
+            variant.summary, variant.summary_by = summary, by
+        elif why:
+            decision += f"; summary rejected ({why})"
 
     variant.sent_to.append({
         "posting_id": posting.get("id"),

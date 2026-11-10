@@ -516,10 +516,16 @@ def resumes(prof: Profile) -> dict[str, Any]:
                     "sent_to": [used(s) for s in v.sent_to], "files": resume_files(prof, v.id),
                     "checks_ok": all(c.get("ok") for c in (v.parse_check or {}).get("checks", []))
                     if v.parse_check else None})
+    from ..base_resume import BASE_ID, load_record
+    from .. import resume_style
+    base = load_record(prof)
+    if base is not None:
+        base = {**base, "files": resume_files(prof, BASE_ID)}
     manual_dir = prof.var / "manual" / "resumes"
     manual = [{"name": f.name, "url": f"/files/manual/{f.name}"}
               for f in sorted(manual_dir.glob("*")) if f.is_file()] if manual_dir.exists() else []
-    return {"variants": lib, "manual": manual}
+    return {"variants": lib, "manual": manual, "base": base, "style": resume_style.view(prof),
+            "has_profile": prof.file("master-store.yaml").exists()}
 
 
 def outreach_view(prof: Profile) -> list[dict[str, Any]]:

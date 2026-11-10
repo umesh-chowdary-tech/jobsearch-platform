@@ -121,6 +121,38 @@ export interface ResumeVariant {
   checks_ok: boolean | null;
 }
 
+export interface ResumeStyle {
+  projects_per_job: number;
+  pieces_per_project: number;
+  project_bullets: number;
+  piece_bullets: number;
+  side_projects: number;
+  pages: "1" | "2" | "any";
+  sections: string[];
+}
+
+export interface StyleView {
+  style: ResumeStyle;
+  defaults: ResumeStyle;
+  chosen: string[];
+  sections: string[];
+  required: string[];
+  ranges: Record<string, [number, number]>;
+  pages: string[];
+}
+
+export interface BaseResume {
+  created: string;
+  summary: string | null;
+  pages: number | null;
+  target: string;
+  note: string;
+  checks_ok: boolean;
+  failed: string[];
+  surfaces: string[];
+  files: { name: string; url: string }[];
+}
+
 export interface Feedback {
   good: boolean;
   note: string;

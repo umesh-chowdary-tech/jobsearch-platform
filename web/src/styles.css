@@ -219,6 +219,8 @@ h3.fit-head.possible { color: var(--warn); }
 .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-top: 18px; }
 .vote { display: inline-flex; gap: 6px; align-items: center; }
 .vote button.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); }
+.resume-preview { max-height: 70vh; overflow: auto; border: 1px solid var(--border); border-radius: 10px;
+  background: #fff; color: #111; }
 .console { margin-top: 10px; background: #0a1628; color: #d6e2f0; border-radius: 10px; padding: 10px 12px; font-size: 12px;
            font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; max-height: 220px; overflow: auto; white-space: pre-wrap; }
 .kit-row { display: grid; grid-template-columns: 130px minmax(0, 1fr) auto; gap: 10px; align-items: center;

@@ -308,3 +308,31 @@ measurement above, confirming a handful of practices (System Design, Code
 Review, Agile, Debugging, NLP, Git, unit testing), each tagged only on the
 entries it belongs to, moved the mean match from 45% to 63%. The ones the
 person left out stay out.
+
+## The overall resume and the person's style
+
+After Setup saves a profile, the person goes to **Resumes** and builds their
+overall resume (`base_resume.py`, action `base`): the whole profile, with no
+job in view - their core and working skills stand in for what a posting asks.
+It is never sent, so rebuilding replaces it (`var/<id>/resumes/base.*`,
+`var/<id>/base-resume.json`).
+
+That page is where they say how they like a resume (`resume_style.py`,
+`profiles/<id>/resume-style.yaml`, part of their data export): projects per
+job, pieces per project, bullets per project and per piece, side projects,
+length (1 page, 2 pages, no limit), and which sections show in what order.
+Skills and Experience always show - a parser needs them. Starting values
+follow the years Setup recorded (under 3: one page, two projects a job; from
+3: two pages, three); only what the person changes is written, so the rest
+keeps following their years.
+
+**Length is checked on the PDF.** Too long, and the resume is rebuilt with
+less: extra projects first, then one step of pieces, piece bullets, project
+bullets, side projects and projects per job in turn, never below a floor.
+Too short, and what the person left to the defaults grows back while it
+still fits. A step that changes nothing on the page reuses the last count; at
+most 8 compiles run. A profile that cannot fill the length says so - nothing
+is padded.
+
+Job resumes still use the fixed job style (`resume_style.JOB`); they move onto
+the person's style in phase 4.

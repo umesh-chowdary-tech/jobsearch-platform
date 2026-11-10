@@ -1,29 +1,36 @@
 // Every resume built for you, newest first: what it says about you, the files
 // to download, and which jobs it went to.
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { get, openFile } from "../api";
-import type { ResumeVariant } from "../types";
+import type { BaseResume as Base, ResumeVariant, StyleView } from "../types";
 import { day, Icon, useToast } from "../ui";
+import { BaseResume } from "./BaseResume";
+
+interface ResumesView { variants: ResumeVariant[]; base: Base | null; style: StyleView; has_profile: boolean }
 
 const FILE_NAMES: Record<string, string> = { pdf: "PDF", html: "Web page", txt: "Plain text", tex: "LaTeX" };
 const SKILLS_SHOWN = 12;
 
 export function Resumes() {
-  const [vs, setVs] = useState<ResumeVariant[] | null>(null);
+  const [view, setView] = useState<ResumesView | null>(null);
   const [err, setErr] = useState("");
-  useEffect(() => {
-    get<{ variants: ResumeVariant[] }>("/api/resumes")
-      .then(r => setVs([...r.variants].sort((a, b) => String(b.created).localeCompare(String(a.created)))))
+  const load = useCallback(() => {
+    get<ResumesView>("/api/resumes")
+      .then(r => setView({ ...r, variants: [...r.variants].sort((a, b) => String(b.created).localeCompare(String(a.created))) }))
       .catch(e => setErr((e as Error).message));
   }, []);
+  useEffect(load, [load]);
 
   if (err) return <p className="fail">{err}</p>;
-  if (!vs) return <p className="muted">Loading…</p>;
+  if (!view) return <p className="muted">Loading…</p>;
+  const vs = view.variants;
   return (
     <>
       <h1>Resumes</h1>
-      <p className="sub">Each is built for a job from your confirmed facts only, and reused for another job when nothing new would match it better.</p>
+      <p className="sub">Built from your confirmed facts only. Your resume shows how you like it; each job gets its own, matched to what it asks.</p>
+      <BaseResume base={view.base} style={view.style} hasProfile={view.has_profile} onChange={load} />
+      <h3 style={{ marginTop: 24 }}>For jobs</h3>
       {vs.length ? <div className="stack">{vs.map(v => <ResumeCard key={v.id} v={v} />)}</div> : (
         <div className="card stack">
           <p><b>No resumes yet.</b></p>
