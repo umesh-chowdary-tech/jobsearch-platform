@@ -77,6 +77,7 @@ entries:
     title: "On-call Agent"
     type: work
     where: Acme Freight
+    part_of: acme-agent-platform             # printed under that project, not as a project of its own
     period: 2025-present
     headline: Built an on-call agent that turns bursts of alerts into one Jira incident
     facts:
@@ -114,6 +115,7 @@ entries:
     title: "Daily Exceptions Digest"
     type: work
     where: Acme Freight
+    part_of: acme-track             # printed under that project, not as a project of its own
     period: 2022-present
     headline: Automated a daily digest of delayed shipments for account managers
     facts:
@@ -131,6 +133,7 @@ entries:
     title: "Billing Reconciler"
     type: work
     where: Acme Freight
+    part_of: acme-track             # printed under that project, not as a project of its own
     period: 2022-present
     headline: Built a nightly check that compares carrier invoices with the rates Acme booked
     facts:
@@ -146,6 +149,7 @@ entries:
     title: "Production Smoke Tests"
     type: work
     where: Acme Freight
+    part_of: acme-agent-platform             # printed under that project, not as a project of its own
     period: 2022-present
     headline: Set up hourly smoke tests that book and cancel a test shipment in production
     facts:

@@ -103,7 +103,12 @@ BULLET_CAP = {"work": 5, "project": 3, "education": 1, "certification": 3,
               "award": 1, "profile": 2}
 
 
-def bullets(e: dict[str, Any]) -> list[str]:
+# A project with pieces under it shares the room: its own bullets, then each
+# piece's. Five for the project and five per piece ran one job past a page.
+PROJECT_BULLETS, PIECE_BULLETS = 3, 2
+
+
+def bullets(e: dict[str, Any], cap: int | None = None) -> list[str]:
     """Facts, then any measured metric that is not already one of them.
 
     The store keeps metrics separately so the assembler can drop them when
@@ -121,7 +126,7 @@ def bullets(e: dict[str, Any]) -> list[str]:
             continue
         out.append(claim)
 
-    cap = BULLET_CAP.get(str(e.get("type")), 4)
+    cap = cap if cap is not None else BULLET_CAP.get(str(e.get("type")), 4)
     if len(out) <= cap:
         return out
     # Keep anything carrying a figure. A number is the scarcest thing on the
@@ -155,8 +160,8 @@ def chronological(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def render_text(identity, variant, entries, skills, index=None) -> str:
     from .resume_layout import (contact_bits, entry_period, group_skills, group_work,
-                                heading, lead_line, position_title, practice_items,
-                                stack_items)
+                                heading, job_line, lead_line, position_title,
+                                practice_items, project_stack, stack_items)
 
     def stack(e: dict[str, Any], indent: str) -> None:
         items = stack_items(e, skills, index)
@@ -184,20 +189,31 @@ def render_text(identity, variant, entries, skills, index=None) -> str:
         for b in blocks:
             # Title and dates, then employer: one dated line per job. The
             # workstreams below carry no range, or a parser reads each as a job.
-            lines.append(f"{position_title(identity, variant.title_descriptor)}  "
-                         f"({b['period']})")
-            lines.append(b["employer"] + (f", {b['location']}" if b["location"] else ""))
+            top, under = job_line(identity, variant.title_descriptor, b["employer"], b["location"])
+            lines.append(f"{top}  ({b['period']})")
+            if under:
+                lines.append(under)
             practices = practice_items(b["entries"], skills, index)
             if practices:
                 lines.append(f"  Practices: {', '.join(practices)}")
-            for e in b["entries"]:
+            for g in b["projects"]:
+                e, pieces = g["entry"], g["pieces"]
                 lines.append(f"  {heading(e)}")
                 lead = lead_line(e, b["start_year"])
                 if lead:
                     lines.append(f"    {lead}")
-                for x in bullets(e):
+                for x in bullets(e, PROJECT_BULLETS if pieces else None):
                     lines.append(f"    - {x}")
-                stack(e, "    ")
+                for p in pieces:
+                    lines.append(f"    {heading(p)}")
+                    lead = lead_line(p, b["start_year"])
+                    if lead:
+                        lines.append(f"      {lead}")
+                    for x in bullets(p, PIECE_BULLETS):
+                        lines.append(f"      - {x}")
+                items = project_stack(g, skills, index)
+                if items:
+                    lines.append(f"    Stack: {', '.join(items)}")
 
     def simple(head, kinds):
         chosen = chronological([e for e in entries if e.get("type") in kinds])
@@ -263,6 +279,8 @@ ul { margin: 3px 0 0; padding-left: 15px; }
 li { margin-bottom: 1.5px; }
 .small { font-size: 9.2pt; }
 .stack { font-size: 9pt; margin: 1px 0 0 15px; }
+.piece { margin-left: 15px; }
+.piece .stream { margin-top: 3px; font-size: 9.8pt; }
 a { color: inherit; text-decoration: none; }
 @media print { body { padding: 0; max-width: none; } }
 """
@@ -273,7 +291,8 @@ def _e(s: Any) -> str:
 
 
 def _entry_html(e: dict[str, Any], cls: str = "stream", start_year: int | None = None,
-                skills: list[str] | None = None, index: SkillIndex | None = None) -> str:
+                skills: list[str] | None = None, index: SkillIndex | None = None,
+                cap: int | None = None, stack: list[str] | None = None) -> str:
     """`start_year` set = a workstream inside a job: no date range of its own,
     only "(since 2025)" in the lead when it began after the job did."""
     from .resume_layout import entry_period, heading, lead_line, stack_items
@@ -283,10 +302,10 @@ def _entry_html(e: dict[str, Any], cls: str = "stream", start_year: int | None =
     lead = lead_line(e, start_year or 0)
     if lead:
         out.append(f'<p class="lead">{_e(lead)}</p>')
-    items = bullets(e)
+    items = bullets(e, cap)
     if items:
         out.append("<ul>" + "".join(f"<li>{_e(b)}</li>" for b in items) + "</ul>")
-    stack = stack_items(e, skills or [], index)
+    stack = stack_items(e, skills or [], index) if stack is None else stack
     if stack:
         out.append(f'<p class="stack">Stack: {_e(", ".join(stack))}</p>')
     return "".join(out)
@@ -294,8 +313,8 @@ def _entry_html(e: dict[str, Any], cls: str = "stream", start_year: int | None =
 
 def render_html(identity: dict[str, Any], variant, entries: list[dict[str, Any]],
                 skills: list[str], index: SkillIndex | None = None) -> str:
-    from .resume_layout import (contact_bits, group_skills, group_work, position_title,
-                                practice_items)
+    from .resume_layout import (contact_bits, group_skills, group_work, job_line,
+                                position_title, practice_items, project_stack)
 
     contact = " &middot; ".join(_e(x) for x in contact_bits(identity))
     parts = [
@@ -322,15 +341,28 @@ def render_html(identity: dict[str, Any], variant, entries: list[dict[str, Any]]
     if blocks:
         parts.append("<h2>Experience</h2>")
         for b in blocks:
-            parts.append(f'<div class="employer"><span>{_e(position_title(identity, variant.title_descriptor))}</span>'
+            top, under = job_line(identity, variant.title_descriptor, b["employer"], b["location"])
+            parts.append(f'<div class="employer"><span>{_e(top)}</span>'
                          f'<span class="when">{_e(b["period"])}</span></div>')
-            parts.append(f'<p class="company">{_e(b["employer"])}'
-                         + (f', {_e(b["location"])}' if b["location"] else "") + "</p>")
+            if under:
+                parts.append(f'<p class="company">{_e(under)}</p>')
             practices = practice_items(b["entries"], skills, index)
             if practices:
                 parts.append(f'<p class="stack">Practices: {_e(", ".join(practices))}</p>')
-            parts += [_entry_html(e, start_year=b["start_year"], skills=skills, index=index)
-                      for e in b["entries"]]
+            for g in b["projects"]:
+                pieces = g["pieces"]
+                if not pieces:
+                    parts.append(_entry_html(g["entry"], start_year=b["start_year"], skills=skills,
+                                             index=index))
+                    continue
+                parts.append(_entry_html(g["entry"], start_year=b["start_year"], skills=skills,
+                                         index=index, cap=PROJECT_BULLETS, stack=[]))
+                parts += ['<div class="piece">' + _entry_html(p, start_year=b["start_year"], index=index,
+                                                              cap=PIECE_BULLETS, stack=[]) + "</div>"
+                          for p in pieces]
+                stack = project_stack(g, skills, index)
+                if stack:
+                    parts.append(f'<p class="stack">Stack: {_e(", ".join(stack))}</p>')
 
     def block(head: str, kinds: tuple[str, ...]) -> None:
         chosen = chronological([e for e in entries if e.get("type") in kinds])
@@ -461,6 +493,14 @@ def check_text(text: str, identity: dict[str, Any], entries: list[dict[str, Any]
             checks.append(("job title in experience", band.lower() in " ".join(exp.split()).lower(),
                            band if band else "no title"))
         ranges = _RANGE.findall(exp)
+        # The dated line has to say whose job it is. "Apr 2022 - Present" on a
+        # line of its own sent a parser to the next bold line - a piece of work
+        # - for the job title and the employer.
+        names = [n.lower() for n in [band, *employers] if n]
+        bare = [l.strip() for l in exp.splitlines() if _RANGE.search(l)
+                and not any(n in l.lower() for n in names)]
+        checks.append(("dated line names the job", not bare,
+                       "; ".join(bare[:2]) or "title or employer on every dated line"))
         checks.append(("one dated line per job", len(ranges) == len(employers),
                        f"{len(ranges)} date ranges for {len(employers)} employer(s)"
                        + ("" if len(ranges) == len(employers)

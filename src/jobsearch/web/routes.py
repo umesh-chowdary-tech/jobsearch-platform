@@ -213,7 +213,11 @@ def _setup(prof: Profile, step: str, body: dict[str, Any]) -> Any:
         if angles is not None and not (isinstance(angles, list) and all(isinstance(a, str) for a in angles)):
             raise ApiError(400, "angles must be a list of words")
         cut = body.get("cut_first")
-        onboard.set_labels(prof, str(body.get("entry") or ""), angles, cut if isinstance(cut, bool) else None)
+        part = body.get("part_of")
+        if part is not None and not isinstance(part, str):
+            raise ApiError(400, "part_of must be a piece of work's id, or empty")
+        onboard.set_labels(prof, str(body.get("entry") or ""), angles, cut if isinstance(cut, bool) else None,
+                           part)
     elif step == "fact":
         onboard.add_fact(prof, str(body.get("entry") or ""), str(body.get("text") or ""))
     elif step == "add":
