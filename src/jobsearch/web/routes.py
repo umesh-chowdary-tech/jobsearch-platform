@@ -64,7 +64,7 @@ HOSTED_POST = tuple(re.compile(p) for p in (
     r"/api/run", r"/api/outreach/draft", rf"/api/outreach/{_ID}/mark",
     r"/api/applications/(paste|add)", rf"/api/applications/{_ID}/(confirm|status|ignore|merge)",
     r"/api/companies/ask", rf"/api/companies/{_ID}/withdraw",
-    rf"/api/postings/{_ID}/(status|favorite|later|feedback)", r"/api/resumes/style"))
+    rf"/api/postings/{_ID}/(status|favorite|later|feedback)", r"/api/resumes/(style|edit)"))
 
 # What a referral ask may hold: a name, a line about them, a note on what
 # happened. Enough for a person; not a place to keep anything else.
@@ -283,6 +283,42 @@ def _posting_action(prof: Profile, pid: str, what: str, body: dict[str, Any]) ->
     return pipeline.save_for_later(prof, pid, body.get("days"))
 
 
+def _resume_edit(prof: Profile, body: dict[str, Any]) -> dict[str, Any]:
+    """One change from edit mode on the overall resume (resume_edits.py).
+    Nothing here deletes: hiding is undone by unhiding, a reword by clearing
+    it. Moving a piece under another project changes its "Part of" on the
+    Profile too, through the same step the Profile page uses."""
+    from .. import resume_edits
+    from ..assemble import load_store
+    op, eid = str(body.get("op") or ""), str(body.get("id") or "")
+    try:
+        store = load_store(prof)
+    except OSError:
+        raise ApiError(400, "save your profile in Setup first") from None
+    try:
+        if op in ("hide", "pin"):
+            resume_edits.set_flag(prof, store, eid, "hidden" if op == "hide" else "pinned",
+                                  body.get("on") is not False)
+        elif op == "order":
+            resume_edits.set_order(prof, store, body.get("ids"))
+        elif op == "reword":
+            m = body.get("measured")
+            resume_edits.reword(prof, store, eid, str(body.get("original") or ""), str(body.get("text") or ""),
+                                m if isinstance(m, bool) else None)
+        elif op == "move":
+            part = body.get("part_of")
+            if not isinstance(part, str):
+                raise ApiError(400, "part_of must be a project's id, or empty")
+            onboard.set_labels(prof, eid, part_of=part)
+            if not onboard.resave(prof):
+                raise ApiError(409, "your profile couldn't be saved again - open Profile to see why")
+        else:
+            raise ApiError(400, "op is hide, pin, order, reword or move")
+    except resume_edits.EditError as exc:
+        raise ApiError(400, str(exc)) from None
+    return resume_edits.load(prof)
+
+
 def _run(prof: Profile, body: dict[str, Any], runner: Runner, scope: str) -> tuple[int, Any]:
     name = str(body.get("action") or "")
     if name not in ACTIONS or (scope == HOSTED and name not in HOSTED_ACTIONS):
@@ -316,6 +352,8 @@ def post(prof: Profile, path: str, body: dict[str, Any], runner: Runner, scope: 
         except resume_style.StyleError as exc:
             raise ApiError(400, str(exc)) from None
         return 200, resume_style.view(prof)
+    if path == "/api/resumes/edit":
+        return 200, _resume_edit(prof, body)
     m = re.fullmatch(rf"/api/postings/({_ID})/(status|favorite|later|feedback)", path)
     if m:
         return 200, _posting_action(prof, m.group(1), m.group(2), body)

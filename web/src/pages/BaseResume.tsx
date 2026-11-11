@@ -6,8 +6,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { blob, openFile, post } from "../api";
 import { useJob } from "../jobs";
-import type { BaseResume as Base, ResumeStyle, StyleView } from "../types";
+import type { BaseResume as Base, ResumeEdits, ResumeStyle, StyleView } from "../types";
 import { day, Icon, useToast } from "../ui";
+import { EditResume } from "./EditResume";
 
 const FILE_NAMES: Record<string, string> = { pdf: "PDF", html: "Web page", txt: "Plain text", tex: "LaTeX" };
 const SECTION_NAMES: Record<string, string> = {
@@ -20,13 +21,30 @@ const NUMBERS: [keyof ResumeStyle, string][] = [
   ["side_projects", "Side projects"],
 ];
 
-export function BaseResume({ base, style, hasProfile, onChange }: {
-  base: Base | null; style: StyleView; hasProfile: boolean; onChange: () => void;
+export function BaseResume({ base, style, edits, hasProfile, onChange }: {
+  base: Base | null; style: StyleView; edits: ResumeEdits; hasProfile: boolean; onChange: () => void;
 }) {
   const toast = useToast();
-  const build = useJob(onChange);
+  const [changed, setChanged] = useState(false);       // saved edits the page doesn't show yet
+  const [mine, setMine] = useState(edits);
+  const [editing, setEditing] = useState(false);
+  useEffect(() => setMine(edits), [edits]);
+  const build = useJob(useCallback(() => { setChanged(false); onChange(); }, [onChange]));
   const [busy, setBusy] = useState(false);
   const rebuild = useCallback(() => build.start("base"), [build]);
+
+  /** One change from edit mode: saved now, shown on the next rebuild. */
+  const edit = async (body: Record<string, unknown>): Promise<string | null> => {
+    try {
+      setMine(await post<ResumeEdits>("/api/resumes/edit", body));
+      setChanged(true);
+      return null;
+    } catch (e) {
+      const why = (e as Error).message;
+      if (body.op !== "reword") toast(why);
+      return why;
+    }
+  };
 
   const change = async (changes: Partial<Record<keyof ResumeStyle, unknown>>) => {
     setBusy(true);
@@ -67,11 +85,22 @@ export function BaseResume({ base, style, hasProfile, onChange }: {
         <p className="small fail">Check failed: {base.failed.join(", ")}</p>
       )}
       {base && <Preview key={base.created} />}
+      {changed && (
+        <div className="card next-step">
+          <span className="grow small">Your changes are saved. Rebuild to see them on the page.</span>
+          <button className="primary" disabled={build.running} onClick={rebuild}>{build.running ? "Building…" : "Rebuild"}</button>
+        </div>
+      )}
 
       <div className="row">
         <button className={base ? "" : "primary"} disabled={build.running || busy} onClick={rebuild}>
           {build.running ? "Building…" : base ? "Rebuild" : "Build my resume"}
         </button>
+        {base?.outline && (
+          <button className={editing ? "chip confirmed" : ""} aria-pressed={editing} onClick={() => setEditing(!editing)}>
+            <Icon name="edit" />{editing ? "Done editing" : "Edit"}
+          </button>
+        )}
         {base?.files.map(f => {
           const ext = (f.name.split(".").pop() || "").toLowerCase();
           return (
@@ -83,6 +112,7 @@ export function BaseResume({ base, style, hasProfile, onChange }: {
       </div>
       {build.lines.length > 0 && <div className="console" aria-live="polite">{build.lines.join("\n")}</div>}
       {build.result === "failed" && <p className="fail small">The build didn't finish cleanly - see above.</p>}
+      {editing && base?.outline && <EditResume outline={base.outline} edits={mine} edit={edit} />}
 
       <details open={!base}>
         <summary><b>How you like it</b> <span className="muted small">· starting values follow your years of experience</span></summary>

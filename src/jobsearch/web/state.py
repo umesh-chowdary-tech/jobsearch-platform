@@ -524,7 +524,9 @@ def resumes(prof: Profile) -> dict[str, Any]:
     manual_dir = prof.var / "manual" / "resumes"
     manual = [{"name": f.name, "url": f"/files/manual/{f.name}"}
               for f in sorted(manual_dir.glob("*")) if f.is_file()] if manual_dir.exists() else []
+    from .. import resume_edits
     return {"variants": lib, "manual": manual, "base": base, "style": resume_style.view(prof),
+            "edits": resume_edits.load(prof),
             "has_profile": prof.file("master-store.yaml").exists()}
 
 

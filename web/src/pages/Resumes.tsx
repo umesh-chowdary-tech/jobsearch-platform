@@ -3,11 +3,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { get, openFile } from "../api";
-import type { BaseResume as Base, ResumeVariant, StyleView } from "../types";
+import type { BaseResume as Base, ResumeEdits, ResumeVariant, StyleView } from "../types";
 import { day, Icon, useToast } from "../ui";
 import { BaseResume } from "./BaseResume";
 
-interface ResumesView { variants: ResumeVariant[]; base: Base | null; style: StyleView; has_profile: boolean }
+interface ResumesView {
+  variants: ResumeVariant[]; base: Base | null; style: StyleView; edits: ResumeEdits; has_profile: boolean;
+}
 
 const FILE_NAMES: Record<string, string> = { pdf: "PDF", html: "Web page", txt: "Plain text", tex: "LaTeX" };
 const SKILLS_SHOWN = 12;
@@ -29,7 +31,7 @@ export function Resumes() {
     <>
       <h1>Resumes</h1>
       <p className="sub">Built from your confirmed facts only. Your resume shows how you like it; each job gets its own, matched to what it asks.</p>
-      <BaseResume base={view.base} style={view.style} hasProfile={view.has_profile} onChange={load} />
+      <BaseResume base={view.base} style={view.style} edits={view.edits} hasProfile={view.has_profile} onChange={load} />
       <h3 style={{ marginTop: 24 }}>For jobs</h3>
       {vs.length ? <div className="stack">{vs.map(v => <ResumeCard key={v.id} v={v} />)}</div> : (
         <div className="card stack">

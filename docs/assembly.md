@@ -336,3 +336,27 @@ is padded.
 
 Job resumes still use the fixed job style (`resume_style.JOB`); they move onto
 the person's style in phase 4.
+
+### Edit mode
+
+*Edit* on the overall resume lists what is on the page: each job's projects
+and their pieces, the side projects, what was left out, and what the person
+hid (`base_resume.outline`). Every change is saved at once
+(`resume_edits.py`, `profiles/<id>/resume-edits.yaml`), shown on the next
+rebuild, and undoable - nothing in edit mode deletes:
+
+- **Hide** takes an entry off resumes (a project takes its pieces with it);
+  it stays on the Profile, and *Unhide* brings it back.
+- **Always include** puts an entry on the page whatever it adds, while there
+  is room, and a pinned piece is kept first under its project.
+- **↑ ↓** set the order of a job's projects or a project's pieces; the rest
+  follow newest first.
+- **Part of** moves a piece under another project at the same job. It is the
+  Profile's own "Part of" (`onboard.set_labels`), so both pages agree.
+- **Reword** a bullet for resumes only: the Profile keeps the fact, and the
+  reword is keyed by the fact's text, so it stops applying if the fact is
+  changed there. A number the fact does not have asks "measured, or your
+  estimate?" - an estimate is refused, because only measured results print as
+  numbers.
+
+Job resumes take these edits in phase 4.
