@@ -28,8 +28,9 @@ from .ats import PostingKeywords, Scorer
 from .llm import LLM
 from .models import utcnow
 from .profile import Profile
-from .render import check_text, render_html, render_text, write_outputs
-from .resume_layout import position_title
+from . import resume_edits
+from .render import bullets, caps, check_text, render_html, render_text, write_outputs
+from .resume_layout import group_work, heading, position_title
 from .resume_style import RANGES, Style, load
 from .skills import CORE, SCOPED, WORKING, SkillIndex, load_index
 
@@ -103,7 +104,9 @@ def build_base(prof: Profile, llm: LLM | None = None, use_model: bool = True,
     from .latex import compile_pdf, find_engine, pdf_pages, pdf_text, render_latex, text_layer_problems
     from .resume_style import _read
 
-    store = load_store(prof)
+    raw = load_store(prof)
+    edits = resume_edits.load(prof)
+    store = resume_edits.apply(raw, edits)        # hidden out, wording in, order and pins marked
     index = load_index(prof)
     chosen_style = load(prof)
     chosen = set(_read(prof))
@@ -219,10 +222,48 @@ def build_base(prof: Profile, llm: LLM | None = None, use_model: bool = True,
            "emits": v.emits, "surfaces": skills, "style": style.to_dict(), "target": chosen_style.pages,
            "pages": pages if pages is not None else (n_final if engine else None), "note": note,
            "checks_ok": bool(checks.get("ok")),
-           "failed": [c["check"] for c in checks.get("checks", []) if not c.get("ok")]}
+           "failed": [c["check"] for c in checks.get("checks", []) if not c.get("ok")],
+           "outline": outline(raw, entries, identity, style, edits)}
     record_path(prof).write_text(json.dumps(rec, indent=2), encoding="utf-8")
     say(f"Done: {len(entries)} entries, {len(skills)} skills"
         + (f", {rec['pages']} page(s)" if rec["pages"] else "") + (f". {note}" if note else "."))
     if not rec["checks_ok"]:
         say("Read-back check failed: " + ", ".join(rec["failed"]))
     return rec
+
+
+def outline(raw: dict[str, Any], entries: list[dict[str, Any]], identity: dict[str, Any],
+            style: Style, edits: dict[str, Any]) -> dict[str, Any]:
+    """What is on the page, in the page's order, for edit mode to draw: each
+    job's projects and pieces with the bullets that printed (and the store's
+    own text behind any reworded one), the side projects, what was left out,
+    what the person hid, and the projects a piece could move under."""
+    def item(e: dict[str, Any], cap: int | None) -> dict[str, Any]:
+        mine = {new: old for old, new in (edits["wording"].get(str(e["id"])) or {}).items()}
+        return {"id": e["id"], "title": heading(e), "pinned": bool(e.get("_pinned")),
+                "bullets": [{"text": b, "original": mine.get(b, b), "reworded": b in mine}
+                            for b in bullets(e, cap)]}
+
+    jobs = []
+    for b in group_work(entries, identity):
+        projects = []
+        for g in b["projects"]:
+            own, each = caps(style, bool(g["pieces"]))
+            projects.append({**item(g["entry"], own), "pieces": [item(p, each) for p in g["pieces"]]})
+        jobs.append({"employer": b["employer"], "projects": projects})
+    on_page = {str(e.get("id")) for e in entries}
+    every = [e for e in raw.get("entries") or [] if e.get("id") and emittable(e)]
+    hidden = set(edits.get("hidden") or [])
+    short = lambda e: {"id": e["id"], "title": heading(e), "type": e.get("type"),  # noqa: E731
+                       "where": e.get("where") or "", "part_of": e.get("part_of") or ""}
+    return {
+        "jobs": jobs,
+        "side": [item(e, None) for e in entries if e.get("type") == "project"],
+        "left_out": [short(e) for e in every if e.get("type") in ("work", "project")
+                     and str(e["id"]) not in on_page and str(e["id"]) not in hidden],
+        "hidden": [short(e) for e in every if str(e["id"]) in hidden],
+        # A piece moves under a project at the same job: work that is not
+        # itself a piece.
+        "projects": [{"id": e["id"], "title": heading(e), "where": e.get("where") or ""}
+                     for e in every if e.get("type") == "work" and not e.get("part_of")],
+    }

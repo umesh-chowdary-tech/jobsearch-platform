@@ -141,6 +141,28 @@ export interface StyleView {
   pages: string[];
 }
 
+export interface OutlineItem {
+  id: string;
+  title: string;
+  pinned: boolean;
+  bullets: { text: string; original: string; reworded: boolean }[];
+}
+
+export interface ResumeOutline {
+  jobs: { employer: string; projects: (OutlineItem & { pieces: OutlineItem[] })[] }[];
+  side: OutlineItem[];
+  left_out: { id: string; title: string; type: string; where: string; part_of: string }[];
+  hidden: { id: string; title: string; type: string; where: string; part_of: string }[];
+  projects: { id: string; title: string; where: string }[];
+}
+
+export interface ResumeEdits {
+  hidden: string[];
+  pinned: string[];
+  rank: Record<string, number>;
+  wording: Record<string, Record<string, string>>;
+}
+
 export interface BaseResume {
   created: string;
   summary: string | null;
@@ -151,6 +173,7 @@ export interface BaseResume {
   failed: string[];
   surfaces: string[];
   files: { name: string; url: string }[];
+  outline?: ResumeOutline;
 }
 
 export interface Feedback {

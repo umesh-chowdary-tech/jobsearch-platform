@@ -153,8 +153,9 @@ def select_entries(store: dict[str, Any], index: SkillIndex,
     for items in by_job.values():
         for g in projects(items):
             lead = g["entry"]
-            best = sorted(g["pieces"], key=lambda p: (score([lead, p] + rest).key, substance(p)),
-                          reverse=True)[:pieces]
+            # A piece the person keeps always in comes first, whatever it adds.
+            best = sorted(g["pieces"], key=lambda p: (bool(p.get("_pinned")), score([lead, p] + rest).key,
+                                                      substance(p)), reverse=True)[:pieces]
             groups.append([lead, *best])
     groups += [[e] for e in side]
 
@@ -177,6 +178,13 @@ def select_entries(store: dict[str, Any], index: SkillIndex,
         picked = [next((g for g in groups if any(e is newest for e in g)), None)
                   or next(g for g in groups if g[0].get("type") == "work"
                           and g[0].get("id") == newest.get("part_of"))]
+    # Then what the person keeps always in (resume_edits.py), while there is
+    # room: their call, not the match's.
+    for g in groups:
+        if any(e.get("_pinned") for e in g) and not any(g is p for p in picked):
+            side = g[0].get("type") != "work"
+            if sum((p[0].get("type") != "work") == side for p in picked) < (max_projects if side else max_work):
+                picked.append(g)
     pool = [g for g in groups if not any(g is p for p in picked)]
 
     def room(g: list[dict[str, Any]]) -> bool:

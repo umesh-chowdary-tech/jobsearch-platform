@@ -221,6 +221,12 @@ h3.fit-head.possible { color: var(--warn); }
 .vote button.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); }
 .resume-preview { max-height: 70vh; overflow: auto; border: 1px solid var(--border); border-radius: 10px;
   background: #fff; color: #111; }
+.edit-project { gap: 8px; }
+.edit-piece { margin-left: 18px; padding-left: 10px; border-left: 2px solid var(--border); }
+.edit-hidden { opacity: .55; }
+.edit-bullets { margin: 0; padding-left: 18px; }
+.edit-bullets li { margin-bottom: 4px; }
+.edit-bullets textarea { width: 100%; }
 .console { margin-top: 10px; background: #0a1628; color: #d6e2f0; border-radius: 10px; padding: 10px 12px; font-size: 12px;
            font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; max-height: 220px; overflow: auto; white-space: pre-wrap; }
 .kit-row { display: grid; grid-template-columns: 130px minmax(0, 1fr) auto; gap: 10px; align-items: center;

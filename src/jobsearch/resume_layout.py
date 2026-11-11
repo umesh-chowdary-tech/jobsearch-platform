@@ -88,8 +88,13 @@ def _recency(e: dict[str, Any]) -> tuple[int, int]:
     return (_year(e.get("period")), int(_is_present(e.get("period"))))
 
 
+# An order the person set by hand (resume_edits.py) comes first; the rest
+# follow it, newest first.
+UNRANKED = 10 ** 6
+
+
 def newest_first(items: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
-    return sorted(items, key=lambda e: (-_recency(e)[0], -_recency(e)[1]))
+    return sorted(items, key=lambda e: (e.get("_rank", UNRANKED), -_recency(e)[0], -_recency(e)[1]))
 
 
 def projects(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -112,7 +117,7 @@ def projects(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
                               and str(e.get("part_of") or "") == str(lead.get("id")))
         newest = max([_recency(lead)] + [_recency(p) for p in pieces])
         out.append({"entry": lead, "pieces": pieces, "_newest": newest})
-    out.sort(key=lambda g: (-g["_newest"][0], -g["_newest"][1]))
+    out.sort(key=lambda g: (g["entry"].get("_rank", UNRANKED), -g["_newest"][0], -g["_newest"][1]))
     for g in out:
         g.pop("_newest")
     return out
